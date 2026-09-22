@@ -1,0 +1,14 @@
+node_modules
+dist
+build
+*.tsbuildinfo
+.env.local
+.env
+.DS_Store
+Thumbs.db
+coverage
+.vercel
+.parcel-cache
+.vscode
+.idea
+*.log

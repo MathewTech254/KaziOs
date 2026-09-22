@@ -1,0 +1,493 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 217 73% 10%;
+  --surface: 218 56% 14%;
+  --surface-muted: 218 48% 17%;
+  --surface-elevated: 218 50% 19%;
+  --border: 216 34% 25%;
+  --text-primary: 40 37% 97%;
+  --text-secondary: 216 30% 81%;
+  --text-muted: 216 24% 66%;
+  --accent: 38 92% 52%;
+  --accent-hover: 38 100% 59%;
+  --accent-foreground: 217 73% 10%;
+  --success: 165 52% 55%;
+  --warning: 38 92% 55%;
+  --danger: 0 72% 62%;
+  --info: 218 72% 74%;
+  --radius: 0.6875rem;
+
+  --kazi-ink: #07152d;
+  --kazi-surface: #0b1c39;
+  --kazi-surface-raised: #091a34;
+  --kazi-video-surface: #102542;
+  --kazi-border: rgba(255, 255, 255, 0.1);
+  --kazi-border-strong: rgba(255, 255, 255, 0.16);
+  --kazi-text: #f7f2e7;
+  --kazi-display-text: #fffaf0;
+  --kazi-body-text: #aebbd0;
+  --kazi-muted-text: #91a1bb;
+  --kazi-accent: #f6a313;
+  --kazi-accent-hover: #ffb52d;
+  --kazi-success: #54c7bd;
+  --kazi-info: #9ab6ef;
+  --kazi-cream: #f3efe6;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --radius-hero: 1.625rem;
+  --radius-card: 1.125rem;
+  --radius-control: 0.6875rem;
+  --shadow-panel: 0 28px 80px rgba(0, 0, 0, 0.2);
+  --shadow-accent: 0 12px 26px rgba(246, 163, 19, 0.18);
+}
+
+.dark {
+  --background: 217 73% 10%;
+  --surface: 218 56% 14%;
+  --surface-muted: 218 48% 17%;
+  --surface-elevated: 218 50% 19%;
+  --border: 216 34% 25%;
+  --text-primary: 40 37% 97%;
+  --text-secondary: 216 30% 81%;
+  --text-muted: 216 24% 66%;
+  --accent: 38 92% 52%;
+  --accent-hover: 38 100% 59%;
+  --accent-foreground: 217 73% 10%;
+  --success: 165 52% 55%;
+  --warning: 38 92% 55%;
+  --danger: 0 72% 62%;
+  --info: 218 72% 74%;
+}
+
+[data-theme="light"] {
+  --background: 220 25% 97%;
+  --surface: 0 0% 100%;
+  --surface-muted: 220 20% 94%;
+  --surface-elevated: 0 0% 100%;
+  --border: 220 15% 88%;
+  --text-primary: 222 47% 11%;
+  --text-secondary: 222 20% 35%;
+  --text-muted: 220 10% 50%;
+  --accent: 38 92% 50%;
+  --accent-hover: 38 92% 56%;
+  --accent-foreground: 222 47% 11%;
+  --success: 142 71% 40%;
+  --warning: 38 92% 50%;
+  --danger: 0 72% 50%;
+  --info: 199 89% 45%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    min-width: 320px;
+    background: hsl(var(--background));
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    font-feature-settings: "rlig" 1, "calt" 1;
+    min-width: 320px;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-semibold tracking-tight text-foreground;
+  }
+
+  a,
+  button,
+  input,
+  select {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--kazi-accent);
+    outline-offset: 3px;
+  }
+}
+
+@layer components {
+  .kazi-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.045em;
+  }
+
+  .kazi-page-title {
+    @apply text-2xl font-bold tracking-tight text-foreground;
+    font-family: var(--font-display);
+  }
+
+  .kazi-page-subtitle {
+    @apply mt-1 text-sm;
+    color: hsl(var(--text-secondary));
+  }
+
+  .kazi-section-title {
+    @apply text-xs font-semibold uppercase tracking-wider;
+    color: hsl(var(--text-muted));
+  }
+
+  .kazi-stat-card,
+  .kazi-card {
+    @apply border;
+    border-color: hsl(var(--border));
+    background: hsl(var(--surface));
+    border-radius: var(--radius-card);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.08);
+  }
+
+  .kazi-stat-card {
+    @apply p-4;
+  }
+
+  .kazi-stat-label {
+    @apply text-sm;
+    color: hsl(var(--text-secondary));
+  }
+
+  .kazi-stat-value {
+    @apply text-2xl font-bold;
+    color: hsl(var(--text-primary));
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-display);
+  }
+
+  .kazi-brand-mark {
+    width: 2.75rem;
+    height: 2.75rem;
+    flex: 0 0 auto;
+    object-fit: cover;
+    border-radius: 0.8125rem;
+  }
+
+  .kazi-brand-wordmark {
+    display: block;
+    width: min(20.625rem, 100%);
+    height: auto;
+    object-fit: contain;
+    object-position: left center;
+    border-radius: 0.875rem;
+  }
+
+  .kazi-button-primary {
+    @apply inline-flex items-center justify-center gap-2 font-semibold transition-colors;
+    min-height: 2.875rem;
+    border-radius: var(--radius-control);
+    background: var(--kazi-accent);
+    color: var(--kazi-ink);
+    box-shadow: var(--shadow-accent);
+  }
+
+  .kazi-button-primary:hover {
+    background: var(--kazi-accent-hover);
+  }
+
+  .kazi-button-secondary {
+    @apply inline-flex items-center justify-center gap-2 font-semibold transition-colors;
+    min-height: 2.875rem;
+    border: 1px solid var(--kazi-border-strong);
+    border-radius: var(--radius-control);
+    color: var(--kazi-text);
+  }
+
+  .kazi-button-secondary:hover {
+    border-color: rgba(246, 163, 19, 0.48);
+    color: var(--kazi-accent-hover);
+  }
+
+  .kazi-input {
+    @apply w-full text-sm transition-colors;
+    min-height: 2.875rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-control);
+    background: hsl(var(--surface));
+    color: hsl(var(--text-primary));
+    padding: 0.75rem 0.875rem;
+  }
+
+  .kazi-input::placeholder {
+    color: hsl(var(--text-muted));
+  }
+
+  .kazi-input:focus {
+    border-color: var(--kazi-accent);
+    box-shadow: 0 0 0 3px rgba(246, 163, 19, 0.16);
+    outline: none;
+  }
+
+  .kazi-table-wrap {
+    overflow-x: auto;
+    border-radius: var(--radius-card);
+  }
+
+  .kazi-table-wrap table {
+    min-width: 42rem;
+  }
+
+  .kazi-table-wrap th {
+    white-space: nowrap;
+    color: hsl(var(--text-secondary));
+    letter-spacing: 0.08em;
+  }
+
+  .kazi-table-wrap td {
+    color: hsl(var(--text-secondary));
+  }
+
+  .kazi-auth-shell {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    min-height: 100vh;
+    background: var(--kazi-ink);
+    color: var(--kazi-text);
+  }
+
+  .kazi-auth-shell::before {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    background:
+      radial-gradient(circle at 15% 12%, rgba(246, 163, 19, 0.15), transparent 26%),
+      radial-gradient(circle at 86% 76%, rgba(35, 145, 143, 0.12), transparent 30%);
+    content: "";
+  }
+
+  .kazi-auth-shell::after {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: rgba(7, 21, 45, 0.78);
+    content: "";
+  }
+
+  .kazi-auth-shell .kazi-video-backdrop {
+    opacity: 0.35;
+  }
+
+  .kazi-auth-frame {
+    display: grid;
+    grid-template-columns: minmax(0, 0.92fr) minmax(24rem, 1.08fr);
+    align-items: stretch;
+    width: min(100%, 76rem);
+    gap: 2rem;
+  }
+
+  .kazi-auth-column {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .kazi-auth-panel {
+    display: none;
+    position: relative;
+    isolation: isolate;
+    min-height: 42rem;
+    border-color: var(--kazi-border-strong);
+    background: var(--kazi-video-surface);
+    box-shadow: var(--shadow-panel);
+  }
+
+  .kazi-auth-panel .kazi-video-backdrop {
+    opacity: 0.68;
+  }
+
+  .kazi-auth-panel .kazi-video-scrim {
+    background: rgba(7, 21, 45, 0.55);
+  }
+
+  .kazi-auth-panel .kazi-video-gradient {
+    background: linear-gradient(155deg, rgba(7, 21, 45, 0.18), rgba(7, 21, 45, 0.94) 82%);
+  }
+
+  .kazi-auth-panel-content {
+    width: 100%;
+  }
+
+  .kazi-auth-panel-list {
+    border-color: var(--kazi-border-strong);
+  }
+
+  .kazi-auth-card {
+    border: 1px solid var(--kazi-border-strong);
+    border-radius: var(--radius-hero);
+    background: rgba(11, 28, 57, 0.9);
+    box-shadow: var(--shadow-panel);
+    backdrop-filter: blur(18px);
+  }
+
+  .kazi-video-backdrop,
+  .kazi-video-scrim,
+  .kazi-video-gradient {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .kazi-video-backdrop {
+    z-index: -3;
+    object-fit: cover;
+    background: var(--kazi-video-surface);
+  }
+
+  .kazi-video-scrim {
+    z-index: -2;
+    background: rgba(7, 21, 45, 0.74);
+  }
+
+  .kazi-video-gradient {
+    z-index: -1;
+    background: linear-gradient(155deg, rgba(7, 21, 45, 0.24), rgba(7, 21, 45, 0.92) 76%);
+  }
+
+  .kazi-workspace-shell {
+    background:
+      linear-gradient(180deg, rgba(9, 26, 52, 0.56), transparent 18rem),
+      hsl(var(--background));
+  }
+
+  .kazi-sidebar {
+    background: hsl(var(--surface));
+    border-color: hsl(var(--border));
+  }
+
+  .kazi-sidebar-link,
+  .kazi-shell-icon-button,
+  .kazi-account-button {
+    color: hsl(var(--text-secondary));
+    transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease;
+  }
+
+  .kazi-sidebar-link:hover,
+  .kazi-sidebar-link[data-active="true"],
+  .kazi-shell-icon-button:hover,
+  .kazi-account-button:hover {
+    background: hsl(var(--surface-muted));
+    color: hsl(var(--text-primary));
+  }
+
+  .kazi-sidebar-link[data-active="true"] {
+    box-shadow: inset 2px 0 0 var(--kazi-accent);
+    color: hsl(var(--accent));
+  }
+
+  .kazi-topbar {
+    background: hsl(var(--surface) / 0.96);
+    border-color: hsl(var(--border));
+    backdrop-filter: blur(14px);
+  }
+
+  .kazi-search-button {
+    background: hsl(var(--surface));
+    border-color: hsl(var(--border));
+    color: hsl(var(--text-secondary));
+  }
+
+  .kazi-search-button:hover {
+    border-color: hsl(var(--accent) / 0.48);
+    color: hsl(var(--text-primary));
+  }
+
+  .kazi-search-button kbd {
+    border-color: hsl(var(--border));
+    color: hsl(var(--text-muted));
+  }
+
+  .kazi-fab {
+    background: var(--kazi-accent);
+    color: var(--kazi-ink);
+    box-shadow: var(--shadow-accent);
+    transition: transform 160ms ease, background-color 160ms ease;
+  }
+
+  .kazi-fab:hover {
+    background: var(--kazi-accent-hover);
+    transform: translateY(-2px);
+  }
+
+  .kazi-action-card {
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius-card);
+    background: hsl(var(--surface));
+    transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+  }
+
+  .kazi-action-card:hover {
+    border-color: hsl(var(--accent) / 0.45);
+    background: hsl(var(--surface-elevated));
+    transform: translateY(-2px);
+  }
+
+  .kazi-alert-card {
+    border: 1px solid hsl(var(--warning) / 0.3);
+    border-radius: var(--radius-card);
+    background: linear-gradient(90deg, hsl(var(--warning) / 0.1), hsl(var(--surface)) 45%);
+  }
+
+  .kazi-auth-note {
+    border: 1px solid var(--kazi-border);
+    border-radius: var(--radius-card);
+    background: rgba(11, 28, 57, 0.72);
+    padding: 0.875rem 1rem;
+  }
+}
+
+@media (min-width: 900px) {
+  .kazi-auth-panel {
+    display: flex;
+  }
+}
+
+@media (max-width: 899px) {
+  .kazi-auth-frame {
+    grid-template-columns: minmax(0, 36rem);
+    justify-content: center;
+  }
+}
+
+@media (max-width: 767px) {
+  .kazi-brand-wordmark {
+    width: 15.5rem;
+  }
+
+  .kazi-table-wrap table {
+    min-width: 38rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kazi-video-backdrop {
+    visibility: hidden;
+  }
+
+  .kazi-video-scrim {
+    background: var(--kazi-ink);
+  }
+
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

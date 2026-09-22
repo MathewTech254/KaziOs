@@ -1,0 +1,717 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id               String   @id @default(uuid())
+  name             String
+  slug             String   @unique
+  country          String
+  currency         String
+  timezone         String
+  language         String   @default("en")
+  taxNumber        String?
+  businessCategory String?
+  address          String?
+  phone            String?
+  email            String?
+  status           String   @default("ACTIVE")
+  planId           String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  users          User[]
+  roles          Role[]
+  branches       Branch[]
+  warehouses     Warehouse[]
+  inventories    Inventory[]
+  stockMovements StockMovement[]
+  products       Product[]
+  customers      Customer[]
+  suppliers      Supplier[]
+  categories     Category[]
+  taxCategories  TaxCategory[]
+  accounts       Account[]
+  invoices       Invoice[]
+  payments       Payment[]
+  journals       JournalEntry[]
+  apiKeys        ApiKey[]
+  webhooks       WebhookEndpoint[]
+  automations    AutomationRule[]
+  projects       Project[]
+  tasks          Task[]
+  leads          Lead[]
+  tickets        SupportTicket[]
+  subscriptions  Subscription[]
+  auditLogs      AuditLog[]
+  notifications  Notification[]
+  files          File[]
+  settings       Setting[]
+  salesOrders    SalesOrder[]
+  purchaseOrders PurchaseOrder[]
+  quotations     Quotation[]
+  expenses       Expense[]
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  passwordHash  String
+  name          String
+  phone         String?
+  status        String    @default("INVITED")
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+
+  organization   Organization   @relation(fields: [organizationId], references: [id])
+  organizationId String
+  roles          UserRole[]
+  sessions       Session[]
+  apiKeys        ApiKey[]
+  auditLogs      AuditLog[]
+  notifications  Notification[]
+  tasks          Task[]
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  token        String   @unique
+  refreshToken String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  userAgent    String?
+  ip           String?
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String
+  type        String
+  description String?
+  permissions String[]
+  createdAt   DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  users          UserRole[]
+}
+
+model UserRole {
+  id          String  @id @default(uuid())
+  userId      String
+  roleId      String
+  branchId    String?
+  warehouseId String?
+
+  user      User       @relation(fields: [userId], references: [id])
+  role      Role       @relation(fields: [roleId], references: [id])
+  branch    Branch?    @relation(fields: [branchId], references: [id])
+  warehouse Warehouse? @relation(fields: [warehouseId], references: [id])
+
+  @@unique([userId, roleId, branchId])
+}
+
+model Branch {
+  id        String   @id @default(uuid())
+  name      String
+  code      String
+  address   String?
+  phone     String?
+  isMain    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  organizationId String
+  users          UserRole[]
+  warehouses     Warehouse[]
+  invoices       Invoice[]
+  payments       Payment[]
+  orders         SalesOrder[]
+  purchases      PurchaseOrder[]
+  expenses       Expense[]
+  quotations     Quotation[]
+  stockMovements StockMovement[]
+
+  @@unique([organizationId, code])
+}
+
+model Warehouse {
+  id        String   @id @default(uuid())
+  name      String
+  code      String
+  address   String?
+  createdAt DateTime @default(now())
+
+  organization    Organization    @relation(fields: [organizationId], references: [id])
+  organizationId  String
+  branchId        String?
+  branch          Branch?         @relation(fields: [branchId], references: [id])
+  inventories     Inventory[]
+  stockMovements  StockMovement[]
+  sourceTransfers StockTransfer[] @relation("stockTransferSource")
+  destTransfers   StockTransfer[] @relation("stockTransferDest")
+  userRoles       UserRole[]
+
+  @@unique([organizationId, code])
+}
+
+model Category {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+
+  organization   Organization      @relation(fields: [organizationId], references: [id])
+  organizationId String
+  products       ProductCategory[]
+
+  @@unique([organizationId, name])
+}
+
+model ProductCategory {
+  productId  String
+  categoryId String
+  product    Product  @relation(fields: [productId], references: [id])
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  @@id([productId, categoryId])
+}
+
+model TaxCategory {
+  id        String   @id @default(uuid())
+  name      String
+  rate      Float
+  mode      String   @default("EXCLUSIVE")
+  createdAt DateTime @default(now())
+
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  organizationId String
+  invoiceItems   InvoiceItem[]
+  products       Product[]
+
+  @@unique([organizationId, name])
+}
+
+model Product {
+  id           String   @id @default(uuid())
+  sku          String?
+  barcode      String?
+  name         String
+  description  String?
+  costPrice    Float
+  sellingPrice Float
+  minStock     Int      @default(0)
+  reorderPoint Int      @default(0)
+  isActive     Boolean  @default(true)
+  productType  String   @default("PHYSICAL")
+  trackStock   Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organization      Organization        @relation(fields: [organizationId], references: [id])
+  organizationId    String
+  brandId           String?
+  taxCategoryId     String?
+  unitId            String?
+  brand             Brand?              @relation(fields: [brandId], references: [id])
+  unit              Unit?               @relation(fields: [unitId], references: [id])
+  taxCategory       TaxCategory?        @relation(fields: [taxCategoryId], references: [id])
+  inventories       Inventory[]
+  invoiceItems      InvoiceItem[]
+  purchaseItems     PurchaseOrderItem[]
+  stockMovements    StockMovement[]
+  stockTransfers    StockTransfer[]
+  productCategories ProductCategory[]
+
+  @@unique([organizationId, sku])
+}
+
+model Brand {
+  id       String    @id @default(uuid())
+  name     String    @unique
+  products Product[]
+}
+
+model Unit {
+  id       String    @id @default(uuid())
+  name     String
+  code     String    @unique
+  products Product[]
+}
+
+model Customer {
+  id           String   @id @default(uuid())
+  name         String
+  email        String?
+  phone        String?
+  address      String?
+  taxNumber    String?
+  customerType String   @default("INDIVIDUAL")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  invoices       Invoice[]
+  payments       Payment[]
+  quotations     Quotation[]
+  salesOrders    SalesOrder[]
+  leads          Lead[]
+
+  @@unique([organizationId, name])
+}
+
+model Supplier {
+  id        String   @id @default(uuid())
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  taxNumber String?
+  createdAt DateTime @default(now())
+
+  organization   Organization    @relation(fields: [organizationId], references: [id])
+  organizationId String
+  purchaseOrders PurchaseOrder[]
+  expenses       Expense[]
+
+  @@unique([organizationId, name])
+}
+
+model Account {
+  id        String   @id @default(uuid())
+  code      String
+  name      String
+  type      String
+  parent    String?
+  isSystem  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  organizationId String
+  journalLines   JournalLine[]
+
+  @@unique([organizationId, code])
+}
+
+model Invoice {
+  id            String   @id @default(uuid())
+  invoiceNumber String   @unique
+  status        String   @default("DRAFT")
+  issueDate     DateTime
+  dueDate       DateTime
+  subtotal      Float
+  taxTotal      Float
+  discountTotal Float    @default(0)
+  total         Float
+  currency      String
+  notes         String?
+  terms         String?
+  paymentTerms  String?
+  paidAmount    Float    @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  organizationId String
+  customer       Customer?     @relation(fields: [customerId], references: [id])
+  customerId     String?
+  branch         Branch?       @relation(fields: [branchId], references: [id])
+  branchId       String?
+  idempotencyKey String?       @unique
+  items          InvoiceItem[]
+  payments       Payment[]
+}
+
+model InvoiceItem {
+  id             String  @id @default(uuid())
+  productId      String?
+  description    String
+  quantity       Float
+  unitPrice      Float
+  discountAmount Float   @default(0)
+  taxRateId      String?
+  taxAmount      Float   @default(0)
+  lineTotal      Float
+
+  invoice     Invoice      @relation(fields: [invoiceId], references: [id])
+  invoiceId   String
+  product     Product?     @relation(fields: [productId], references: [id])
+  taxCategory TaxCategory? @relation(fields: [taxRateId], references: [id])
+}
+
+model Payment {
+  id          String    @id @default(uuid())
+  reference   String    @unique
+  amount      Float
+  currency    String
+  provider    String
+  methodType  String
+  status      String    @default("PENDING")
+  providerRef String?
+  notes       String?
+  paidAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  invoice        Invoice?     @relation(fields: [invoiceId], references: [id])
+  invoiceId      String?
+  customer       Customer?    @relation(fields: [customerId], references: [id])
+  customerId     String?
+  branch         Branch?      @relation(fields: [branchId], references: [id])
+  branchId       String?
+}
+
+model JournalEntry {
+  id          String   @id @default(uuid())
+  reference   String   @unique
+  description String
+  journalDate DateTime
+  status      String   @default("DRAFT")
+  createdAt   DateTime @default(now())
+
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  organizationId String
+  lines          JournalLine[]
+}
+
+model JournalLine {
+  id          String  @id @default(uuid())
+  accountId   String
+  description String?
+  debit       Float   @default(0)
+  credit      Float   @default(0)
+
+  journalEntry   JournalEntry @relation(fields: [journalEntryId], references: [id])
+  journalEntryId String
+  account        Account      @relation(fields: [accountId], references: [id])
+}
+
+model Inventory {
+  id       String @id @default(uuid())
+  quantity Float
+  reserved Float  @default(0)
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  product     Product   @relation(fields: [productId], references: [id])
+  productId   String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  warehouseId String
+
+  @@unique([productId, warehouseId])
+}
+
+model StockMovement {
+  id        String   @id @default(uuid())
+  type      String
+  quantity  Float
+  reason    String?
+  reference String?
+  createdAt DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  product     Product   @relation(fields: [productId], references: [id])
+  productId   String
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  warehouseId String
+  branch      Branch?   @relation(fields: [branchId], references: [id])
+  branchId    String?
+}
+
+model StockTransfer {
+  id        String   @id @default(uuid())
+  quantity  Float
+  reference String?
+  status    String   @default("PENDING")
+  createdAt DateTime @default(now())
+
+  sourceWarehouse        Warehouse @relation("stockTransferSource", fields: [sourceWarehouseId], references: [id])
+  sourceWarehouseId      String
+  destinationWarehouse   Warehouse @relation("stockTransferDest", fields: [destinationWarehouseId], references: [id])
+  destinationWarehouseId String
+  product                Product   @relation(fields: [productId], references: [id])
+  productId              String
+}
+
+model SalesOrder {
+  id          String   @id @default(uuid())
+  orderNumber String   @unique
+  status      String   @default("DRAFT")
+  createdAt   DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  customer       Customer     @relation(fields: [customerId], references: [id])
+  customerId     String
+  branch         Branch?      @relation(fields: [branchId], references: [id])
+  branchId       String?
+}
+
+model PurchaseOrder {
+  id           String    @id @default(uuid())
+  poNumber     String    @unique
+  status       String    @default("DRAFT")
+  expectedDate DateTime?
+  totalAmount  Float     @default(0)
+  createdAt    DateTime  @default(now())
+
+  organization   Organization        @relation(fields: [organizationId], references: [id])
+  organizationId String
+  supplier       Supplier            @relation(fields: [supplierId], references: [id])
+  supplierId     String
+  branch         Branch?             @relation(fields: [branchId], references: [id])
+  branchId       String?
+  items          PurchaseOrderItem[]
+}
+
+model PurchaseOrderItem {
+  id        String @id @default(uuid())
+  quantity  Float
+  unitPrice Float
+  lineTotal Float
+
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  purchaseOrderId String
+  product         Product       @relation(fields: [productId], references: [id])
+  productId       String
+}
+
+model Quotation {
+  id          String   @id @default(uuid())
+  quoteNumber String   @unique
+  validUntil  DateTime
+  notes       String?
+  status      String   @default("DRAFT")
+  createdAt   DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  customer       Customer     @relation(fields: [customerId], references: [id])
+  customerId     String
+  branch         Branch?      @relation(fields: [branchId], references: [id])
+  branchId       String?
+}
+
+model Expense {
+  id            String   @id @default(uuid())
+  vendorName    String
+  amount        Float
+  currency      String
+  expenseDate   DateTime
+  paymentMethod String
+  receiptNumber String?
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  supplierId     String?
+  supplier       Supplier?    @relation(fields: [supplierId], references: [id])
+  categoryId     String?
+  branch         Branch?      @relation(fields: [branchId], references: [id])
+  branchId       String?
+  project        Project?     @relation(fields: [projectId], references: [id])
+  projectId      String?
+}
+
+model Project {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  status      String    @default("ACTIVE")
+  startDate   DateTime?
+  endDate     DateTime?
+  budget      Float?
+  createdAt   DateTime  @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  tasks          Task[]
+  expenses       Expense[]
+}
+
+model Task {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  priority    String    @default("MEDIUM")
+  status      String    @default("TODO")
+  dueDate     DateTime?
+  createdAt   DateTime  @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  project        Project?     @relation(fields: [projectId], references: [id])
+  projectId      String?
+  assignee       User?        @relation(fields: [assigneeId], references: [id])
+  assigneeId     String?
+}
+
+model Lead {
+  id        String   @id @default(uuid())
+  name      String
+  email     String?
+  phone     String?
+  status    String   @default("NEW")
+  source    String?
+  createdAt DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  customer       Customer?    @relation(fields: [customerId], references: [id])
+  customerId     String?
+}
+
+model SupportTicket {
+  id          String   @id @default(uuid())
+  subject     String
+  description String
+  category    String
+  priority    String   @default("MEDIUM")
+  status      String   @default("OPEN")
+  createdAt   DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+}
+
+model ApiKey {
+  id        String    @id @default(uuid())
+  name      String
+  key       String    @unique
+  scopes    String[]
+  expiresAt DateTime?
+  status    String    @default("ACTIVE")
+  createdAt DateTime  @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  user           User?        @relation(fields: [userId], references: [id])
+  userId         String?
+}
+
+model WebhookEndpoint {
+  id        String   @id @default(uuid())
+  name      String
+  url       String
+  events    String[]
+  isActive  Boolean  @default(true)
+  secret    String?
+  createdAt DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+}
+
+model AutomationRule {
+  id            String   @id @default(uuid())
+  name          String
+  trigger       String
+  triggerConfig String?
+  conditions    Json?
+  actions       Json
+  isActive      Boolean  @default(true)
+  status        String   @default("ACTIVE")
+  createdAt     DateTime @default(now())
+
+  organization   Organization          @relation(fields: [organizationId], references: [id])
+  organizationId String
+  executions     AutomationExecution[]
+}
+
+model AutomationExecution {
+  id        String   @id @default(uuid())
+  status    String   @default("PENDING")
+  result    Json?
+  error     String?
+  createdAt DateTime @default(now())
+
+  automation   AutomationRule @relation(fields: [automationId], references: [id])
+  automationId String
+}
+
+model Subscription {
+  id               String    @id @default(uuid())
+  planId           String
+  billingCycle     String    @default("monthly")
+  status           String    @default("TRIALING")
+  currentPeriodEnd DateTime?
+  createdAt        DateTime  @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  @@unique([organizationId])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  entity    String
+  entityId  String
+  action    String
+  changes   Json
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  user           User?        @relation(fields: [userId], references: [id])
+  userId         String?
+}
+
+model Notification {
+  id        String    @id @default(uuid())
+  channel   String
+  type      String
+  title     String
+  body      String
+  status    String    @default("PENDING")
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  user           User         @relation(fields: [userId], references: [id])
+  userId         String
+}
+
+model File {
+  id        String   @id @default(uuid())
+  filename  String
+  mime      String
+  size      Int
+  url       String
+  type      String
+  createdAt DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+}
+
+model Setting {
+  id    String @id @default(uuid())
+  key   String @unique
+  value Json
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  @@unique([organizationId, key])
+}

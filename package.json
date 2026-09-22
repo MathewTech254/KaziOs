@@ -1,0 +1,59 @@
+{
+  "name": "kazios",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev --workspace=@kazios/api\" \"npm run dev --workspace=@kazios/worker\" \"npm run dev --workspace=@kazios/web\"",
+    "dev:api": "npm run dev --workspace=@kazios/api",
+    "dev:worker": "npm run dev --workspace=@kazios/worker",
+    "dev:web": "npm run dev --workspace=@kazios/web",
+    "build:packages": "npm run build --workspace=@kazios/types && npm run build --workspace=@kazios/config && npm run build --workspace=@kazios/validation && npm run build --workspace=@kazios/integrations && npm run build --workspace=@kazios/ai && npm run build --workspace=@kazios/ui",
+    "build": "npm run build:packages && npm run build --workspace=@kazios/api && npm run build --workspace=@kazios/worker && npm run build --workspace=@kazios/web",
+    "lint": "npm run lint --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
+    "test": "npm run test --workspaces",
+    "test:unit": "npm run test:unit --workspaces",
+    "test:integration": "npm run test:integration --workspaces",
+    "prisma:generate": "npm run prisma:generate --workspace=@kazios/api",
+    "prisma:migrate": "npm run prisma:migrate --workspace=@kazios/api",
+    "prisma:migrate:deploy": "prisma migrate deploy --schema apps/api/prisma/schema.prisma",
+    "prisma:migrate:reset": "prisma migrate reset --schema apps/api/prisma/schema.prisma",
+    "prisma:studio": "npm run prisma:studio --workspace=@kazios/api",
+    "db:push": "npm run db:push --workspace=@kazios/api",
+    "db:seed": "npm run db:seed --workspace=@kazios/api",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:build": "docker compose build",
+    "clean": "docker compose down -v && docker compose rm -sf"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@tailwindcss/container-queries": "^0.1.1",
+    "@types/jest": "^29.5.12",
+    "@typescript-eslint/eslint-plugin": "^7.13.1",
+    "@typescript-eslint/parser": "^7.13.1",
+    "concurrently": "^10.0.5",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.3",
+    "prettier": "^3.3.2",
+    "ts-jest": "^29.1.4"
+  },
+  "allowScripts": {
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "argon2@0.40.3": true,
+    "esbuild@0.21.5": true,
+    "msgpackr-extract@3.0.4": true,
+    "prisma@5.22.0": true
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "openai": "^7.15.0"
+  }
+}
