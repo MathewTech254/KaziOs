@@ -1,0 +1,32 @@
+name: Migrate Production Database
+
+# Applies committed Prisma migrations to the hosted database. `migrate deploy`
+# only ever applies migrations that exist in the repository, it never resets data.
+on:
+  push:
+    branches: [master, main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-db-migrations
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Prisma migrate deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Apply pending migrations
+        env:
+          # Neon "direct" (non pooled) connection string, stored as a repository secret.
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: npx prisma migrate deploy --schema apps/api/prisma/schema.prisma

@@ -82,7 +82,7 @@ export function createEmailProvider(config: {
   fromName: string;
 }): EmailProvider {
   if (config.provider === "sendgrid" && config.apiKey) {
-    return new SendgridEmailProvider(config);
+    return new SendgridEmailProvider({ apiKey: config.apiKey, from: config.from, fromName: config.fromName });
   }
   if (config.provider === "smtp" && config.apiKey) {
     return new ConsoleEmailProvider();

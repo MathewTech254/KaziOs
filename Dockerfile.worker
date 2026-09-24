@@ -1,16 +1,30 @@
+# Build stage: needs the full toolchain (typescript, prisma CLI) to compile.
 FROM node:20-alpine AS builder
 WORKDIR /app
-COPY package.json package-lock.json ./
-COPY .npmrc ./
-RUN npm ci --omit=dev
+COPY package.json package-lock.json .npmrc ./
+RUN npm ci
 COPY . .
-RUN npm run build
+RUN npx prisma generate --schema apps/api/prisma/schema.prisma
+RUN npm run build:packages && npm run build --workspace=@kazios/worker
 
+# Runtime stage: production dependencies plus the generated Prisma client.
 FROM node:20-alpine AS runner
 WORKDIR /app
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/node_modules ./node_modules
+ENV NODE_ENV=production
+COPY package.json package-lock.json .npmrc ./
+COPY apps/api/package.json ./apps/api/
+COPY apps/worker/package.json ./apps/worker/
+COPY apps/web/package.json ./apps/web/
+COPY packages/ai/package.json ./packages/ai/
+COPY packages/config/package.json ./packages/config/
+COPY packages/integrations/package.json ./packages/integrations/
+COPY packages/types/package.json ./packages/types/
+COPY packages/ui/package.json ./packages/ui/
+COPY packages/validation/package.json ./packages/validation/
+RUN PRISMA_SKIP_POSTINSTALL_GENERATE=true npm ci --omit=dev && npm cache clean --force
 COPY --from=builder /app/apps/worker/dist ./apps/worker/dist
+COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
 COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 EXPOSE 4001
 CMD ["node", "apps/worker/dist/index.js"]

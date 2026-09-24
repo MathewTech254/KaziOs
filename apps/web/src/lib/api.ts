@@ -8,7 +8,9 @@ const API_BASE =
 export const api = axios.create({
   baseURL: API_BASE,
   withCredentials: true,
-  timeout: 30000,
+  // Generous timeout: a free hosting tier sleeps when idle, so the first request
+  // after a quiet period waits for the instance to wake up.
+  timeout: Number(import.meta.env.VITE_API_TIMEOUT_MS || 90_000),
 });
 
 api.interceptors.request.use((config) => {

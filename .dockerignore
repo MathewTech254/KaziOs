@@ -1,1 +1,31 @@
-node /index.js
+# Dependencies and build output are produced inside the image
+node_modules
+**/node_modules
+dist
+**/dist
+*.tsbuildinfo
+
+# Secrets must never be baked into an image
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# VCS, CI and editor noise
+.git
+.gitignore
+.github
+.kilo
+.kombai
+.vscode
+.idea
+*.log
+
+# Local artefacts and compose files (not part of the runtime image)
+docker
+docker-compose*.yml
+test.txt
+test2.txt
+backgroundvideo.mp4

@@ -1,0 +1,3 @@
+/* Single page app: every route is served by index.html so deep links like
+   /inventory and /pos survive a hard refresh. */
+/*    /index.html   200

@@ -7,6 +7,11 @@ const JWT_SECRET = process.env.JWT_SECRET || "dev-jwt-secret-change-in-productio
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 const BCRYPT_ROUNDS = parseInt(process.env.BCRYPT_ROUNDS || "12", 10);
 
+// Never boot a production API that would sign tokens with the public dev secret.
+if (process.env.NODE_ENV === "production" && JWT_SECRET.startsWith("dev-jwt-secret")) {
+  throw new Error("JWT_SECRET is not configured. Set a random secret of 32+ characters before starting in production.");
+}
+
 export async function hashPassword(password: string): Promise<string> {
   return bcrypt.hash(password, BCRYPT_ROUNDS);
 }

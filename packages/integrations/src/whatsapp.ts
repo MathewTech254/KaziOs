@@ -26,6 +26,7 @@ export class WhatsappProvider {
   async send(message: WhatsappMessage): Promise<WhatsappResult> {
     if (this.provider === "console") {
       console.log("\n=== WHATSAPP ===");
+      console.log("From:", this.from);
       console.log("To:", message.to);
       console.log("Body:", message.body);
       console.log("=== END WHATSAPP ===\n");

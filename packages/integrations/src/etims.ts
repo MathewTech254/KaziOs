@@ -1,3 +1,11 @@
+import { readJson } from "./http";
+
+interface EtimResponseBody {
+  message?: string;
+  access_token?: string;
+  data?: { id?: string; receiptId?: string; status?: string };
+}
+
 export interface EtimSubmission {
   id: string;
   organizationId: string;
@@ -177,7 +185,7 @@ export class EtimProviderImpl implements EtimProvider {
       }),
     });
 
-    const data = await response.json();
+    const data = await readJson<EtimResponseBody>(response);
 
     if (!response.ok) {
       return {
@@ -203,7 +211,7 @@ export class EtimProviderImpl implements EtimProvider {
       body: JSON.stringify(_creditNote),
     });
 
-    const data = await response.json();
+    const data = await readJson<EtimResponseBody>(response);
 
     if (!response.ok) {
       return { status: "REJECTED", errors: data.message || JSON.stringify(data) };
@@ -223,7 +231,7 @@ export class EtimProviderImpl implements EtimProvider {
       body: JSON.stringify(_receipt),
     });
 
-    const data = await response.json();
+    const data = await readJson<EtimResponseBody>(response);
 
     if (!response.ok) {
       return { status: "REJECTED", errors: data.message || JSON.stringify(data) };
@@ -242,7 +250,7 @@ export class EtimProviderImpl implements EtimProvider {
       return "FAILED";
     }
 
-    const data = await response.json();
+    const data = await readJson<EtimResponseBody>(response);
     const statusMap: Record<string, EtimStatus> = {
       accepted: "ACCEPTED",
       rejected: "REJECTED",
@@ -250,7 +258,8 @@ export class EtimProviderImpl implements EtimProvider {
       failed: "FAILED",
     };
 
-    return statusMap[data.data?.status] || "PENDING";
+    const status = data.data?.status;
+    return (status ? statusMap[status] : undefined) || "PENDING";
   }
 
   private async getAccessToken(): Promise<string> {
@@ -268,7 +277,10 @@ export class EtimProviderImpl implements EtimProvider {
       throw new Error("Failed to authenticate with eTIMS");
     }
 
-    const data = await response.json();
+    const data = await readJson<EtimResponseBody>(response);
+    if (!data.access_token) {
+      throw new Error("eTIMS did not return an access token");
+    }
     return data.access_token;
   }
 }

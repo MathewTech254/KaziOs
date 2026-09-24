@@ -1,5 +1,5 @@
-import { randomUUID } from "crypto";
 import * as crypto from "crypto";
+import { readJson } from "./http";
 
 export interface PaymentIntent {
   id: string;
@@ -48,6 +48,7 @@ export interface PaymentVerificationResult {
   amount: number;
   currency: string;
   reference: string;
+  message?: string;
   customerEmail?: string;
   channel?: string;
   transactionDate?: Date;
@@ -64,22 +65,54 @@ export interface PaymentRefundResult {
   };
 }
 
+interface PaystackInitializeBody {
+  status?: boolean;
+  message?: string;
+  data?: {
+    authorization_url?: string;
+    access_code?: string;
+    reference?: string;
+  };
+}
+
+interface PaystackVerifyBody {
+  status?: boolean;
+  message?: string;
+  data: {
+    status: string;
+    amount: number;
+    currency?: string;
+    reference: string;
+    customer?: { email?: string };
+    channel?: string;
+    transaction_date?: string;
+    id?: number;
+    metadata?: Record<string, any>;
+  };
+}
+
+interface PaystackRefundBody {
+  status?: boolean;
+  message?: string;
+  data?: { reference?: string; amount?: number };
+}
+
 export class StubPaymentProvider implements PaymentProvider {
   constructor(private providerType: PaymentProviderType) {}
 
-  async initializePayment(req: PaymentIntentRequest): Promise<PaymentIntentResponse> {
+  async initializePayment(_req: PaymentIntentRequest): Promise<PaymentIntentResponse> {
     throw new PaymentProviderNotConfiguredError(this.providerType);
   }
 
-  async verifyPayment(reference: string): Promise<PaymentVerificationResult> {
+  async verifyPayment(_reference: string): Promise<PaymentVerificationResult> {
     throw new PaymentProviderNotConfiguredError(this.providerType);
   }
 
-  async createRefund(transactionRef: string, amount?: number): Promise<PaymentRefundResult> {
+  async createRefund(_transactionRef: string, _amount?: number): Promise<PaymentRefundResult> {
     throw new PaymentProviderNotConfiguredError(this.providerType);
   }
 
-  verifyWebhookSignature(payload: string, signature: string): boolean {
+  verifyWebhookSignature(_payload: string, _signature: string): boolean {
     return false;
   }
 }
@@ -122,7 +155,7 @@ export class PaystackProvider implements PaymentProvider {
       }),
     });
 
-    const data = await response.json();
+    const data = await readJson<PaystackInitializeBody>(response);
 
     if (!response.ok || data.status === false) {
       return { status: "failed", message: data.message || "Payment initialization failed" };
@@ -130,11 +163,11 @@ export class PaystackProvider implements PaymentProvider {
 
     return {
       status: "success",
-      message: data.message,
+      message: data.message || "Payment initialized",
       data: {
-        authorizationUrl: data.data.authorization_url,
-        accessCode: data.data.access_code,
-        reference: data.data.reference,
+        authorizationUrl: data.data?.authorization_url,
+        accessCode: data.data?.access_code,
+        reference: data.data?.reference,
       },
     };
   }
@@ -147,7 +180,7 @@ export class PaystackProvider implements PaymentProvider {
       },
     });
 
-    const data = await response.json();
+    const data = await readJson<PaystackVerifyBody>(response);
 
     if (!response.ok || data.status === false) {
       return {
@@ -189,7 +222,7 @@ export class PaystackProvider implements PaymentProvider {
       }),
     });
 
-    const data = await response.json();
+    const data = await readJson<PaystackRefundBody>(response);
 
     if (!response.ok || data.status === false) {
       return { status: "failed", message: data.message || "Refund failed" };
@@ -197,7 +230,7 @@ export class PaystackProvider implements PaymentProvider {
 
     return {
       status: "success",
-      message: data.message,
+      message: data.message || "Refund processed",
       data: {
         reference: data.data?.reference,
         amount: data.data?.amount,

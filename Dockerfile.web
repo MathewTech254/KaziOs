@@ -1,14 +1,15 @@
+# Build stage: compiles the shared packages, then the Vite bundle.
 FROM node:20-alpine AS builder
 WORKDIR /app
-COPY package.json package-lock.json ./
-COPY .npmrc ./
+COPY package.json package-lock.json .npmrc ./
 RUN npm ci
 COPY . .
-RUN npm run build
+RUN npm run build:packages && npm run build --workspace=@kazios/web
 
-FROM node:20-alpine AS runner
-WORKDIR /app
-COPY --from=builder /app/apps/web/dist ./dist
-COPY --from=builder /app/apps/web/package.json ./package.json
-EXPOSE 3000
-CMD ["npx", "vite", "preview", "--host", "0.0.0.0", "--port", "3000", "--outDir", "dist"]
+# Runtime stage: nginx serves the static bundle and proxies /api to the API service,
+# so the browser only ever talks to one origin.
+FROM nginx:1.27-alpine AS runner
+COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
