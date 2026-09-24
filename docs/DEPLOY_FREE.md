@@ -57,7 +57,7 @@ One becomes `SESSION_SECRET`, the other `JWT_SECRET`. The API refuses to start i
    | Setting | Value |
    | --- | --- |
    | Runtime | Node |
-   | Build command | `npm ci && npm run build:packages && npx prisma generate --schema apps/api/prisma/schema.prisma && npm run build --workspace=@kazios/api` |
+   | Build command | `npm ci --include=dev && npm run build:packages && npx prisma generate --schema apps/api/prisma/schema.prisma && npm run build --workspace=@kazios/api` |
    | Start command | `npm run start --workspace=@kazios/api` |
    | Plan | Free |
    | Health check path | `/health` |
@@ -116,7 +116,7 @@ That creates `admin@kazios.dev` / `admin123`. Change the password before sharing
    | Setting | Value |
    | --- | --- |
    | Framework preset | None (the build command is explicit) |
-   | Build command | `npm ci && npm run build:packages && npm run build --workspace=@kazios/web` |
+   | Build command | `npm ci --include=dev && npm run build:packages && npm run build --workspace=@kazios/web` |
    | Build output directory | `apps/web/dist` |
    | Root directory | leave empty (repo root) |
 
@@ -130,6 +130,12 @@ That creates `admin@kazios.dev` / `admin123`. Change the password before sharing
 
    `VITE_API_URL` is compiled into the JavaScript bundle by Vite, so changing it requires a
    **new build**: after editing it, use **Retry deployment** on the latest deployment.
+
+   `--include=dev` is deliberate. Render sets `NODE_ENV=production` during the build, which makes npm
+   skip dev dependencies; the TypeScript compiler and `@types/node` are needed to build, so they are
+   requested explicitly (and are also declared as real dependencies in the root `package.json`, so they
+   are present even without the flag). Without this you get a confusing `tsc is not recognized` or a
+   random global compiler version.
 
 4. Deploy. You get a URL like `https://kazios.pages.dev`.
 5. Go back to Render and set `CORS_ORIGIN` to the exact Pages URL (no trailing slash), then save.

@@ -26,7 +26,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      - run: npm ci
+      - run: npm ci --include=dev
       - run: npm run lint
       - run: npm run typecheck
 
@@ -89,7 +89,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      - run: npm ci
+      - run: npm ci --include=dev
       - run: npm run prisma:generate
         working-directory: ./apps/api
       - run: npm run prisma:migrate deploy
@@ -106,7 +106,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      - run: npm ci
+      - run: npm ci --include=dev
       - run: npm run build
 
   docker-build:

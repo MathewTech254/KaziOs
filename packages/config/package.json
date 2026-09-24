@@ -16,6 +16,8 @@
     "typecheck": "tsc --noEmit",
     "test": "jest"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.14.10"
+  },
   "dependencies": {}
 }
