@@ -1,0 +1,1 @@
+ALTER TABLE "Setting" DROP CONSTRAINT IF EXISTS "Setting_key_key";

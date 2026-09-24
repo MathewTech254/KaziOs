@@ -69,9 +69,12 @@ apps/
 - **Customers**: CRUD with type (individual/business)
 - **Invoices**: create with line items, send, void, status tracking
 - **Payments**: create, auto-update invoice status (PAID/PARTIALLY_PAID)
-- **Organization**: branches, warehouses, settings
-- **Reports**: sales summary, profit/loss, inventory, trial balance
-- **Settings**: key-value store
+- **Organization**: profile, branches and warehouses (full CRUD, one main branch, in-use guards)
+- **Reports**: sales summary (gated by `reports.view`)
+- **Settings**: typed per-org key/value store (`invoicing`, `pos`, `notifications`, `accounting`) with validation, defaults and reset-to-defaults
+- **Taxes**: tax category CRUD (`/tax-categories`) with rate/mode and in-use protection
+- **Users & roles**: member list/invite, role CRUD with a shared permission catalogue (`GET /roles/permissions`), role assignment per branch/warehouse, last-owner protection
+- **Web settings page**: `/settings` — organization profile, locations, tax, preferences and roles & permissions
 - **Audit log**: automatic on all mutations
 - **Worker**: notifications, automations, overdue invoices, stock checks (BullMQ)
 

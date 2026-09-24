@@ -10,6 +10,8 @@ import { InvoicesPage } from "../pages/InvoicesPage";
 import { ReportsPage } from "../pages/ReportsPage";
 import { PosPage } from "../pages/PosPage";
 import { PaymentsPage } from "../pages/PaymentsPage";
+import { SettingsPage } from "../pages/SettingsPage";
+import { InventoryPage } from "../pages/InventoryPage";
 import { AuthGuard } from "../components/Guard";
 
 export const router = createBrowserRouter([
@@ -35,6 +37,24 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <PosPage /> },
     ],
+  },
+  {
+    path: "/settings",
+    element: (
+      <AuthGuard>
+        <Layout />
+      </AuthGuard>
+    ),
+    children: [{ index: true, element: <SettingsPage /> }],
+  },
+  {
+    path: "/inventory",
+    element: (
+      <AuthGuard>
+        <Layout />
+      </AuthGuard>
+    ),
+    children: [{ index: true, element: <InventoryPage /> }],
   },
   {
     path: "/dashboard",

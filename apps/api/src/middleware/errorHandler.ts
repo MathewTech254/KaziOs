@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import { ZodError } from "zod";
 
 export class AppError extends Error {
   constructor(
@@ -15,6 +16,14 @@ export function errorHandler(err: any, _req: Request, res: Response, _next: Next
   console.error("Error:", err);
   if (err instanceof AppError) {
     res.status(err.statusCode).json({ error: err.message, code: err.code });
+    return;
+  }
+  if (err instanceof ZodError) {
+    res.status(400).json({ error: "Validation failed", details: err.issues });
+    return;
+  }
+  if (err.name === "ZodError") {
+    res.status(400).json({ error: "Validation failed", details: err.issues || err.errors });
     return;
   }
   if (err.name === "ValidationError") {

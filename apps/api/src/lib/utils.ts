@@ -37,6 +37,15 @@ export function generateOrderNumber(prefix = "SO"): string {
   return `${prefix}-${y}${m}-${rnd}`;
 }
 
+/** Reference used for stock adjustments ("ADJ") and transfers ("TRF"). */
+export function generateStockReference(prefix = "ADJ"): string {
+  const now = new Date();
+  const y = now.getFullYear().toString().slice(-2);
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const rnd = randomUUID().slice(-4).toUpperCase();
+  return `${prefix}-${y}${m}-${rnd}`;
+}
+
 export function paginate(page = 1, limit = 50) {
   const p = Math.max(1, page);
   const l = Math.min(100, Math.max(1, limit));

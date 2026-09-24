@@ -32,6 +32,7 @@ model Organization {
   warehouses     Warehouse[]
   inventories    Inventory[]
   stockMovements StockMovement[]
+  stockTransfers StockTransfer[]
   products       Product[]
   customers      Customer[]
   suppliers      Supplier[]
@@ -79,6 +80,7 @@ model User {
   auditLogs      AuditLog[]
   notifications  Notification[]
   tasks          Task[]
+  stockTransfers StockTransfer[]
 }
 
 model Session {
@@ -435,11 +437,16 @@ model StockMovement {
 }
 
 model StockTransfer {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   quantity  Float
   reference String?
-  status    String   @default("PENDING")
-  createdAt DateTime @default(now())
+  status    String    @default("PENDING")
+  notes     String?
+  completedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
 
   sourceWarehouse        Warehouse @relation("stockTransferSource", fields: [sourceWarehouseId], references: [id])
   sourceWarehouseId      String
@@ -447,6 +454,11 @@ model StockTransfer {
   destinationWarehouseId String
   product                Product   @relation(fields: [productId], references: [id])
   productId              String
+  createdBy              User?     @relation(fields: [createdById], references: [id])
+  createdById            String?
+
+  @@index([organizationId])
+  @@index([status])
 }
 
 model SalesOrder {
@@ -707,7 +719,7 @@ model File {
 
 model Setting {
   id    String @id @default(uuid())
-  key   String @unique
+  key   String
   value Json
 
   organization   Organization @relation(fields: [organizationId], references: [id])

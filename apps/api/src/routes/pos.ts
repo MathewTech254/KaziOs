@@ -3,9 +3,10 @@ import { Prisma } from "@prisma/client";
 import { isPaystackConfigured, loadConfig } from "@kazios/config";
 import { zPosSaleSchema } from "@kazios/validation";
 import { prisma } from "../lib/prisma";
-import { AuthRequest, requireAuth, requirePermission } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { generateId, generateInvoiceNumber, paginate } from "../lib/utils";
+import { getOrganizationId, getScopedValues, isAllowed } from "../lib/scope";
 
 export const posRouter = Router();
 
@@ -21,24 +22,6 @@ function toCurrency(cents: number): number {
 
 function roundCents(value: number): number {
   return Math.round(value + Number.EPSILON);
-}
-
-function getOrganizationId(req: Request): string | undefined {
-  return (req as AuthRequest).organizationId;
-}
-
-function getScopedValues(req: Request, key: "branchId" | "warehouseId"): string[] {
-  const roles = (req as AuthRequest).roles || [];
-  const values = roles.flatMap((assignment) => {
-    const relation = key === "branchId" ? assignment.branch : assignment.warehouse;
-    const direct = key === "branchId" ? assignment.branchId : assignment.warehouseId;
-    return [typeof direct === "string" ? direct : undefined, relation?.id].filter((value): value is string => Boolean(value));
-  });
-  return Array.from(new Set(values));
-}
-
-function isAllowed(value: string | null | undefined, scopedValues: string[]): boolean {
-  return scopedValues.length === 0 || (value ? scopedValues.includes(value) : false);
 }
 
 function getPaymentMethods() {

@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma";
-import { requireAuth } from "../middleware/auth";
+import { AuthRequest, requireAuth, requirePermission } from "../middleware/auth";
 
 export const reportRouter = Router();
 
-reportRouter.get("/sales-summary", requireAuth, async (req, res, next) => {
+reportRouter.get("/sales-summary", requireAuth, requirePermission("reports.view"), async (req: AuthRequest, res, next) => {
   try {
     const startDate = req.query.startDate ? new Date(String(req.query.startDate)) : undefined;
     const endDate = req.query.endDate ? new Date(String(req.query.endDate)) : undefined;
@@ -53,3 +53,4 @@ reportRouter.get("/sales-summary", requireAuth, async (req, res, next) => {
     next(err);
   }
 });
+
