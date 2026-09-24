@@ -13,6 +13,7 @@ export {
   getUserOrganization,
 } from "./lib/auth";
 export { AppError } from "./middleware/errorHandler";
+export { assertProductionEnv, productionEnvProblems } from "./lib/productionEnv";
 export { generateId, generateInvoiceNumber, generatePoNumber, generateQuoteNumber, generateOrderNumber, generateStockReference, paginate, toFloat } from "./lib/utils";
 
 import express from "express";
@@ -22,6 +23,7 @@ import cookieParser from "cookie-parser";
 import session from "express-session";
 import { RedisStore } from "connect-redis";
 import { prisma } from "./lib/prisma";
+import { assertProductionEnv } from "./lib/productionEnv";
 import { redisClient, connectRedis } from "./lib/redis";
 import { authRouter } from "./routes/auth";
 import { organizationRouter } from "./routes/organization";
@@ -86,22 +88,8 @@ export function createApp() {
   return app;
 }
 
-/** Fail fast in production instead of booting with development defaults. */
-function requireProductionEnv(): void {
-  if (process.env.NODE_ENV !== "production") return;
-
-  const required = ["DATABASE_URL", "SESSION_SECRET", "JWT_SECRET", "CORS_ORIGIN"];
-  const missing = required.filter((name) => !process.env[name]);
-  if (missing.length) {
-    throw new Error(`Missing required production environment variables: ${missing.join(", ")}`);
-  }
-  if ((process.env.SESSION_SECRET || "").length < 32) {
-    throw new Error("SESSION_SECRET must be at least 32 characters in production");
-  }
-}
-
 async function start() {
-  requireProductionEnv();
+  assertProductionEnv();
   await connectRedis();
   await prisma.$connect();
   const app = createApp();
