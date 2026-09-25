@@ -21,7 +21,12 @@ COPY packages/integrations/package.json ./packages/integrations/
 COPY packages/types/package.json ./packages/types/
 COPY packages/ui/package.json ./packages/ui/
 COPY packages/validation/package.json ./packages/validation/
-RUN PRISMA_SKIP_POSTINSTALL_GENERATE=true npm ci --omit=dev && npm cache clean --force
+# include=dev in .npmrc would otherwise defeat --omit=dev, so step that file aside for
+# this production-only install.
+RUN mv .npmrc .npmrc.build \
+    && PRISMA_SKIP_POSTINSTALL_GENERATE=true npm ci --omit=dev \
+    && mv .npmrc.build .npmrc \
+    && npm cache clean --force
 COPY --from=builder /app/apps/worker/dist ./apps/worker/dist
 COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
 COPY --from=builder /app/packages ./packages
