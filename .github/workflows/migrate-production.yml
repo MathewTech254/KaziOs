@@ -25,6 +25,23 @@ jobs:
 
       - run: npm ci --include=dev
 
+      - name: Check the production secret
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::PRODUCTION_DATABASE_URL is empty. Add it under Settings > Secrets and variables > Actions > Repository secrets, with exactly that name. A secret added under an Environment is not visible here."
+            exit 1
+          fi
+          echo "secret present (length ${#DATABASE_URL})"
+          case "$DATABASE_URL" in
+            postgresql://*|postgres://*) echo "datasource scheme ok" ;;
+            *) echo "::error::PRODUCTION_DATABASE_URL must start with postgresql://"; exit 1 ;;
+          esac
+          case "$DATABASE_URL" in
+            *-pooler.*) echo "::error::That is a pooled URL. Migrations need the direct, non-pooled Neon URL."; exit 1 ;;
+          esac
+
       - name: Apply pending migrations
         env:
           # Neon "direct" (non pooled) connection string, stored as a repository secret.
