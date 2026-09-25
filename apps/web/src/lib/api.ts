@@ -1,9 +1,19 @@
 import axios from "axios";
 
-const API_BASE =
+/**
+ * The API is served under /api/v1. A configured host may or may not already include
+ * that prefix, so normalise it rather than silently dropping it and 404ing every call.
+ */
+function resolveApiBase(configured?: string): string {
+  const base = (configured || "").trim().replace(/\/+$/, "");
+  if (!base) return "/api/v1";
+  return /\/api\/v\d+$/i.test(base) ? base : `${base}/api/v1`;
+}
+
+const API_BASE = resolveApiBase(
   (typeof window !== "undefined" ? (window as Window & { __KAZIOS_API_URL__?: string }).__KAZIOS_API_URL__ : undefined) ||
-  import.meta.env.VITE_API_URL ||
-  "/api/v1";
+    import.meta.env.VITE_API_URL
+);
 
 export const api = axios.create({
   baseURL: API_BASE,
