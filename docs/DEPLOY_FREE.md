@@ -73,7 +73,7 @@ One becomes `SESSION_SECRET`, the other `JWT_SECRET`. The API refuses to start i
    | `REDIS_URL` | Upstash TLS URL from step 2 |
    | `SESSION_SECRET` | generated in step 3 |
    | `JWT_SECRET` | generated in step 3 |
-   | `CORS_ORIGIN` | add this in step 6, once you have the web URL |
+   | `CORS_ORIGIN` | the web app's exact origin, e.g. `https://kazios.pages.dev`. Accepts a comma separated list. Add it in step 6, once Pages exists. |
    | `BCRYPT_ROUNDS` | `10` (lower than the dev default, friendlier to a small free instance) |
 
 4. Create the service. The first build compiles every workspace and takes several minutes.
@@ -141,6 +141,12 @@ That creates `admin@kazios.dev` / `admin123`. Change the password before sharing
 5. Go back to Render and set `CORS_ORIGIN` to the exact Pages URL (no trailing slash), then save.
    Render restarts the API when its environment changes.
 6. Open the Pages URL, sign in, and check `/inventory`, `/pos` and `/dashboard` work.
+
+The API does not refuse to start when `CORS_ORIGIN` is missing, it logs a warning instead. That is
+deliberate: the web app is normally deployed after the API, so its URL is not known yet, and treating
+it as a boot requirement deadlocks the deploy order. Until you set the variable, browser requests from
+the web app are rejected while everything else keeps working. Set it to the exact Pages origin, or a
+comma separated list if you add a custom domain later.
 
 `apps/web/public/_redirects` tells Cloudflare Pages to serve `index.html` for unknown paths,
 so refreshing on `/inventory` or `/pos` does not 404. If you ever host the web app elsewhere

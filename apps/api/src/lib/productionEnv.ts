@@ -14,7 +14,7 @@ export function productionEnvProblems(env: NodeJS.ProcessEnv = process.env): str
 
   const problems: string[] = [];
 
-  for (const name of ["DATABASE_URL", "SESSION_SECRET", "JWT_SECRET", "CORS_ORIGIN"]) {
+  for (const name of ["DATABASE_URL", "SESSION_SECRET", "JWT_SECRET"]) {
     if (!env[name]?.trim()) problems.push(`${name} is not set`);
   }
 
@@ -32,9 +32,23 @@ export function productionEnvProblems(env: NodeJS.ProcessEnv = process.env): str
     problems.push("SESSION_SECRET must be at least 32 characters");
   }
 
-  if (env.CORS_ORIGIN === "*") problems.push('CORS_ORIGIN must be the exact web origin, not "*"');
-
   return problems;
+}
+
+/**
+ * CORS is a browser concern, not a credential, so a missing origin must not stop the
+ * API from serving: the web app is often deployed after the API, and its URL is not
+ * known until then. Reported loudly instead so it is not forgotten.
+ */
+export function corsOriginWarning(env: NodeJS.ProcessEnv = process.env): string | null {
+  const configured = (env.CORS_ORIGIN || "").trim();
+  if (!configured) {
+    return "CORS_ORIGIN is not set. Browser requests from the web app will be blocked until it is (Render: Environment tab).";
+  }
+  if (configured === "*") {
+    return "CORS_ORIGIN is \"*\", which cannot be used with credentialed requests. Set the exact web origin instead.";
+  }
+  return null;
 }
 
 export function assertProductionEnv(env: NodeJS.ProcessEnv = process.env): void {

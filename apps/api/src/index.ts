@@ -13,7 +13,7 @@ export {
   getUserOrganization,
 } from "./lib/auth";
 export { AppError } from "./middleware/errorHandler";
-export { assertProductionEnv, productionEnvProblems } from "./lib/productionEnv";
+export { assertProductionEnv, corsOriginWarning, productionEnvProblems } from "./lib/productionEnv";
 export { generateId, generateInvoiceNumber, generatePoNumber, generateQuoteNumber, generateOrderNumber, generateStockReference, paginate, toFloat } from "./lib/utils";
 
 import express from "express";
@@ -23,7 +23,7 @@ import cookieParser from "cookie-parser";
 import session from "express-session";
 import { RedisStore } from "connect-redis";
 import { prisma } from "./lib/prisma";
-import { assertProductionEnv } from "./lib/productionEnv";
+import { assertProductionEnv, corsOriginWarning } from "./lib/productionEnv";
 import { redisClient, connectRedis } from "./lib/redis";
 import { authRouter } from "./routes/auth";
 import { organizationRouter } from "./routes/organization";
@@ -41,13 +41,24 @@ import { inventoryRouter } from "./routes/inventory";
 import { auditMiddleware } from "./middleware/audit";
 import { errorHandler } from "./middleware/errorHandler";
 
+/** CORS_ORIGIN may list several origins, e.g. a Pages URL plus a custom domain. */
+function getCorsOrigins(): string[] {
+  return (process.env.CORS_ORIGIN || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 export function createApp() {
   const app = express();
+  const allowedOrigins = getCorsOrigins();
 
   app.use(helmet());
   app.use(
     cors({
-      origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+      // The web client sends credentials, so the origin has to be explicit. A comma
+      // separated list is accepted, e.g. a Pages URL plus a custom domain.
+      origin: allowedOrigins.length ? allowedOrigins : false,
       credentials: true,
     })
   );
@@ -90,6 +101,8 @@ export function createApp() {
 
 async function start() {
   assertProductionEnv();
+  const corsWarning = corsOriginWarning();
+  if (corsWarning) console.warn(`Warning: ${corsWarning}`);
   await connectRedis();
   await prisma.$connect();
   const app = createApp();
