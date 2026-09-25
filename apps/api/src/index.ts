@@ -81,6 +81,33 @@ export function createApp() {
   app.use(auditMiddleware);
 
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
+
+  // Visiting the API host in a browser should explain itself rather than 404.
+  app.get("/", (_req, res) =>
+    res.json({
+      service: "KaziOS API",
+      status: "ok",
+      environment: process.env.NODE_ENV || "development",
+      health: "/health",
+      api: "/api/v1",
+      resources: [
+        "auth",
+        "org",
+        "products",
+        "customers",
+        "invoices",
+        "payments",
+        "reports",
+        "settings",
+        "tax-categories",
+        "users",
+        "roles",
+        "pos",
+        "inventory",
+      ],
+    })
+  );
+
   app.use("/api/v1/auth", authRouter);
   app.use("/api/v1/org", organizationRouter);
   app.use("/api/v1/products", productRouter);
