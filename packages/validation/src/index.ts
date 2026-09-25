@@ -112,6 +112,12 @@ export const zSupplierSchema = z.object({
   taxNumber: zString(1, 50).optional().nullable(),
 });
 
+export const zSupplierQuerySchema = z.object({
+  search: zString(0, 100).optional(),
+  page: z.coerce.number().int().positive().optional().default(1),
+  limit: z.coerce.number().int().positive().max(200).optional().default(50),
+});
+
 export const zProductSchema = z.object({
   name: zString(2, 200),
   sku: zString(1, 50).optional().nullable(),
@@ -503,6 +509,13 @@ export const PERMISSION_GROUPS = [
     permissions: [
       { key: "inventory.view", label: "View stock levels and movements" },
       { key: "inventory.manage", label: "Adjust stock and transfer between warehouses" },
+    ],
+  },
+  {
+    label: "Purchasing",
+    permissions: [
+      { key: "purchasing.view", label: "View suppliers and purchase orders" },
+      { key: "purchasing.manage", label: "Create suppliers and manage purchase orders" },
     ],
   },
   {

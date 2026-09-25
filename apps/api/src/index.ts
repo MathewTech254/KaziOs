@@ -38,6 +38,7 @@ import { userRouter } from "./routes/users";
 import { roleRouter } from "./routes/roles";
 import { posRouter } from "./routes/pos";
 import { inventoryRouter } from "./routes/inventory";
+import { supplierRouter } from "./routes/suppliers";
 import { auditMiddleware } from "./middleware/audit";
 import { errorHandler } from "./middleware/errorHandler";
 
@@ -121,6 +122,7 @@ export function createApp() {
   app.use("/api/v1/roles", roleRouter);
   app.use("/api/v1/pos", posRouter);
   app.use("/api/v1/inventory", inventoryRouter);
+  app.use("/api/v1/suppliers", supplierRouter);
 
   app.use(errorHandler);
   return app;
