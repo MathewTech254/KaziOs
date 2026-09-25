@@ -152,6 +152,28 @@ comma separated list if you add a custom domain later.
 so refreshing on `/inventory` or `/pos` does not 404. If you ever host the web app elsewhere
 (Vercel, Netlify, nginx), the same pattern applies: SPA fallback to `index.html`.
 
+## Local checks before every push
+
+Run these from the repository root before `git push`. They are the same gates CI enforces, plus
+live API checks CI cannot run because they need a running server.
+
+```bash
+# 1. typecheck and build every workspace (api, worker, web, packages)
+npm run verify
+
+# 2. with the dev API listening on :4000 (npm run dev:api)
+powershell -File apps/api/scripts/smoke-inventory.ps1
+powershell -File apps/api/scripts/smoke-suppliers.ps1
+```
+
+Then look at the page you changed in the browser at `http://localhost:3000`, including a hard
+refresh on a deep link such as `/inventory` or `/purchases` to confirm the single page app
+fallback. The scripts cover the API contract, permissions and tenant isolation; only your eyes
+cover layout, interaction and wording.
+
+Point them at another environment with `KAZIOS_API_URL`, `KAZIOS_SMOKE_EMAIL` and
+`KAZIOS_SMOKE_PASSWORD`.
+
 ## 7. Branch and deploy workflow (keeps hosting boring as you develop)
 
 `master` is the **only deploy branch**. Both Render and Cloudflare Pages must watch `master`, and
