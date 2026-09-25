@@ -39,6 +39,7 @@ import { roleRouter } from "./routes/roles";
 import { posRouter } from "./routes/pos";
 import { inventoryRouter } from "./routes/inventory";
 import { supplierRouter } from "./routes/suppliers";
+import { purchaseOrderRouter } from "./routes/purchase-orders";
 import { auditMiddleware } from "./middleware/audit";
 import { errorHandler } from "./middleware/errorHandler";
 
@@ -123,6 +124,7 @@ export function createApp() {
   app.use("/api/v1/pos", posRouter);
   app.use("/api/v1/inventory", inventoryRouter);
   app.use("/api/v1/suppliers", supplierRouter);
+  app.use("/api/v1/purchase-orders", purchaseOrderRouter);
 
   app.use(errorHandler);
   return app;

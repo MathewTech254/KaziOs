@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Building2, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { api, getApiError } from "../lib/api";
 import { EmptyRow, LoadingBlock, Notice } from "../components/Feedback";
+import { PurchaseOrdersPanel } from "../components/purchasing/PurchaseOrdersPanel";
 import { useAuth } from "../contexts/AuthContext";
 
 interface Supplier {
@@ -43,6 +44,7 @@ export function PurchasingPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [tab, setTab] = useState<"suppliers" | "orders">("suppliers");
 
   useEffect(() => {
     const timer = setTimeout(() => setTerm(search), 300);
@@ -170,14 +172,41 @@ export function PurchasingPage() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="kazi-page-title">Purchasing</h1>
-          <p className="kazi-page-subtitle">
-            {meta.total} supplier{meta.total === 1 ? "" : "s"}. Purchase orders and goods receiving come next.
-          </p>
+      <div className="mb-6">
+        <h1 className="kazi-page-title">Purchasing</h1>
+        <p className="kazi-page-subtitle">Suppliers and purchase orders</p>
+      </div>
+
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-border">
+        <div className="flex gap-4" role="tablist" aria-label="Purchasing sections">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "suppliers"}
+            onClick={() => setTab("suppliers")}
+            className={`-mb-px border-b-2 px-1 pb-3 text-sm font-medium ${
+              tab === "suppliers"
+                ? "border-accent text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Suppliers
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "orders"}
+            onClick={() => setTab("orders")}
+            className={`-mb-px border-b-2 px-1 pb-3 text-sm font-medium ${
+              tab === "orders"
+                ? "border-accent text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Purchase orders
+          </button>
         </div>
-        {canManage && (
+        {tab === "suppliers" && canManage && (
           <button type="button" onClick={openCreate} className="kazi-button-primary px-4 text-sm">
             <Plus className="h-4 w-4" aria-hidden="true" />
             New supplier
@@ -188,10 +217,14 @@ export function PurchasingPage() {
       {!canManage && (
         <div className="kazi-alert-card mb-4 p-4 text-sm text-foreground">
           You have read-only access. An owner can grant the <span className="font-medium">purchasing.manage</span>{" "}
-          permission to let you add and edit suppliers.
+          permission to let you add suppliers and raise purchase orders.
         </div>
       )}
 
+      {tab === "orders" ? (
+        <PurchaseOrdersPanel />
+      ) : (
+        <>
       {notice && <Notice tone="success" title="Done" message={notice} />}
       {loadError && <Notice tone="error" title="Could not load suppliers" message={loadError} />}
 
@@ -404,8 +437,10 @@ export function PurchasingPage() {
 
       <p className="mt-6 flex items-center gap-2 text-xs text-muted-foreground">
         <Building2 className="h-3 w-3" aria-hidden="true" />
-        Purchase orders, approvals and goods receiving are the next milestones.
+        Goods receiving against a sent order is the next milestone.
       </p>
+        </>
+      )}
     </div>
   );
 }

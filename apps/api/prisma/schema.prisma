@@ -81,6 +81,7 @@ model User {
   notifications  Notification[]
   tasks          Task[]
   stockTransfers StockTransfer[]
+  purchaseOrders PurchaseOrder[]
 }
 
 model Session {
@@ -163,6 +164,7 @@ model Warehouse {
   stockMovements  StockMovement[]
   sourceTransfers StockTransfer[] @relation("stockTransferSource")
   destTransfers   StockTransfer[] @relation("stockTransferDest")
+  purchaseOrders  PurchaseOrder[]
   userRoles       UserRole[]
 
   @@unique([organizationId, code])
@@ -480,8 +482,15 @@ model PurchaseOrder {
   poNumber     String    @unique
   status       String    @default("DRAFT")
   expectedDate DateTime?
+  notes        String?
+  currency     String?
+  subtotal     Float     @default(0)
+  taxRate      Float     @default(0)
+  taxTotal     Float     @default(0)
   totalAmount  Float     @default(0)
+  sentAt       DateTime?
   createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   organization   Organization        @relation(fields: [organizationId], references: [id])
   organizationId String
@@ -489,16 +498,23 @@ model PurchaseOrder {
   supplierId     String
   branch         Branch?             @relation(fields: [branchId], references: [id])
   branchId       String?
+  warehouse      Warehouse?          @relation(fields: [warehouseId], references: [id])
+  warehouseId    String?
+  createdBy      User?               @relation(fields: [createdById], references: [id])
+  createdById    String?
   items          PurchaseOrderItem[]
+
+  @@index([organizationId, status])
 }
 
 model PurchaseOrderItem {
-  id        String @id @default(uuid())
+  id        String  @id @default(uuid())
   quantity  Float
   unitPrice Float
   lineTotal Float
+  description String?
 
-  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  purchaseOrder   PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   purchaseOrderId String
   product         Product       @relation(fields: [productId], references: [id])
   productId       String

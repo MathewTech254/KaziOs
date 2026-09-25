@@ -344,18 +344,46 @@ export const zSalesOrderSchema = z.object({
   notes: zString(0, 500).optional().nullable(),
 });
 
+/** Lifecycle of a purchase order. Receiving states are set when goods arrive. */
+export const PURCHASE_ORDER_STATUSES = [
+  "DRAFT",
+  "SENT",
+  "PARTIALLY_RECEIVED",
+  "RECEIVED",
+  "CANCELLED",
+] as const;
+
+export type PurchaseOrderStatus = (typeof PURCHASE_ORDER_STATUSES)[number];
+export const zPurchaseOrderStatus = z.enum(PURCHASE_ORDER_STATUSES);
+
 export const zPurchaseOrderSchema = z.object({
   supplierId: zUuid,
   branchId: zUuid.optional().nullable(),
-  items: z.array(
-    z.object({
-      productId: zUuid,
-      quantity: z.number().positive(),
-      unitPrice: z.number().nonnegative(),
-      description: zString(1, 200).optional(),
-    })
-  ).min(1, "At least one item is required"),
+  warehouseId: zUuid.optional().nullable(),
+  expectedDate: z.string().datetime().optional().nullable(),
+  currency: z.string().length(3).optional().nullable(),
+  taxRate: z.number().min(0).max(100).optional(),
+  items: z
+    .array(
+      z.object({
+        productId: zUuid,
+        quantity: z.number().positive("Quantity must be positive"),
+        unitPrice: z.number().nonnegative("Unit price cannot be negative"),
+        description: zString(1, 200).optional(),
+      })
+    )
+    .min(1, "At least one item is required"),
   notes: zString(0, 500).optional().nullable(),
+});
+
+export const zPurchaseOrderUpdateSchema = zPurchaseOrderSchema.partial();
+
+export const zPurchaseOrderQuerySchema = z.object({
+  search: zString(0, 100).optional(),
+  status: z.enum(["ALL", ...PURCHASE_ORDER_STATUSES]).optional().default("ALL"),
+  supplierId: zUuid.optional(),
+  page: z.coerce.number().int().positive().optional().default(1),
+  limit: z.coerce.number().int().positive().max(200).optional().default(50),
 });
 
 export const zApiKeySchema = z.object({
