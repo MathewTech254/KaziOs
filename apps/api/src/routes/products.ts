@@ -11,7 +11,16 @@ productRouter.get("/", requireAuth, requirePermission("products.view"), async (r
     const { page = 1, limit = 50, search, productType } = req.query;
     const { skip, take, page: p, limit: l } = paginate(Number(page), Number(limit));
     const where: any = { organizationId: req.organizationId };
-    if (search) where.name = { contains: String(search), mode: "insensitive" };
+    // A till operator scans a barcode or reads a sku, so those count as a match too.
+    if (search) {
+      const term = String(search);
+      where.OR = [
+        { name: { contains: term, mode: "insensitive" } },
+        { sku: { contains: term, mode: "insensitive" } },
+        { barcode: { contains: term, mode: "insensitive" } },
+        { description: { contains: term, mode: "insensitive" } },
+      ];
+    }
     if (productType) where.productType = String(productType);
 
     const [data, total] = await Promise.all([

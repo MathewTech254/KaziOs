@@ -16,9 +16,22 @@ export const paymentRouter = Router();
 
 paymentRouter.get("/", requireAuth, requirePermission("payments.view"), async (req: AuthRequest, res, next) => {
   try {
-    const { page = 1, limit = 50 } = req.query;
+    const { page = 1, limit = 50, search, status, provider } = req.query;
     const { skip, take, page: p, limit: l } = paginate(Number(page), Number(limit));
-    const where = { organizationId: req.organizationId };
+    const where: any = { organizationId: req.organizationId };
+    if (status && String(status) !== "ALL") where.status = String(status);
+    if (provider && String(provider) !== "ALL") where.provider = String(provider);
+    // The payments screen offers a search box, so honour the term instead of ignoring it.
+    if (search && String(search).trim()) {
+      const term = String(search).trim();
+      where.OR = [
+        { reference: { contains: term, mode: "insensitive" } },
+        { providerRef: { contains: term, mode: "insensitive" } },
+        { notes: { contains: term, mode: "insensitive" } },
+        { customer: { name: { contains: term, mode: "insensitive" } } },
+        { invoice: { invoiceNumber: { contains: term, mode: "insensitive" } } },
+      ];
+    }
     const [data, total] = await Promise.all([
       prisma.payment.findMany({ where, include: { customer: true, invoice: true, branch: true }, skip, take, orderBy: { createdAt: "desc" } }),
       prisma.payment.count({ where }),

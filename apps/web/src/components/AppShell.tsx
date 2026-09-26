@@ -18,9 +18,11 @@ import {
   Warehouse,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../hooks/useTheme";
 import { BrandLogo } from "./BrandLogo";
+import { CommandPalette } from "./CommandPalette";
 
 interface NavGroup {
   label: string;
@@ -116,11 +118,30 @@ export function AppSidebar({ collapsed, onToggle }: AppShellProps) {
 export function TopBar({ collapsed }: { collapsed: boolean }) {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Cmd/Ctrl+K is the shortcut the button advertises, so make it real.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
+    <>
     <header className="kazi-topbar fixed top-0 z-30 flex h-16 items-center justify-between border-b px-4 sm:px-6" style={{ left: collapsed ? "4rem" : "16rem" }}>
       <div className="flex items-center gap-3">
-        <button className="kazi-search-button flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm" aria-label="Search workspace">
+        <button
+          type="button"
+          onClick={() => setPaletteOpen(true)}
+          className="kazi-search-button flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm"
+          aria-label="Search workspace"
+        >
           <Command className="h-4 w-4" aria-hidden="true" />
           <span>Search</span>
           <kbd className="ml-2 rounded border px-1.5 py-0.5 text-[10px]">⌘K</kbd>
@@ -140,6 +161,8 @@ export function TopBar({ collapsed }: { collapsed: boolean }) {
         </button>
       </div>
     </header>
+    <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
+    </>
   );
 }
 

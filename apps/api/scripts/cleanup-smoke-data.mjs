@@ -71,10 +71,17 @@ const smokeRoles = await prisma.role.findMany({
   where: { name: { contains: "Smoke" } },
   select: { id: true, name: true },
 });
-const smokeSuppliers = await prisma.supplier.findMany({
-  where: { name: { startsWith: "Smoke Supplier" } },
-  select: { id: true, name: true },
-});
+// Each suite names its fixtures differently, so match every prefix they use.
+const supplierPrefixes = ["Smoke Supplier", "Search Supplier"];
+const smokeSuppliers = [];
+for (const prefix of supplierPrefixes) {
+  smokeSuppliers.push(
+    ...(await prisma.supplier.findMany({
+      where: { name: { startsWith: prefix } },
+      select: { id: true, name: true },
+    }))
+  );
+}
 const smokeProducts = await prisma.product.findMany({
   where: { sku: { startsWith: "SMK-" } },
   select: { id: true, sku: true },
