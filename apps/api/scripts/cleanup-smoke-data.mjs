@@ -82,10 +82,23 @@ for (const prefix of supplierPrefixes) {
     }))
   );
 }
-const smokeProducts = await prisma.product.findMany({
-  where: { sku: { startsWith: "SMK-" } },
+
+// Customers and products are fixtures too, and the isolation suite creates some.
+const smokeCustomers = await prisma.customer.findMany({
+  where: { name: { startsWith: "Iso Customer" } },
+  select: { id: true, name: true },
+});
+const isoProducts = await prisma.product.findMany({
+  where: { sku: { startsWith: "ISO-" } },
   select: { id: true, sku: true },
 });
+// Each suite names its product fixtures differently, so match every sku prefix.
+const smokeProducts = [];
+for (const prefix of ["SMK-", "SRCH-"]) {
+  smokeProducts.push(
+    ...(await prisma.product.findMany({ where: { sku: { startsWith: prefix } }, select: { id: true, sku: true } }))
+  );
+}
 // Keyed off the fixture rows themselves, not off free text, so an order without
 // notes is still removed.
 const smokeOrders = await prisma.purchaseOrder.findMany({
@@ -112,11 +125,12 @@ if (!apply) {
     removed.suppliers = (await tx.supplier.deleteMany({ where: { id: { in: smokeSuppliers.map((s) => s.id) } } })).count;
     // A smoke product can be picked up by another suite (smoke-inventory takes whichever
     // tracked product it finds first), so its stock rows go before the product itself.
-    const productIds = smokeProducts.map((p) => p.id);
+    const productIds = [...smokeProducts, ...isoProducts].map((p) => p.id);
     removed.stockMovements = (await tx.stockMovement.deleteMany({ where: { productId: { in: productIds } } })).count;
     removed.stockTransfers = (await tx.stockTransfer.deleteMany({ where: { productId: { in: productIds } } })).count;
     removed.inventories = (await tx.inventory.deleteMany({ where: { productId: { in: productIds } } })).count;
     removed.products = (await tx.product.deleteMany({ where: { id: { in: productIds } } })).count;
+    removed.customers = (await tx.customer.deleteMany({ where: { id: { in: smokeCustomers.map((c) => c.id) } } })).count;
     // Users hold sessions, role assignments and audit rows, so clear those first.
     const userIds = smokeUsers.map((u) => u.id);
     removed.sessions = (await tx.session.deleteMany({ where: { userId: { in: userIds } } })).count;

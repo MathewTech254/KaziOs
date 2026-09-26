@@ -1,10 +1,20 @@
 import { Router } from "express";
+import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { AuthRequest, requireAuth, requirePermission } from "../middleware/auth";
 import { AppError, paginate } from "../lib";
 import { zProductSchema } from "@kazios/validation";
 
 export const productRouter = Router();
+
+/** PATCH sends only the fields the user changed, so absent keys must stay absent. */
+function toProductPatch(input: Partial<z.infer<typeof zProductSchema>>) {
+  const data: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== undefined) data[key] = value;
+  }
+  return data;
+}
 
 productRouter.get("/", requireAuth, requirePermission("products.view"), async (req: AuthRequest, res, next) => {
   try {
@@ -76,9 +86,18 @@ productRouter.get("/:id", requireAuth, requirePermission("products.view"), async
 productRouter.patch("/:id", requireAuth, requirePermission("products.update"), async (req: AuthRequest, res, next) => {
   try {
     const data = zProductSchema.partial().parse(req.body);
+    // Resolve within the caller's organization first. The old update used a bare id and
+    // also rewrote organizationId, so one tenant could edit and then steal another
+    // tenant's product.
+    const current = await prisma.product.findFirst({
+      where: { id: req.params.id, organizationId: req.organizationId! },
+      select: { id: true },
+    });
+    if (!current) throw new AppError(404, "Product not found");
+
     const product = await prisma.product.update({
-      where: { id: req.params.id },
-      data: { ...data, organizationId: req.organizationId, updatedAt: new Date() },
+      where: { id: current.id },
+      data: { ...toProductPatch(data), updatedAt: new Date() },
     });
     res.json({ data: product });
   } catch (err) {
@@ -86,10 +105,20 @@ productRouter.patch("/:id", requireAuth, requirePermission("products.update"), a
   }
 });
 
-productRouter.delete("/:id", requireAuth, requirePermission("products.update"), async (req, res, next) => {
+productRouter.delete("/:id", requireAuth, requirePermission("products.update"), async (req: AuthRequest, res, next) => {
   try {
-    await prisma.product.delete({ where: { id: req.params.id } });
-    res.json({ data: { success: true } });
+    // Same rule as the update: only ever touch a product in the caller's organization.
+    const current = await prisma.product.findFirst({
+      where: { id: req.params.id, organizationId: req.organizationId! },
+      select: { id: true, _count: { select: { invoiceItems: true, purchaseItems: true, inventories: true } } },
+    });
+    if (!current) throw new AppError(404, "Product not found");
+    if (current._count.invoiceItems > 0) {
+      throw new AppError(409, "This product appears on an invoice, so it cannot be deleted", "PRODUCT_IN_USE");
+    }
+
+    await prisma.product.delete({ where: { id: current.id } });
+    res.json({ data: { id: current.id, deleted: true } });
   } catch (err) {
     next(err);
   }
