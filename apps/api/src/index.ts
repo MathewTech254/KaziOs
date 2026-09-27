@@ -21,6 +21,7 @@ import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import session from "express-session";
+import rateLimit from "express-rate-limit";
 import { RedisStore } from "connect-redis";
 import { prisma } from "./lib/prisma";
 import { assertProductionEnv, corsOriginWarning } from "./lib/productionEnv";
@@ -56,6 +57,33 @@ export function createApp() {
   const allowedOrigins = getCorsOrigins();
 
   app.use(helmet());
+
+  // Sign in is the one place worth being strict about: a password can be guessed, so a
+  // limit here is what actually stops the guessing. Successful logins are not counted, so
+  // a cashier on a busy till is never locked out by their own correct password. The
+  // ceiling is per IP over fifteen minutes, generous enough for a shared till but far too
+  // slow to brute force a password through.
+  const authLimiter = rateLimit({
+    windowMs: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+    limit: Number(process.env.AUTH_RATE_LIMIT_MAX || 30),
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    message: { error: "Too many failed sign in attempts. Please wait a few minutes and try again." },
+  });
+
+  // The general ceiling is deliberately generous. It exists to stop a runaway script, not
+  // to police ordinary use: a shop can legitimately make thousands of calls a day, and a
+  // test suite or a busy till must never be mistaken for an attack. Sign in, where
+  // guessing is the real threat, is the strict one.
+  const apiLimiter = rateLimit({
+    windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS || 60 * 1000),
+    limit: Number(process.env.RATE_LIMIT_MAX || 1000),
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    message: { error: "Too many requests. Please slow down." },
+  });
+
   app.use(
     cors({
       // The web client sends credentials, so the origin has to be explicit. A comma
@@ -83,6 +111,13 @@ export function createApp() {
   app.use(auditMiddleware);
 
   app.get("/health", (_req, res) => res.json({ status: "ok" }));
+
+  // Sign in is the strict one: a password can be guessed, so a tight limit there is
+  // what actually stops the guessing. The rest of the API gets a wider allowance so a
+  // busy till is never mistaken for an attack. Health sits above both, so a monitoring
+  // probe can never throttle the API it is checking.
+  app.use("/api/v1/auth", authLimiter);
+  app.use("/api/v1", apiLimiter);
 
   // Visiting the API host in a browser should explain itself rather than 404.
   app.get("/", (_req, res) =>

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma";
 import { AuthRequest, requireAuth, requirePermission } from "../middleware/auth";
 import { AppError, generateInvoiceNumber, paginate } from "../lib";
+import { computeInvoiceTotals, fromCents } from "../lib/money";
 import { zInvoiceSchema } from "@kazios/validation";
 
 const InvoiceStatus = {
@@ -35,6 +36,35 @@ invoiceRouter.get("/", requireAuth, requirePermission("invoices.view"), async (r
 invoiceRouter.post("/", requireAuth, requirePermission("invoices.create"), async (req: AuthRequest, res, next) => {
   try {
     const data = zInvoiceSchema.parse(req.body);
+
+    // Every amount is derived here from quantity, unit price, discount and tax rate.
+    // The client's subtotal, taxTotal, discountTotal and total are ignored: an invoice
+    // that stores whatever the caller declared is not an accounting record, and the
+    // stored lines would contradict the stored header.
+    const totals = computeInvoiceTotals(
+      data.items.map((item) => ({
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        discountAmount: item.discountAmount,
+        taxRate: item.taxRate,
+      }))
+    );
+
+    // A product on the invoice has to belong to this organization.
+    const productIds = data.items.map((item) => item.productId).filter((id): id is string => Boolean(id));
+    if (productIds.length) {
+      const owned = await prisma.product.count({ where: { id: { in: [...new Set(productIds)] }, organizationId: req.organizationId! } });
+      if (owned !== new Set(productIds).size) {
+        throw new AppError(400, "One or more products are not available in this organization");
+      }
+    }
+
+    const customer = await prisma.customer.findFirst({
+      where: { id: data.customerId, organizationId: req.organizationId! },
+      select: { id: true },
+    });
+    if (!customer) throw new AppError(400, "The selected customer is not available in this organization");
+
     const invoice = await prisma.$transaction(async (tx: any) => {
       const inv = await tx.invoice.create({
         data: {
@@ -44,10 +74,10 @@ invoiceRouter.post("/", requireAuth, requirePermission("invoices.create"), async
           branchId: data.branchId || undefined,
           issueDate: new Date(data.issueDate),
           dueDate: new Date(data.dueDate),
-          subtotal: data.subtotal,
-          taxTotal: data.taxTotal,
-          discountTotal: data.discountTotal,
-          total: data.total,
+          subtotal: fromCents(totals.subtotalCents),
+          taxTotal: fromCents(totals.taxCents),
+          discountTotal: fromCents(totals.discountCents),
+          total: fromCents(totals.totalCents),
           currency: data.currency,
           notes: data.notes || undefined,
           terms: data.terms || undefined,
@@ -55,7 +85,8 @@ invoiceRouter.post("/", requireAuth, requirePermission("invoices.create"), async
           status: InvoiceStatus.DRAFT,
         },
       });
-      for (const item of data.items) {
+      for (const [index, item] of data.items.entries()) {
+        const line = totals.lines[index];
         await tx.invoiceItem.create({
           data: {
             invoiceId: inv.id,
@@ -63,10 +94,10 @@ invoiceRouter.post("/", requireAuth, requirePermission("invoices.create"), async
             description: item.description,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
-            discountAmount: item.discountAmount,
+            discountAmount: fromCents(line.discountCents),
             taxRateId: item.taxRateId || undefined,
-            taxAmount: item.taxAmount,
-            lineTotal: item.lineTotal,
+            taxAmount: fromCents(line.taxCents),
+            lineTotal: fromCents(line.lineTotalCents),
           },
         });
       }

@@ -157,8 +157,12 @@ export const zInvoiceItemSchema = z.object({
   unitPrice: z.number().nonnegative("Unit price must be non-negative"),
   discountAmount: z.number().nonnegative().default(0),
   taxRateId: zUuid.optional().nullable(),
-  taxAmount: z.number().nonnegative().default(0),
-  lineTotal: z.number().nonnegative(),
+  // The server derives every amount from quantity, unitPrice, discount and taxRate.
+  // taxAmount and lineTotal stay optional so an existing client keeps working, but
+  // the values sent are recalculated and never trusted.
+  taxRate: z.number().min(0).max(100).default(0),
+  taxAmount: z.number().nonnegative().optional(),
+  lineTotal: z.number().nonnegative().optional(),
 });
 
 export const zInvoiceSchema = z.object({
@@ -167,10 +171,12 @@ export const zInvoiceSchema = z.object({
   issueDate: z.string().datetime(),
   dueDate: z.string().datetime(),
   items: z.array(zInvoiceItemSchema).min(1, "At least one item is required"),
-  subtotal: z.number().nonnegative(),
-  taxTotal: z.number().nonnegative(),
-  discountTotal: z.number().nonnegative(),
-  total: z.number().nonnegative(),
+  // Totals are the server's answer. They remain optional on the request so an older
+  // client keeps working; whatever it sends here is ignored on purpose.
+  subtotal: z.number().nonnegative().optional(),
+  taxTotal: z.number().nonnegative().optional(),
+  discountTotal: z.number().nonnegative().optional(),
+  total: z.number().nonnegative().optional(),
   notes: zString(0, 500).optional().nullable(),
   terms: zString(0, 500).optional().nullable(),
   paymentTerms: z.string().optional().nullable(),

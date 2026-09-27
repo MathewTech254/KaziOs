@@ -85,12 +85,26 @@ for (const prefix of supplierPrefixes) {
 
 // Customers and products are fixtures too, and the isolation suite creates some.
 const smokeCustomers = await prisma.customer.findMany({
-  where: { name: { startsWith: "Iso Customer" } },
+  where: { OR: [{ name: { startsWith: "Iso Customer" } }, { name: { startsWith: "Money Customer" } }] },
   select: { id: true, name: true },
 });
 const isoProducts = await prisma.product.findMany({
   where: { sku: { startsWith: "ISO-" } },
   select: { id: true, sku: true },
+});
+const moneyProducts = await prisma.product.findMany({
+  where: { sku: { startsWith: "MNY-" } },
+  select: { id: true, sku: true },
+});
+const moneySuppliers = await prisma.supplier.findMany({
+  where: { name: { startsWith: "Money Supplier" } },
+  select: { id: true, name: true },
+});
+// The money suite creates many invoices against a "Money Customer" fixture, so
+// they are cleared before the customer row itself.
+const moneyInvoices = await prisma.invoice.findMany({
+  where: { customerId: { in: smokeCustomers.map((c) => c.id) } },
+  select: { id: true },
 });
 // Each suite names its product fixtures differently, so match every sku prefix.
 const smokeProducts = [];
@@ -103,6 +117,10 @@ for (const prefix of ["SMK-", "SRCH-"]) {
 // notes is still removed.
 const smokeOrders = await prisma.purchaseOrder.findMany({
   where: { supplierId: { in: smokeSuppliers.map((s) => s.id) } },
+  select: { id: true, poNumber: true, status: true },
+});
+const moneyOrders = await prisma.purchaseOrder.findMany({
+  where: { supplierId: { in: moneySuppliers.map((s) => s.id) } },
   select: { id: true, poNumber: true, status: true },
 });
 
@@ -121,16 +139,34 @@ if (!apply) {
   // Order matters: an order references a supplier, and an organization references
   // everything. These run as a single transaction so a half-finished clean up is impossible.
   await prisma.$transaction(async (tx) => {
-    removed.orders = (await tx.purchaseOrder.deleteMany({ where: { id: { in: smokeOrders.map((o) => o.id) } } })).count;
-    removed.suppliers = (await tx.supplier.deleteMany({ where: { id: { in: smokeSuppliers.map((s) => s.id) } } })).count;
+    removed.orders = (await tx.purchaseOrder.deleteMany({ where: { id: { in: [...smokeOrders, ...moneyOrders].map((o) => o.id) } } })).count;
+    removed.suppliers = (
+      await tx.supplier.deleteMany({ where: { id: { in: [...smokeSuppliers, ...moneySuppliers].map((s) => s.id) } } })
+    ).count;
     // A smoke product can be picked up by another suite (smoke-inventory takes whichever
     // tracked product it finds first), so its stock rows go before the product itself.
-    const productIds = [...smokeProducts, ...isoProducts].map((p) => p.id);
+    const productIds = [...smokeProducts, ...isoProducts, ...moneyProducts].map((p) => p.id);
     removed.stockMovements = (await tx.stockMovement.deleteMany({ where: { productId: { in: productIds } } })).count;
     removed.stockTransfers = (await tx.stockTransfer.deleteMany({ where: { productId: { in: productIds } } })).count;
     removed.inventories = (await tx.inventory.deleteMany({ where: { productId: { in: productIds } } })).count;
     removed.products = (await tx.product.deleteMany({ where: { id: { in: productIds } } })).count;
-    removed.customers = (await tx.customer.deleteMany({ where: { id: { in: smokeCustomers.map((c) => c.id) } } })).count;
+    // Invoice lines reference the invoice, so the invoices go before the customer.
+    if (moneyInvoices.length) {
+      await tx.invoiceItem.deleteMany({ where: { invoiceId: { in: moneyInvoices.map((i) => i.id) } } });
+      removed.invoices = (await tx.invoice.deleteMany({ where: { id: { in: moneyInvoices.map((i) => i.id) } } })).count;
+    } else {
+      removed.invoices = 0;
+    }
+
+    // Orphans: a suite that failed part way through leaves an invoice whose customer row
+    // was already cleaned away, so it can never be reached through a customer lookup.
+    const orphanLines = await tx.invoiceItem.findMany({ where: { invoice: { customerId: null } }, select: { id: true } });
+    await tx.invoiceItem.deleteMany({ where: { id: { in: orphanLines.map((l) => l.id) } } });
+    removed.orphanInvoices = (await tx.invoice.deleteMany({ where: { customerId: null } })).count;
+
+    removed.customers = (
+      await tx.customer.deleteMany({ where: { id: { in: smokeCustomers.map((c) => c.id) } } })
+    ).count;
     // Users hold sessions, role assignments and audit rows, so clear those first.
     const userIds = smokeUsers.map((u) => u.id);
     removed.sessions = (await tx.session.deleteMany({ where: { userId: { in: userIds } } })).count;
