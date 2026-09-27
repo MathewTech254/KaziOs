@@ -82,6 +82,7 @@ model User {
   tasks          Task[]
   stockTransfers StockTransfer[]
   purchaseOrders PurchaseOrder[]
+  passwordResetTokens PasswordResetToken[]
 }
 
 model Session {
@@ -742,4 +743,21 @@ model Setting {
   organizationId String
 
   @@unique([organizationId, key])
+}
+
+// A password reset token. Only the SHA-256 hash of the token that was emailed is
+// stored, so someone who reads this table still cannot use a link to take over an
+// account.
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }

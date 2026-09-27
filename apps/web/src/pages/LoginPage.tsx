@@ -87,6 +87,12 @@ export function LoginPage() {
               Don&apos;t have an account?{" "}
               <Link to="/register" className="font-semibold text-[var(--kazi-accent)] underline underline-offset-4 hover:text-[var(--kazi-accent-hover)]">Create one</Link>
             </p>
+
+            <p className="mt-3 text-center text-sm text-[var(--kazi-body-text)]">
+              <Link to="/forgot-password" className="text-[var(--kazi-muted-text)] underline underline-offset-4 hover:text-[var(--kazi-text)]">
+                Forgot your password?
+              </Link>
+            </p>
           </div>
 
           <div className="kazi-auth-note mt-4">
