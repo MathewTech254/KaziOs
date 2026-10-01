@@ -1,16 +1,29 @@
 // Seeds the MathewTech production organization with a realistic multi branch
 // trading business so every feature can be exercised end to end.
 //
+//   $env:KAZIOS_SMOKE_EMAIL='you@example.com'
+//   $env:KAZIOS_SMOKE_PASSWORD='...'
 //   node apps/api/scripts/seed-production.mjs            # dry run, prints the plan
 //   node apps/api/scripts/seed-production.mjs --apply    # do it
 //
+// Credentials are read from the environment with no fallback on purpose. A password
+// committed to a repository is a leaked password, so this script refuses to run rather
+// than carry a default that would quietly end up in Git history.
+//
 // It authenticates as a normal user through the public API, exactly as the browser
 // does, so it can never write something the application itself would refuse.
-
 const KAZIOS_API_URL = process.env.KAZIOS_API_URL || "https://kazios.onrender.com/api/v1";
-const KAZIOS_SMOKE_EMAIL = process.env.KAZIOS_SMOKE_EMAIL || "mathewtech200@gmail.com";
-const KAZIOS_SMOKE_PASSWORD = process.env.KAZIOS_SMOKE_PASSWORD || "Matrene@2026";
+const KAZIOS_SMOKE_EMAIL = process.env.KAZIOS_SMOKE_EMAIL;
+const KAZIOS_SMOKE_PASSWORD = process.env.KAZIOS_SMOKE_PASSWORD;
 const apply = process.argv.includes("--apply");
+
+if (!KAZIOS_SMOKE_EMAIL || !KAZIOS_SMOKE_PASSWORD) {
+  console.error(
+    "Set KAZIOS_SMOKE_EMAIL and KAZIOS_SMOKE_PASSWORD before running this script.\n" +
+      "Credentials are intentionally not built in."
+  );
+  process.exit(1);
+}
 
 const BASE = KAZIOS_API_URL.replace(/\/+$/, "");
 let token = "";

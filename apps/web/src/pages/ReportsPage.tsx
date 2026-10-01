@@ -9,7 +9,10 @@ interface ReportData {
   totalPayments: number;
 }
 
+import { useCurrency, formatMoney } from "../lib/currency";
+
 export function ReportsPage() {
+  const currency = useCurrency();
   const [report, setReport] = useState<ReportData | null>(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -18,11 +21,13 @@ export function ReportsPage() {
     const params = new URLSearchParams();
     if (startDate) params.set("startDate", startDate);
     if (endDate) params.set("endDate", endDate);
-    const res = await api.get(`/reports/sales-summary?${params}`);
+    const res = await api.get(`/reports/sales-summary?${params.toString()}`);
     setReport(res.data.data);
   };
 
-  useEffect(() => { load(); }, [startDate, endDate]);
+  useEffect(() => {
+    load();
+  }, [startDate, endDate]);
 
   return (
     <div>
@@ -38,7 +43,7 @@ export function ReportsPage() {
             <input
               type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={e => setStartDate(e.target.value)}
               className="kazi-input"
             />
           </div>
@@ -47,7 +52,7 @@ export function ReportsPage() {
             <input
               type="date"
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
+              onChange={e => setEndDate(e.target.value)}
               className="kazi-input"
             />
           </div>
@@ -62,11 +67,15 @@ export function ReportsPage() {
           </div>
           <div className="kazi-stat-card">
             <p className="kazi-stat-label">Revenue</p>
-            <p className="kazi-stat-value mt-1 text-success">KES {report.totalRevenue.toLocaleString()}</p>
+            <p className="kazi-stat-value mt-1 text-success">
+              {formatMoney(report.totalRevenue, currency)}
+            </p>
           </div>
           <div className="kazi-stat-card">
             <p className="kazi-stat-label">Tax Collected</p>
-            <p className="kazi-stat-value mt-1 text-info">KES {report.totalTax.toLocaleString()}</p>
+            <p className="kazi-stat-value mt-1 text-info">
+              {formatMoney(report.totalTax, currency)}
+            </p>
           </div>
           <div className="kazi-stat-card">
             <p className="kazi-stat-label">Payments</p>

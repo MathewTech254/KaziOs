@@ -84,8 +84,16 @@ function getEnv(name: string, fallback?: string): string {
 }
 
 function getEnvOptional(name: string): string | undefined {
-  const value = process.env[name];
-  if (value === undefined || value === "") return undefined;
+  const raw = process.env[name];
+  if (raw === undefined) return undefined;
+  // A value copied out of a dashboard or shell often keeps its surrounding quotes, and
+  // "sk_live_..." with quotes still looks valid, so the quotes are stripped here rather
+  // than letting a broken key fail confusingly much later at the payment provider.
+  const value = raw
+    .trim()
+    .replace(/^(['"])(.*)\1$/, "$2")
+    .trim();
+  if (value === "") return undefined;
   return value;
 }
 
@@ -106,7 +114,10 @@ function getEnvBoolean(name: string, fallback: boolean): boolean {
 export function loadConfig(): EnvironmentConfig {
   return {
     nodeEnv: getEnv("NODE_ENV", "development") as NodeEnv,
-    databaseUrl: getEnv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/kazios?schema=public"),
+    databaseUrl: getEnv(
+      "DATABASE_URL",
+      "postgresql://postgres:postgres@localhost:5432/kazios?schema=public"
+    ),
     redisUrl: getEnv("REDIS_URL", "redis://localhost:6379"),
     sessionSecret: getEnv("SESSION_SECRET", "dev-session-secret-change-in-production-min-32chars"),
     jwtSecret: getEnv("JWT_SECRET", "dev-jwt-secret-change-in-production-min-32chars"),

@@ -11,8 +11,9 @@ function resolveApiBase(configured?: string): string {
 }
 
 const API_BASE = resolveApiBase(
-  (typeof window !== "undefined" ? (window as Window & { __KAZIOS_API_URL__?: string }).__KAZIOS_API_URL__ : undefined) ||
-    import.meta.env.VITE_API_URL
+  (typeof window !== "undefined"
+    ? (window as Window & { __KAZIOS_API_URL__?: string }).__KAZIOS_API_URL__
+    : undefined) || import.meta.env.VITE_API_URL
 );
 
 export const api = axios.create({
@@ -23,15 +24,30 @@ export const api = axios.create({
   timeout: Number(import.meta.env.VITE_API_TIMEOUT_MS || 90_000),
 });
 
-api.interceptors.request.use((config) => {
+/**
+ * The API host without the /api/v1 suffix.
+ *
+ * A browser's EventSource cannot set an Authorization header, so the notification
+ * stream is opened as a plain URL and needs the host on its own. Keeping the strip in
+ * one place stops the two from disagreeing about where the API lives.
+ *
+ * It lives here rather than in the component because this module is the single place
+ * that reads the bundler's environment, and a test that mocks the API gets it for free
+ * instead of having to stub a global.
+ */
+export function apiHost(): string {
+  return API_BASE.replace(/\/api\/v\d+$/i, "");
+}
+
+api.interceptors.request.use(config => {
   const token = localStorage.getItem("kazios_token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  response => response,
+  error => {
     if (error.response?.status === 401) {
       localStorage.removeItem("kazios_token");
       window.location.href = "/login";

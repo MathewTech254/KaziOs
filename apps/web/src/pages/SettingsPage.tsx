@@ -29,18 +29,21 @@ export function SettingsPage() {
     <div>
       <div className="mb-6">
         <h1 className="kazi-page-title">Settings</h1>
-        <p className="kazi-page-subtitle">Organization profile, locations, tax, preferences and access control</p>
+        <p className="kazi-page-subtitle">
+          Organization profile, locations, tax, preferences and access control
+        </p>
       </div>
 
       {!canManage && (
         <div className="kazi-alert-card mb-6 p-4 text-sm text-foreground">
-          You have read-only access. An owner can grant the <span className="font-medium">settings.manage</span> permission to
-          let you change these settings.
+          You have read-only access. An owner can grant the{" "}
+          <span className="font-medium">settings.manage</span> permission to let you change these
+          settings.
         </div>
       )}
 
       <div className="mb-6 flex flex-wrap gap-2">
-        {TABS.map((item) => {
+        {TABS.map(item => {
           const Icon = item.icon;
           const active = tab === item.id;
           const disabled = item.id === "roles" && !canViewUsers;

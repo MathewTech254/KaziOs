@@ -1,16 +1,44 @@
 /**
- * Transactional email. Resend is used when RESEND_API_KEY is set; without it the
- * mail is logged instead, so a developer can see what would have been sent and the
- * application keeps working rather than failing a sign up because mail is down.
+ * Transactional email. The provider is read from the shared config so the same
+ * EMAIL_PROVIDER / EMAIL_API_KEY / EMAIL_FROM settings drive every sending path. When
+ * no provider is configured the message is logged instead of sent, so a developer can
+ * still complete the flow and the app never fails a sign-up because mail is unavailable.
  */
-const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
-const MAIL_FROM = process.env.MAIL_FROM || "KaziOS <no-reply@resend.dev>";
-const APP_URL = (process.env.APP_URL || "http://localhost:3000").replace(/\/+$/, "");
+import { loadConfig } from "@kazios/config";
+
+interface EmailSettings {
+  provider: string;
+  apiKey: string;
+  from: string;
+  fromName: string;
+  appUrl: string;
+}
+
+function settings(): EmailSettings {
+  let provider = "console";
+  let apiKey = "";
+  let from = "";
+  let fromName = "KaziOS";
+  let appUrl = "http://localhost:3000";
+  try {
+    const config = loadConfig();
+    provider = config.email.provider || "console";
+    apiKey = config.email.apiKey || "";
+    from = config.email.from || "";
+    fromName = config.email.fromName || "KaziOS";
+  } catch {
+    // A missing config must not take the server down; fall through to console.
+  }
+  appUrl = (process.env.APP_URL || appUrl).replace(/\/+$/, "");
+  return { provider, apiKey, from, fromName, appUrl };
+}
+
 /** How long a reset link stays usable. Deliberately short: a link in an inbox is public. */
 const RESET_WINDOW_MINUTES = 15;
 
 export function isEmailConfigured(): boolean {
-  return Boolean(RESEND_API_KEY);
+  const { provider, apiKey } = settings();
+  return provider !== "console" && Boolean(apiKey);
 }
 
 export function resetWindowMinutes(): number {
@@ -24,9 +52,87 @@ export interface Mail {
   text: string;
 }
 
+const isResend = (provider: string) => provider === "resend";
+
+export interface MailCheck {
+  ok: boolean;
+  provider: string;
+  sender: string;
+  detail: string;
+}
+
+/**
+ * Checks that the mail credentials actually work by asking the provider, without sending
+ * anything. This turns "the email did not arrive" into a specific, actionable answer
+ * instead of a silent no-op.
+ */
+export async function checkMailConfiguration(): Promise<MailCheck> {
+  const s = settings();
+  const sender = senderAddress(s);
+
+  if (!isResend(s.provider)) {
+    return {
+      ok: false,
+      provider: s.provider,
+      sender,
+      detail:
+        "Email is set to console mode. Emails are printed to the API log, not delivered. Set EMAIL_PROVIDER=resend to send real mail.",
+    };
+  }
+  if (!s.apiKey) {
+    return {
+      ok: false,
+      provider: s.provider,
+      sender,
+      detail: "EMAIL_API_KEY is empty. Add a key from resend.com/api-keys.",
+    };
+  }
+
+  try {
+    const res = await fetch("https://api.resend.com/domains", {
+      headers: { Authorization: `Bearer ${s.apiKey}` },
+    });
+    if (res.status === 401 || res.status === 403 || res.status === 400) {
+      return {
+        ok: false,
+        provider: s.provider,
+        sender,
+        detail:
+          "The Resend API key was rejected. It is invalid or revoked. Create a new key at resend.com/api-keys.",
+      };
+    }
+    return {
+      ok: true,
+      provider: s.provider,
+      sender,
+      detail: "Resend accepted the API key. Emails will be delivered.",
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      provider: s.provider,
+      sender,
+      detail: `Could not reach Resend: ${(err as Error).message}`,
+    };
+  }
+}
+
+/**
+ * The address the mail is sent from. A domain that has not been verified with the
+ * provider is rejected outright, so the default names a provider that is always allowed
+ * to send rather than a made-up domain that would silently fail for every real user.
+ */
+function senderAddress(s: EmailSettings): string {
+  const from = s.from && s.from !== "no-reply@kazios.test" ? s.from : "onboarding@resend.dev";
+  const name = s.fromName || "KaziOS";
+  return name ? `${name} <${from}>` : from;
+}
+
 /** Sends one message. Never throws: a failed email must not roll back a sale. */
 export async function sendMail(mail: Mail): Promise<boolean> {
-  if (!RESEND_API_KEY) {
+  const s = settings();
+
+  if (!isResend(s.provider) || !s.apiKey) {
     // No provider configured. Log the link so a developer can still complete the flow.
     console.log(`[mail:preview] to=${mail.to} subject="${mail.subject}"\n${mail.text}`);
     return false;
@@ -35,14 +141,29 @@ export async function sendMail(mail: Mail): Promise<boolean> {
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${RESEND_API_KEY}` },
-      body: JSON.stringify({ from: MAIL_FROM, to: [mail.to], subject: mail.subject, html: mail.html, text: mail.text }),
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.apiKey}` },
+      body: JSON.stringify({
+        from: senderAddress(s),
+        to: [mail.to],
+        subject: mail.subject,
+        html: mail.html,
+        text: mail.text,
+      }),
     });
     if (!res.ok) {
       const body = await res.text();
       console.error(`[mail] resend rejected the message: ${res.status} ${body.slice(0, 300)}`);
+      if (res.status === 401 || res.status === 400) {
+        // A dead or mistyped key fails identically for every user, so say so plainly
+        // instead of letting a silent console line look like a delivered email.
+        console.error(
+          "[mail] the Resend API key was rejected. Generate a new key at resend.com/api-keys " +
+            "and set EMAIL_API_KEY in .env. Until then, reset links are only printed here."
+        );
+      }
       return false;
     }
+    console.log(`[mail] sent "${mail.subject}" to ${mail.to}`);
     return true;
   } catch (err) {
     console.error(`[mail] could not reach the mail provider: ${(err as Error).message}`);
@@ -50,7 +171,11 @@ export async function sendMail(mail: Mail): Promise<boolean> {
   }
 }
 
-const shell = (title: string, body: string, action?: { label: string; url: string }) => `<!doctype html>
+const shell = (
+  title: string,
+  body: string,
+  action?: { label: string; url: string }
+) => `<!doctype html>
 <html><body style="margin:0;padding:24px;background:#f5f5f4;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1c1917">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#fff;border-radius:12px;padding:32px">
@@ -70,7 +195,7 @@ const shell = (title: string, body: string, action?: { label: string; url: strin
 </body></html>`;
 
 export function passwordResetEmail(to: string, name: string, token: string): Mail {
-  const url = `${APP_URL}/reset-password?token=${encodeURIComponent(token)}`;
+  const url = `${settings().appUrl}/reset-password?token=${encodeURIComponent(token)}`;
   const body = `<p>Hello ${name},</p>
     <p>Someone asked to reset the password for your KaziOS account. Use the button below to choose a new one.</p>
     <p>This link works once and expires in ${RESET_WINDOW_MINUTES} minutes. If this was not you, ignore this message and nothing changes.</p>`;
@@ -95,12 +220,13 @@ export function passwordChangedEmail(to: string, name: string): Mail {
 }
 
 export function welcomeEmail(to: string, name: string, organizationName: string): Mail {
+  const appUrl = settings().appUrl;
   const body = `<p>Hello ${name},</p>
     <p>Your <strong>${organizationName}</strong> workspace is ready. Add your first product, or open the point of sale and start selling.</p>`;
   return {
     to,
     subject: `Welcome to KaziOS, ${organizationName}`,
-    html: shell("Your workspace is ready", body, { label: "Open KaziOS", url: APP_URL }),
-    text: `Hello ${name},\n\nYour ${organizationName} workspace is ready on KaziOS: ${APP_URL}`,
+    html: shell("Your workspace is ready", body, { label: "Open KaziOS", url: appUrl }),
+    text: `Hello ${name},\n\nYour ${organizationName} workspace is ready on KaziOS: ${appUrl}`,
   };
 }

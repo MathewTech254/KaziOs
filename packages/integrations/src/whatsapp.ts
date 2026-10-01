@@ -37,6 +37,10 @@ export class WhatsappProvider {
       return { messageId: "", status: "not_configured", error: "WhatsApp provider not configured" };
     }
 
-    return { messageId: "", status: "failed", error: `WhatsApp provider ${this.provider} not implemented` };
+    return {
+      messageId: "",
+      status: "failed",
+      error: `WhatsApp provider ${this.provider} not implemented`,
+    };
   }
 }

@@ -7,10 +7,34 @@ interface AuthBrandPanelProps {
 }
 
 const operatingAreas = [
-  { title: "Sales", description: "Invoices, payments, revenue.", icon: FileText, accent: "text-accent", surface: "bg-accent/15" },
-  { title: "Inventory", description: "Products, stock, alerts.", icon: Boxes, accent: "text-success", surface: "bg-success/15" },
-  { title: "Customers", description: "Relationships, history.", icon: UsersRound, accent: "text-info", surface: "bg-info/15" },
-  { title: "Reports", description: "A clearer operating view.", icon: BarChart3, accent: "text-warning", surface: "bg-warning/15" },
+  {
+    title: "Sales",
+    description: "Invoices, payments, revenue.",
+    icon: FileText,
+    accent: "text-accent",
+    surface: "bg-accent/15",
+  },
+  {
+    title: "Inventory",
+    description: "Products, stock, alerts.",
+    icon: Boxes,
+    accent: "text-success",
+    surface: "bg-success/15",
+  },
+  {
+    title: "Customers",
+    description: "Relationships, history.",
+    icon: UsersRound,
+    accent: "text-info",
+    surface: "bg-info/15",
+  },
+  {
+    title: "Reports",
+    description: "A clearer operating view.",
+    icon: BarChart3,
+    accent: "text-warning",
+    surface: "bg-warning/15",
+  },
 ];
 
 export function AuthBrandPanel({ mode }: AuthBrandPanelProps) {
@@ -28,9 +52,13 @@ export function AuthBrandPanel({ mode }: AuthBrandPanelProps) {
         </div>
 
         <div className="max-w-[28rem]">
-          <p className="mb-4 text-[11px] font-semibold uppercase tracking-[.22em] text-[var(--kazi-accent)]">One operating view</p>
+          <p className="mb-4 text-[11px] font-semibold uppercase tracking-[.22em] text-[var(--kazi-accent)]">
+            One operating view
+          </p>
           <h2 className="kazi-display max-w-[26rem] text-4xl font-semibold leading-[1.02] tracking-[-.06em] text-[var(--kazi-display-text)] xl:text-5xl">
-            {isRegister ? "Build the workspace your business can grow inside." : "Keep the next decision close at hand."}
+            {isRegister
+              ? "Build the workspace your business can grow inside."
+              : "Keep the next decision close at hand."}
           </h2>
           <p className="mt-5 max-w-[25rem] text-sm leading-7 text-[var(--kazi-body-text)]">
             {isRegister
@@ -41,12 +69,18 @@ export function AuthBrandPanel({ mode }: AuthBrandPanelProps) {
           <div className="kazi-auth-panel-list mt-8 divide-y divide-white/10 overflow-hidden rounded-[18px] border border-white/15 bg-[rgba(7,21,45,.74)] backdrop-blur-sm">
             {operatingAreas.map(({ title, description, icon: Icon, accent, surface }) => (
               <div key={title} className="flex items-center gap-3 px-4 py-3.5">
-                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] ${surface} ${accent}`}>
+                <span
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] ${surface} ${accent}`}
+                >
                   <Icon className="h-4 w-4" aria-hidden="true" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-[var(--kazi-text)]">{title}</span>
-                  <span className="block text-xs leading-5 text-[var(--kazi-muted-text)]">{description}</span>
+                  <span className="block text-sm font-semibold text-[var(--kazi-text)]">
+                    {title}
+                  </span>
+                  <span className="block text-xs leading-5 text-[var(--kazi-muted-text)]">
+                    {description}
+                  </span>
                 </span>
               </div>
             ))}

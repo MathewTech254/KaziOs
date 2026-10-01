@@ -1,8 +1,9 @@
 import { Router } from "express";
-import { Prisma } from "@prisma/client";
-import { z } from "zod";
+import type { Prisma } from "@prisma/client";
+import type { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { AuthRequest, requireAuth, requirePermission } from "../middleware/auth";
+import type { AuthRequest } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 import { AppError, paginate } from "../lib";
 import { zSupplierQuerySchema, zSupplierSchema } from "@kazios/validation";
 
@@ -35,111 +36,161 @@ function toSupplierPatch(input: Partial<z.infer<typeof zSupplierSchema>>) {
   return data;
 }
 
-supplierRouter.get("/", requireAuth, requirePermission("purchasing.view"), async (req: AuthRequest, res, next) => {
-  try {
-    const organizationId = req.organizationId!;
-    const query = zSupplierQuerySchema.parse(req.query);
-    const { skip, take, page, limit } = paginate(query.page, query.limit);
+supplierRouter.get(
+  "/",
+  requireAuth,
+  requirePermission("purchasing.view"),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const organizationId = req.organizationId!;
+      const query = zSupplierQuerySchema.parse(req.query);
+      const { skip, take, page, limit } = paginate(query.page, query.limit);
 
-    const where: Prisma.SupplierWhereInput = { organizationId };
-    if (query.search) {
-      const term = query.search.trim();
-      where.OR = [
-        { name: { contains: term, mode: "insensitive" } },
-        { email: { contains: term, mode: "insensitive" } },
-        { phone: { contains: term, mode: "insensitive" } },
-        { taxNumber: { contains: term, mode: "insensitive" } },
-      ];
+      const where: Prisma.SupplierWhereInput = { organizationId };
+      if (query.search) {
+        const term = query.search.trim();
+        where.OR = [
+          { name: { contains: term, mode: "insensitive" } },
+          { email: { contains: term, mode: "insensitive" } },
+          { phone: { contains: term, mode: "insensitive" } },
+          { taxNumber: { contains: term, mode: "insensitive" } },
+        ];
+      }
+
+      const [data, total] = await Promise.all([
+        prisma.supplier.findMany({
+          where,
+          skip,
+          take,
+          orderBy: { name: "asc" },
+          include: { _count: { select: { purchaseOrders: true } } },
+        }),
+        prisma.supplier.count({ where }),
+      ]);
+
+      res.json({ data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+    } catch (err) {
+      next(err);
     }
-
-    const [data, total] = await Promise.all([
-      prisma.supplier.findMany({
-        where,
-        skip,
-        take,
-        orderBy: { name: "asc" },
-        include: { _count: { select: { purchaseOrders: true } } },
-      }),
-      prisma.supplier.count({ where }),
-    ]);
-
-    res.json({ data, meta: { page, limit, total, totalPages: Math.ceil(total / limit) } });
-  } catch (err) {
-    next(err);
   }
-});
+);
 
-supplierRouter.get("/:id", requireAuth, requirePermission("purchasing.view"), async (req: AuthRequest, res, next) => {
-  try {
-    const supplier = await prisma.supplier.findFirst({
-      where: { id: req.params.id, organizationId: req.organizationId! },
-      include: {
-        purchaseOrders: {
-          take: 10,
-          orderBy: { createdAt: "desc" },
-          select: { id: true, poNumber: true, status: true, totalAmount: true, expectedDate: true, createdAt: true },
+supplierRouter.get(
+  "/:id",
+  requireAuth,
+  requirePermission("purchasing.view"),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const supplier = await prisma.supplier.findFirst({
+        where: { id: req.params.id, organizationId: req.organizationId! },
+        include: {
+          purchaseOrders: {
+            take: 10,
+            orderBy: { createdAt: "desc" },
+            select: {
+              id: true,
+              poNumber: true,
+              status: true,
+              totalAmount: true,
+              expectedDate: true,
+              createdAt: true,
+            },
+          },
+          _count: { select: { purchaseOrders: true } },
         },
-        _count: { select: { purchaseOrders: true } },
-      },
-    });
-    if (!supplier) throw new AppError(404, "Supplier not found");
-    res.json({ data: supplier });
-  } catch (err) {
-    next(err);
-  }
-});
-
-supplierRouter.post("/", requireAuth, requirePermission("purchasing.manage"), async (req: AuthRequest, res, next) => {
-  try {
-    const input = zSupplierSchema.parse(req.body);
-    const data = toSupplierData(input);
-
-    const existing = await prisma.supplier.findFirst({
-      where: { organizationId: req.organizationId!, name: data.name },
-      select: { id: true },
-    });
-    if (existing) throw new AppError(409, `A supplier named "${data.name}" already exists`, "SUPPLIER_EXISTS");
-
-    const supplier = await prisma.supplier.create({ data: { ...data, organizationId: req.organizationId! } });
-    res.status(201).json({ data: supplier });
-  } catch (err) {
-    next(err);
-  }
-});
-
-supplierRouter.patch("/:id", requireAuth, requirePermission("purchasing.manage"), async (req: AuthRequest, res, next) => {
-  try {
-    const input = zSupplierSchema.partial().parse(req.body);
-    const current = await prisma.supplier.findFirst({
-      where: { id: req.params.id, organizationId: req.organizationId! },
-      select: { id: true },
-    });
-    if (!current) throw new AppError(404, "Supplier not found");
-
-    const supplier = await prisma.supplier.update({ where: { id: current.id }, data: toSupplierPatch(input) });
-    res.json({ data: supplier });
-  } catch (err) {
-    next(err);
-  }
-});
-
-supplierRouter.delete("/:id", requireAuth, requirePermission("purchasing.manage"), async (req: AuthRequest, res, next) => {
-  try {
-    const supplier = await prisma.supplier.findFirst({
-      where: { id: req.params.id, organizationId: req.organizationId! },
-      include: { _count: { select: { purchaseOrders: true, expenses: true } } },
-    });
-    if (!supplier) throw new AppError(404, "Supplier not found");
-    if (supplier._count.purchaseOrders > 0) {
-      throw new AppError(409, "This supplier has purchase orders, so it cannot be deleted", "SUPPLIER_IN_USE");
+      });
+      if (!supplier) throw new AppError(404, "Supplier not found");
+      res.json({ data: supplier });
+    } catch (err) {
+      next(err);
     }
-    if (supplier._count.expenses > 0) {
-      throw new AppError(409, "This supplier has recorded expenses, so it cannot be deleted", "SUPPLIER_IN_USE");
-    }
-
-    await prisma.supplier.delete({ where: { id: supplier.id } });
-    res.json({ data: { id: supplier.id, deleted: true } });
-  } catch (err) {
-    next(err);
   }
-});
+);
+
+supplierRouter.post(
+  "/",
+  requireAuth,
+  requirePermission("purchasing.manage"),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const input = zSupplierSchema.parse(req.body);
+      const data = toSupplierData(input);
+
+      const existing = await prisma.supplier.findFirst({
+        where: { organizationId: req.organizationId!, name: data.name },
+        select: { id: true },
+      });
+      if (existing)
+        throw new AppError(
+          409,
+          `A supplier named "${data.name}" already exists`,
+          "SUPPLIER_EXISTS"
+        );
+
+      const supplier = await prisma.supplier.create({
+        data: { ...data, organizationId: req.organizationId! },
+      });
+      res.status(201).json({ data: supplier });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+supplierRouter.patch(
+  "/:id",
+  requireAuth,
+  requirePermission("purchasing.manage"),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const input = zSupplierSchema.partial().parse(req.body);
+      const current = await prisma.supplier.findFirst({
+        where: { id: req.params.id, organizationId: req.organizationId! },
+        select: { id: true },
+      });
+      if (!current) throw new AppError(404, "Supplier not found");
+
+      const supplier = await prisma.supplier.update({
+        where: { id: current.id },
+        data: toSupplierPatch(input),
+      });
+      res.json({ data: supplier });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+supplierRouter.delete(
+  "/:id",
+  requireAuth,
+  requirePermission("purchasing.manage"),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const supplier = await prisma.supplier.findFirst({
+        where: { id: req.params.id, organizationId: req.organizationId! },
+        include: { _count: { select: { purchaseOrders: true, expenses: true } } },
+      });
+      if (!supplier) throw new AppError(404, "Supplier not found");
+      if (supplier._count.purchaseOrders > 0) {
+        throw new AppError(
+          409,
+          "This supplier has purchase orders, so it cannot be deleted",
+          "SUPPLIER_IN_USE"
+        );
+      }
+      if (supplier._count.expenses > 0) {
+        throw new AppError(
+          409,
+          "This supplier has recorded expenses, so it cannot be deleted",
+          "SUPPLIER_IN_USE"
+        );
+      }
+
+      await prisma.supplier.delete({ where: { id: supplier.id } });
+      res.json({ data: { id: supplier.id, deleted: true } });
+    } catch (err) {
+      next(err);
+    }
+  }
+);

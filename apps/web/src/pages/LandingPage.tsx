@@ -34,10 +34,34 @@ const detailItems = [
 ];
 
 const operationalItems = [
-  { title: "Sales", description: "Track revenue", icon: ArrowUpRight, accent: "text-accent", surface: "bg-accent/15" },
-  { title: "Inventory", description: "Stay in stock", icon: Boxes, accent: "text-success", surface: "bg-success/15" },
-  { title: "Customers", description: "Know your base", icon: UsersRound, accent: "text-info", surface: "bg-info/15" },
-  { title: "Invoices", description: "Keep paid work moving", icon: FileText, accent: "text-warning", surface: "bg-warning/15" },
+  {
+    title: "Sales",
+    description: "Track revenue",
+    icon: ArrowUpRight,
+    accent: "text-accent",
+    surface: "bg-accent/15",
+  },
+  {
+    title: "Inventory",
+    description: "Stay in stock",
+    icon: Boxes,
+    accent: "text-success",
+    surface: "bg-success/15",
+  },
+  {
+    title: "Customers",
+    description: "Know your base",
+    icon: UsersRound,
+    accent: "text-info",
+    surface: "bg-info/15",
+  },
+  {
+    title: "Invoices",
+    description: "Keep paid work moving",
+    icon: FileText,
+    accent: "text-warning",
+    surface: "bg-warning/15",
+  },
 ];
 
 export function LandingPage() {
@@ -59,7 +83,9 @@ export function LandingPage() {
           <Link to="/" aria-label="KaziOS home" className="flex items-center gap-3 sm:gap-4">
             <BrandLogo variant="mark" className="h-11 w-11 sm:h-12 sm:w-12" />
             <div className="hidden sm:block">
-              <div className="kazi-display text-[22px] font-semibold tracking-[-.03em] text-[var(--kazi-text)]">KaziOS</div>
+              <div className="kazi-display text-[22px] font-semibold tracking-[-.03em] text-[var(--kazi-text)]">
+                KaziOS
+              </div>
               <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[.24em] text-[var(--kazi-muted-text)]">
                 Business operating system
               </div>
@@ -67,8 +93,13 @@ export function LandingPage() {
           </Link>
 
           <nav className="flex items-center gap-4 text-sm sm:gap-8" aria-label="Public navigation">
-            <span className="hidden text-[var(--kazi-muted-text)] lg:inline">Built for the way African businesses operate</span>
-            <Link to="/login" className="rounded-md px-2 py-2 font-medium text-[var(--kazi-text)] transition-colors hover:text-[var(--kazi-accent-hover)]">
+            <span className="hidden text-[var(--kazi-muted-text)] lg:inline">
+              Built for the way African businesses operate
+            </span>
+            <Link
+              to="/login"
+              className="rounded-md px-2 py-2 font-medium text-[var(--kazi-text)] transition-colors hover:text-[var(--kazi-accent-hover)]"
+            >
               Sign in
             </Link>
             <Link to="/register" className="kazi-button-primary px-4 text-sm sm:px-5">
@@ -91,14 +122,18 @@ export function LandingPage() {
                   <span className="h-px w-8 bg-[var(--kazi-accent)]" aria-hidden="true" />
                   One workspace. Every moving part.
                 </div>
-                <BrandLogo variant="wordmark" className="mb-9 w-[17rem] sm:mb-12 sm:w-[20.625rem]" />
+                <BrandLogo
+                  variant="wordmark"
+                  className="mb-9 w-[17rem] sm:mb-12 sm:w-[20.625rem]"
+                />
                 <h1 className="kazi-display max-w-[640px] text-[clamp(2.875rem,5.3vw,5.125rem)] font-semibold leading-[.98] tracking-[-.065em] text-[var(--kazi-display-text)]">
                   Run the business.
                   <br />
                   <span className="text-[var(--kazi-accent)]">See what matters.</span>
                 </h1>
                 <p className="mt-7 max-w-[575px] text-base leading-7 text-[var(--kazi-body-text)] sm:mt-8 sm:text-[19px] sm:leading-8">
-                  KaziOS brings sales, stock, customers, invoices, and reporting into one dependable operating view—so the next decision is always close at hand.
+                  KaziOS brings sales, stock, customers, invoices, and reporting into one dependable
+                  operating view—so the next decision is always close at hand.
                 </p>
               </div>
 
@@ -107,7 +142,10 @@ export function LandingPage() {
                   Create your workspace
                   <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
                 </Link>
-                <Link to="/login" className="text-sm font-semibold text-[var(--kazi-text)] underline decoration-white/20 underline-offset-4 transition-colors hover:text-[var(--kazi-accent-hover)]">
+                <Link
+                  to="/login"
+                  className="text-sm font-semibold text-[var(--kazi-text)] underline decoration-white/20 underline-offset-4 transition-colors hover:text-[var(--kazi-accent-hover)]"
+                >
                   Sign in to an existing account
                 </Link>
               </div>
@@ -129,14 +167,23 @@ export function LandingPage() {
                   </p>
                   <div className="mt-6 divide-y divide-white/10 overflow-hidden rounded-[18px] border border-white/15 bg-[rgba(7,21,45,.78)] backdrop-blur-sm">
                     {operationalItems.map(({ title, description, icon: Icon, accent, surface }) => (
-                      <div key={title} className="flex items-center justify-between gap-4 px-4 py-4 sm:px-5">
+                      <div
+                        key={title}
+                        className="flex items-center justify-between gap-4 px-4 py-4 sm:px-5"
+                      >
                         <div className="flex min-w-0 items-center gap-3">
-                          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] ${surface} ${accent}`}>
+                          <span
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] ${surface} ${accent}`}
+                          >
                             <Icon className="h-4 w-4" aria-hidden="true" />
                           </span>
-                          <span className="truncate text-sm font-semibold text-[var(--kazi-text)]">{title}</span>
+                          <span className="truncate text-sm font-semibold text-[var(--kazi-text)]">
+                            {title}
+                          </span>
                         </div>
-                        <span className="shrink-0 text-right text-xs text-[var(--kazi-muted-text)]">{description}</span>
+                        <span className="shrink-0 text-right text-xs text-[var(--kazi-muted-text)]">
+                          {description}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -154,14 +201,20 @@ export function LandingPage() {
           <div className="mx-auto max-w-[1328px] px-5 py-8 sm:px-8 lg:px-14 lg:py-9">
             <div className="flex flex-col gap-7 lg:flex-row lg:items-center lg:justify-between">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[.22em] text-[var(--kazi-accent)]">Built around real work</p>
-                <h2 className="kazi-display mt-2 text-2xl font-semibold tracking-[-.04em] text-[var(--kazi-display-text)]">Everything important, without the noise.</h2>
+                <p className="text-[11px] font-semibold uppercase tracking-[.22em] text-[var(--kazi-accent)]">
+                  Built around real work
+                </p>
+                <h2 className="kazi-display mt-2 text-2xl font-semibold tracking-[-.04em] text-[var(--kazi-display-text)]">
+                  Everything important, without the noise.
+                </h2>
               </div>
               <div className="grid flex-1 gap-5 sm:grid-cols-2 lg:ml-20 lg:grid-cols-4 lg:gap-3">
-                {capabilityItems.map((item) => (
+                {capabilityItems.map(item => (
                   <div key={item.title} className="border-l border-white/15 pl-4">
                     <p className={`text-sm font-semibold ${item.accent}`}>{item.title}</p>
-                    <p className="mt-1 text-xs leading-5 text-[var(--kazi-muted-text)]">{item.description}</p>
+                    <p className="mt-1 text-xs leading-5 text-[var(--kazi-muted-text)]">
+                      {item.description}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -172,7 +225,9 @@ export function LandingPage() {
         <section className="mx-auto max-w-[1328px] px-5 py-14 sm:px-8 lg:px-14 lg:py-16">
           <div className="grid gap-10 lg:grid-cols-[1.15fr_.85fr] lg:items-end">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[.22em] text-[var(--kazi-accent)]">A steadier way to operate</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[.22em] text-[var(--kazi-accent)]">
+                A steadier way to operate
+              </p>
               <h2 className="kazi-display mt-3 max-w-[610px] text-4xl font-semibold leading-[1.05] tracking-[-.055em] text-[var(--kazi-display-text)] sm:text-5xl">
                 The detail is still there.
                 <br />
@@ -180,16 +235,28 @@ export function LandingPage() {
               </h2>
             </div>
             <p className="max-w-[430px] text-sm leading-7 text-[var(--kazi-body-text)]">
-              From first invoice to end-of-month reporting, KaziOS keeps the operational record close, legible, and ready for the next action.
+              From first invoice to end-of-month reporting, KaziOS keeps the operational record
+              close, legible, and ready for the next action.
             </p>
           </div>
 
           <div className="mt-10 grid gap-4 md:grid-cols-3 lg:mt-12">
-            {detailItems.map((item) => (
-              <div key={item.number} className="rounded-[var(--radius-card)] border border-white/10 bg-[var(--kazi-surface)] p-6">
-                <span className={`text-[11px] font-semibold uppercase tracking-[.18em] ${item.accent}`}>{item.number}</span>
-                <h3 className="mt-8 text-lg font-semibold text-[var(--kazi-display-text)]">{item.title}</h3>
-                <p className="mt-3 text-sm leading-6 text-[var(--kazi-muted-text)]">{item.description}</p>
+            {detailItems.map(item => (
+              <div
+                key={item.number}
+                className="rounded-[var(--radius-card)] border border-white/10 bg-[var(--kazi-surface)] p-6"
+              >
+                <span
+                  className={`text-[11px] font-semibold uppercase tracking-[.18em] ${item.accent}`}
+                >
+                  {item.number}
+                </span>
+                <h3 className="mt-8 text-lg font-semibold text-[var(--kazi-display-text)]">
+                  {item.title}
+                </h3>
+                <p className="mt-3 text-sm leading-6 text-[var(--kazi-muted-text)]">
+                  {item.description}
+                </p>
               </div>
             ))}
           </div>
@@ -198,9 +265,15 @@ export function LandingPage() {
         <section className="border-t border-white/10 bg-[var(--kazi-cream)] text-[var(--kazi-ink)]">
           <div className="mx-auto grid max-w-[1328px] gap-8 px-5 py-12 sm:px-8 lg:grid-cols-[1fr_auto] lg:items-center lg:px-14 lg:py-14">
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[.22em] text-[#b66d00]">Start with a clearer view</p>
-              <h2 className="kazi-display mt-3 text-3xl font-semibold tracking-[-.05em] text-[var(--kazi-ink)] sm:text-4xl">Set up the workspace your business can grow inside.</h2>
-              <p className="mt-3 max-w-[650px] text-sm leading-6 text-[#53627a]">Create your account and bring the day-to-day operation into one place.</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[.22em] text-[#b66d00]">
+                Start with a clearer view
+              </p>
+              <h2 className="kazi-display mt-3 text-3xl font-semibold tracking-[-.05em] text-[var(--kazi-ink)] sm:text-4xl">
+                Set up the workspace your business can grow inside.
+              </h2>
+              <p className="mt-3 max-w-[650px] text-sm leading-6 text-[#53627a]">
+                Create your account and bring the day-to-day operation into one place.
+              </p>
             </div>
             <Link to="/register" className="kazi-button-primary w-full px-6 sm:w-auto">
               Create free account

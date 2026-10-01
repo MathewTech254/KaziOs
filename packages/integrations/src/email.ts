@@ -4,11 +4,11 @@ export interface EmailOptions {
   html: string;
   text?: string;
   from?: string;
-  attachments?: Array<{
+  attachments?: {
     filename: string;
     content: Buffer | string;
     contentType?: string;
-  }>;
+  }[];
 }
 
 export interface EmailProvider {
@@ -44,6 +44,9 @@ export class SendgridEmailProvider implements EmailProvider {
   }
 
   async send(options: EmailOptions): Promise<EmailResult> {
+    // Required lazily so an installation that never configures SendGrid does not have
+    // to have the SDK installed at all.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const sgMail = require("@sendgrid/mail");
     sgMail.setApiKey(this.apiKey);
 
@@ -54,7 +57,7 @@ export class SendgridEmailProvider implements EmailProvider {
         subject: options.subject,
         html: options.html,
         text: options.text,
-        attachments: options.attachments?.map((a) => ({
+        attachments: options.attachments?.map(a => ({
           filename: a.filename,
           content: a.content.toString("base64"),
           type: a.contentType,
@@ -82,7 +85,11 @@ export function createEmailProvider(config: {
   fromName: string;
 }): EmailProvider {
   if (config.provider === "sendgrid" && config.apiKey) {
-    return new SendgridEmailProvider({ apiKey: config.apiKey, from: config.from, fromName: config.fromName });
+    return new SendgridEmailProvider({
+      apiKey: config.apiKey,
+      from: config.from,
+      fromName: config.fromName,
+    });
   }
   if (config.provider === "smtp" && config.apiKey) {
     return new ConsoleEmailProvider();

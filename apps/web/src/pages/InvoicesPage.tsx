@@ -17,20 +17,30 @@ export function InvoicesPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get("/invoices").then((res) => { setInvoices(res.data.data); setLoading(false); });
+    api.get("/invoices").then(res => {
+      setInvoices(res.data.data);
+      setLoading(false);
+    });
   }, []);
 
   if (loading) return <div className="p-6 text-muted-foreground">Loading...</div>;
 
   const statusColor = (s: string) => {
     switch (s) {
-      case "PAID": return "bg-success/15 text-success";
-      case "DRAFT": return "bg-surface-muted text-muted-foreground";
-      case "SENT": return "bg-info/15 text-info";
-      case "PARTIALLY_PAID": return "bg-warning/15 text-warning";
-      case "OVERDUE": return "bg-danger/15 text-danger";
-      case "VOID": return "bg-surface-muted text-muted-foreground";
-      default: return "bg-surface-muted text-muted-foreground";
+      case "PAID":
+        return "bg-success/15 text-success";
+      case "DRAFT":
+        return "bg-surface-muted text-muted-foreground";
+      case "SENT":
+        return "bg-info/15 text-info";
+      case "PARTIALLY_PAID":
+        return "bg-warning/15 text-warning";
+      case "OVERDUE":
+        return "bg-danger/15 text-danger";
+      case "VOID":
+        return "bg-surface-muted text-muted-foreground";
+      default:
+        return "bg-surface-muted text-muted-foreground";
     }
   };
 
@@ -45,24 +55,46 @@ export function InvoicesPage() {
         <table className="min-w-full divide-y divide-border">
           <thead className="bg-surface-muted">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Invoice #</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Customer</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Date</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Due</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Total</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                Invoice #
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                Customer
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                Date
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                Due
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                Total
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                Status
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {invoices.map((inv) => (
+            {invoices.map(inv => (
               <tr key={inv.id} className="hover:bg-surface-muted/50">
-                <td className="px-6 py-4 text-sm font-medium text-foreground">{inv.invoiceNumber}</td>
+                <td className="px-6 py-4 text-sm font-medium text-foreground">
+                  {inv.invoiceNumber}
+                </td>
                 <td className="px-6 py-4 text-sm text-muted-foreground">{inv.customer?.name}</td>
-                <td className="px-6 py-4 text-sm text-muted-foreground">{new Date(inv.issueDate).toLocaleDateString()}</td>
-                <td className="px-6 py-4 text-sm text-muted-foreground">{new Date(inv.dueDate).toLocaleDateString()}</td>
-                <td className="px-6 py-4 text-sm text-muted-foreground">{inv.currency} {inv.total.toLocaleString()}</td>
+                <td className="px-6 py-4 text-sm text-muted-foreground">
+                  {new Date(inv.issueDate).toLocaleDateString()}
+                </td>
+                <td className="px-6 py-4 text-sm text-muted-foreground">
+                  {new Date(inv.dueDate).toLocaleDateString()}
+                </td>
+                <td className="px-6 py-4 text-sm text-muted-foreground">
+                  {inv.currency} {inv.total.toLocaleString()}
+                </td>
                 <td className="px-6 py-4 text-sm">
-                  <span className={`rounded-full px-2 py-1 text-xs font-medium ${statusColor(inv.status)}`}>
+                  <span
+                    className={`rounded-full px-2 py-1 text-xs font-medium ${statusColor(inv.status)}`}
+                  >
                     {inv.status}
                   </span>
                 </td>

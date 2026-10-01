@@ -111,12 +111,17 @@ export function SettingsUsersPanel({ canManage }: { canManage: boolean }) {
     }
   };
 
-  if (loading) return <div className="kazi-card p-6 text-sm text-muted-foreground">Loading members...</div>;
+  if (loading)
+    return <div className="kazi-card p-6 text-sm text-muted-foreground">Loading members...</div>;
 
   return (
     <div className="space-y-6">
       {error && <div className="kazi-alert-card p-3 text-sm text-foreground">{error}</div>}
-      {message && <div className="rounded-lg border border-border bg-surface-muted p-3 text-sm text-foreground">{message}</div>}
+      {message && (
+        <div className="rounded-lg border border-border bg-surface-muted p-3 text-sm text-foreground">
+          {message}
+        </div>
+      )}
 
       <form onSubmit={invite} className="kazi-card p-6">
         <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-foreground">
@@ -128,7 +133,7 @@ export function SettingsUsersPanel({ canManage }: { canManage: boolean }) {
             <label className="mb-1 block text-sm text-muted-foreground">Name</label>
             <input
               value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              onChange={e => setForm({ ...form, name: e.target.value })}
               className="kazi-input"
               required
             />
@@ -138,7 +143,7 @@ export function SettingsUsersPanel({ canManage }: { canManage: boolean }) {
             <input
               type="email"
               value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              onChange={e => setForm({ ...form, email: e.target.value })}
               className="kazi-input"
               required
             />
@@ -149,7 +154,7 @@ export function SettingsUsersPanel({ canManage }: { canManage: boolean }) {
               type="password"
               minLength={8}
               value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              onChange={e => setForm({ ...form, password: e.target.value })}
               className="kazi-input"
               required
             />
@@ -158,11 +163,11 @@ export function SettingsUsersPanel({ canManage }: { canManage: boolean }) {
             <label className="mb-1 block text-sm text-muted-foreground">Role</label>
             <select
               value={form.roleId}
-              onChange={(e) => setForm({ ...form, roleId: e.target.value })}
+              onChange={e => setForm({ ...form, roleId: e.target.value })}
               className="kazi-input"
             >
               <option value="">No role yet</option>
-              {roles.map((role) => (
+              {roles.map(role => (
                 <option key={role.id} value={role.id}>
                   {role.name}
                 </option>
@@ -170,7 +175,11 @@ export function SettingsUsersPanel({ canManage }: { canManage: boolean }) {
             </select>
           </div>
         </div>
-        <button type="submit" disabled={!canManage || saving} className="kazi-button-primary mt-4 px-4 text-sm disabled:opacity-50">
+        <button
+          type="submit"
+          disabled={!canManage || saving}
+          className="kazi-button-primary mt-4 px-4 text-sm disabled:opacity-50"
+        >
           {saving ? "Saving..." : "Add member"}
         </button>
       </form>
@@ -179,14 +188,22 @@ export function SettingsUsersPanel({ canManage }: { canManage: boolean }) {
         <table className="min-w-full divide-y divide-border">
           <thead className="bg-surface-muted">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">Member</th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">Roles</th>
-              <th className="px-6 py-3 text-right text-xs font-medium uppercase text-muted-foreground">Assign role</th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
+                Member
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
+                Status
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
+                Roles
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium uppercase text-muted-foreground">
+                Assign role
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {members.map((member) => (
+            {members.map(member => (
               <tr key={member.id} className="hover:bg-surface-muted/50">
                 <td className="px-6 py-4 text-sm font-medium text-foreground">
                   {member.name}
@@ -195,8 +212,10 @@ export function SettingsUsersPanel({ canManage }: { canManage: boolean }) {
                 <td className="px-6 py-4 text-sm text-muted-foreground">{member.status}</td>
                 <td className="px-6 py-4">
                   <div className="flex flex-wrap gap-2">
-                    {member.roles.length === 0 && <span className="text-sm text-muted-foreground">No roles</span>}
-                    {member.roles.map((assignment) => (
+                    {member.roles.length === 0 && (
+                      <span className="text-sm text-muted-foreground">No roles</span>
+                    )}
+                    {member.roles.map(assignment => (
                       <span
                         key={assignment.id}
                         className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs text-foreground"
@@ -219,11 +238,11 @@ export function SettingsUsersPanel({ canManage }: { canManage: boolean }) {
                   <div className="flex justify-end gap-2">
                     <select
                       value={selection[member.id] || ""}
-                      onChange={(e) => setSelection({ ...selection, [member.id]: e.target.value })}
+                      onChange={e => setSelection({ ...selection, [member.id]: e.target.value })}
                       className="kazi-input max-w-[10rem]"
                     >
                       <option value="">Select role</option>
-                      {roles.map((role) => (
+                      {roles.map(role => (
                         <option key={role.id} value={role.id}>
                           {role.name}
                         </option>

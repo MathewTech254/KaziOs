@@ -1,3 +1,9 @@
+/* eslint-disable @typescript-eslint/no-var-requires --
+// The AWS SDK is required lazily, inside the S3 backed provider, rather than at module
+// load. A deployment that stores files on local disk has no reason to carry the SDK or
+// pay its start-up cost, and a static import here would make the optional dependency a
+// hard one.
+*/
 import { randomUUID } from "crypto";
 import * as path from "path";
 import * as fs from "fs/promises";
@@ -63,7 +69,7 @@ export class LocalStorageProvider implements StorageProvider {
 
   async delete(key: string): Promise<void> {
     const fullPath = path.join(this.basePath, key);
-    await fs.unlink(fullPath).catch(() => {});
+    await fs.unlink(fullPath).catch(() => undefined);
   }
 
   async getUrl(key: string): Promise<string> {
@@ -76,7 +82,14 @@ export class S3StorageProvider implements StorageProvider {
   private baseUrl: string;
   private s3: any;
 
-  constructor(config: { bucket: string; endpoint?: string; accessKey: string; secretKey: string; region?: string; baseUrl: string }) {
+  constructor(config: {
+    bucket: string;
+    endpoint?: string;
+    accessKey: string;
+    secretKey: string;
+    region?: string;
+    baseUrl: string;
+  }) {
     this.bucket = config.bucket;
     this.baseUrl = config.baseUrl;
     const { S3Client } = require("@aws-sdk/client-s3");

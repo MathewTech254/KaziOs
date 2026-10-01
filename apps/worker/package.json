@@ -9,7 +9,9 @@
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "typecheck": "tsc --noEmit",
-    "test": "jest --detectOpenHandles --forceExit"
+    "test": "jest --detectOpenHandles --forceExit",
+    "test:unit": "jest --testPathPattern=.*\\.test\\.ts$ --passWithNoTests",
+    "test:integration": "jest --testPathPattern=.*\\.integration\\.ts$ --passWithNoTests"
   },
   "dependencies": {
     "@kazios/types": "1.0.0",
@@ -30,6 +32,7 @@
     "jest": "^29.7.0",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.5.2"
+    "typescript": "^5.5.2",
+    "ts-jest": "^29.1.4"
   }
 }

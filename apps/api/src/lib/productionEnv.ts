@@ -19,7 +19,8 @@ export function productionEnvProblems(env: NodeJS.ProcessEnv = process.env): str
   }
 
   const jwt = env.JWT_SECRET || "";
-  if (jwt.startsWith(DEVELOPMENT_DEFAULTS.JWT_SECRET)) problems.push("JWT_SECRET still uses the development default");
+  if (jwt.startsWith(DEVELOPMENT_DEFAULTS.JWT_SECRET))
+    problems.push("JWT_SECRET still uses the development default");
   if (jwt && !jwt.startsWith(DEVELOPMENT_DEFAULTS.JWT_SECRET) && jwt.length < 32) {
     problems.push("JWT_SECRET must be at least 32 characters");
   }
@@ -46,7 +47,7 @@ export function corsOriginWarning(env: NodeJS.ProcessEnv = process.env): string 
     return "CORS_ORIGIN is not set. Browser requests from the web app will be blocked until it is (Render: Environment tab).";
   }
   if (configured === "*") {
-    return "CORS_ORIGIN is \"*\", which cannot be used with credentialed requests. Set the exact web origin instead.";
+    return 'CORS_ORIGIN is "*", which cannot be used with credentialed requests. Set the exact web origin instead.';
   }
   return null;
 }

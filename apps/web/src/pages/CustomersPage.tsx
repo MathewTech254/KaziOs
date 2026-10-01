@@ -20,7 +20,9 @@ export function CustomersPage() {
     setCustomers(res.data.data);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,10 +39,7 @@ export function CustomersPage() {
           <h1 className="kazi-page-title">Customers</h1>
           <p className="kazi-page-subtitle">Manage your customer relationships</p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="kazi-button-primary px-4 text-sm"
-        >
+        <button onClick={() => setShowForm(!showForm)} className="kazi-button-primary px-4 text-sm">
           <Plus className="h-4 w-4" />
           {showForm ? "Cancel" : "Add Customer"}
         </button>
@@ -54,7 +53,7 @@ export function CustomersPage() {
               <label className="mb-1 block text-sm text-muted-foreground">Name</label>
               <input
                 value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                onChange={e => setForm({ ...form, name: e.target.value })}
                 className="kazi-input"
                 required
               />
@@ -64,7 +63,7 @@ export function CustomersPage() {
               <input
                 type="email"
                 value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                onChange={e => setForm({ ...form, email: e.target.value })}
                 className="kazi-input"
               />
             </div>
@@ -72,7 +71,7 @@ export function CustomersPage() {
               <label className="mb-1 block text-sm text-muted-foreground">Phone</label>
               <input
                 value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                onChange={e => setForm({ ...form, phone: e.target.value })}
                 className="kazi-input"
               />
             </div>
@@ -80,7 +79,7 @@ export function CustomersPage() {
               <label className="mb-1 block text-sm text-muted-foreground">Type</label>
               <select
                 value={form.customerType}
-                onChange={(e) => setForm({ ...form, customerType: e.target.value })}
+                onChange={e => setForm({ ...form, customerType: e.target.value })}
                 className="kazi-input"
               >
                 <option value="INDIVIDUAL">Individual</option>
@@ -98,14 +97,22 @@ export function CustomersPage() {
         <table className="min-w-full divide-y divide-border">
           <thead className="bg-surface-muted">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Name</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Email</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Phone</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Type</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                Name
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                Email
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                Phone
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                Type
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {customers.map((c) => (
+            {customers.map(c => (
               <tr key={c.id} className="hover:bg-surface-muted/50">
                 <td className="px-6 py-4 text-sm font-medium text-foreground">{c.name}</td>
                 <td className="px-6 py-4 text-sm text-muted-foreground">{c.email || "-"}</td>

@@ -1,0 +1,7 @@
+{
+  // The build omits tests: they are typechecked by the editor and by `npm run typecheck`,
+  // but shipping them inside the published package would put jest into the deployed
+  // artifact for no benefit.
+  "extends": "./tsconfig.json",
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+}

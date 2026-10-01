@@ -105,7 +105,12 @@ function money(amount: number, currency: string | null): string {
 
 export function PurchaseOrdersPanel() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
-  const [meta, setMeta] = useState<{ page: number; totalPages: number; total: number; byStatus: Record<string, number> }>({
+  const [meta, setMeta] = useState<{
+    page: number;
+    totalPages: number;
+    total: number;
+    byStatus: Record<string, number>;
+  }>({
     page: 1,
     totalPages: 0,
     total: 0,
@@ -122,7 +127,9 @@ export function PurchaseOrdersPanel() {
 
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState(EMPTY_DRAFT);
-  const [lines, setLines] = useState<DraftLine[]>([{ productId: "", quantity: "1", unitPrice: "" }]);
+  const [lines, setLines] = useState<DraftLine[]>([
+    { productId: "", quantity: "1", unitPrice: "" },
+  ]);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -131,7 +138,6 @@ export function PurchaseOrdersPanel() {
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
-
 
   useEffect(() => {
     const timer = setTimeout(() => setTerm(search), 300);
@@ -191,7 +197,7 @@ export function PurchaseOrdersPanel() {
     })();
   }, [showForm]);
 
-  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  const productById = useMemo(() => new Map(products.map(p => [p.id, p])), [products]);
 
   const totals = useMemo(() => {
     const subtotal = lines.reduce((sum, line) => {
@@ -206,7 +212,7 @@ export function PurchaseOrdersPanel() {
   }, [lines, draft.taxRate]);
 
   const setLine = (index: number, patch: Partial<DraftLine>) => {
-    setLines((current) => current.map((line, i) => (i === index ? { ...line, ...patch } : line)));
+    setLines(current => current.map((line, i) => (i === index ? { ...line, ...patch } : line)));
   };
 
   const openCreate = () => {
@@ -224,8 +230,8 @@ export function PurchaseOrdersPanel() {
       return;
     }
     const items = lines
-      .filter((line) => line.productId)
-      .map((line) => ({
+      .filter(line => line.productId)
+      .map(line => ({
         productId: line.productId,
         quantity: Number(line.quantity),
         unitPrice: Number(line.unitPrice) || 0,
@@ -234,7 +240,7 @@ export function PurchaseOrdersPanel() {
       setFormError("Add at least one product to the order.");
       return;
     }
-    if (items.some((item) => !Number.isFinite(item.quantity) || item.quantity <= 0)) {
+    if (items.some(item => !Number.isFinite(item.quantity) || item.quantity <= 0)) {
       setFormError("Every line needs a quantity greater than zero.");
       return;
     }
@@ -245,7 +251,9 @@ export function PurchaseOrdersPanel() {
       const res = await api.post("/purchase-orders", {
         supplierId: draft.supplierId,
         warehouseId: draft.warehouseId || null,
-        expectedDate: draft.expectedDate ? new Date(`${draft.expectedDate}T09:00:00`).toISOString() : null,
+        expectedDate: draft.expectedDate
+          ? new Date(`${draft.expectedDate}T09:00:00`).toISOString()
+          : null,
         taxRate: Number(draft.taxRate) || 0,
         notes: draft.notes.trim() || null,
         items,
@@ -316,14 +324,16 @@ export function PurchaseOrdersPanel() {
       </div>
 
       {notice && <Notice tone="success" title="Done" message={notice} />}
-      {loadError && <Notice tone="error" title="Could not load purchase orders" message={loadError} />}
+      {loadError && (
+        <Notice tone="error" title="Could not load purchase orders" message={loadError} />
+      )}
 
       {showForm && (
         <form onSubmit={save} className="kazi-card mb-6 p-6">
           <h2 className="mb-1 text-lg font-semibold text-foreground">New purchase order</h2>
           <p className="mb-4 text-sm text-muted-foreground">
-            Saved as a draft with a number like PO-2509-AB12. Totals are calculated on the server, so the figure below
-            always matches what the supplier is asked for.
+            Saved as a draft with a number like PO-2509-AB12. Totals are calculated on the server,
+            so the figure below always matches what the supplier is asked for.
           </p>
 
           {formError && <Notice tone="error" title="Order not saved" message={formError} />}
@@ -336,12 +346,12 @@ export function PurchaseOrdersPanel() {
               <select
                 id="po-supplier"
                 value={draft.supplierId}
-                onChange={(e) => setDraft({ ...draft, supplierId: e.target.value })}
+                onChange={e => setDraft({ ...draft, supplierId: e.target.value })}
                 className="kazi-input"
                 required
               >
                 <option value="">Select a supplier</option>
-                {suppliers.map((supplier) => (
+                {suppliers.map(supplier => (
                   <option key={supplier.id} value={supplier.id}>
                     {supplier.name}
                   </option>
@@ -355,11 +365,11 @@ export function PurchaseOrdersPanel() {
               <select
                 id="po-warehouse"
                 value={draft.warehouseId}
-                onChange={(e) => setDraft({ ...draft, warehouseId: e.target.value })}
+                onChange={e => setDraft({ ...draft, warehouseId: e.target.value })}
                 className="kazi-input"
               >
                 <option value="">Decide later</option>
-                {warehouses.map((warehouse) => (
+                {warehouses.map(warehouse => (
                   <option key={warehouse.id} value={warehouse.id}>
                     {warehouse.name} ({warehouse.code})
                   </option>
@@ -374,7 +384,7 @@ export function PurchaseOrdersPanel() {
                 id="po-expected"
                 type="date"
                 value={draft.expectedDate}
-                onChange={(e) => setDraft({ ...draft, expectedDate: e.target.value })}
+                onChange={e => setDraft({ ...draft, expectedDate: e.target.value })}
                 className="kazi-input"
               />
             </div>
@@ -389,7 +399,7 @@ export function PurchaseOrdersPanel() {
                 max="100"
                 step="0.01"
                 value={draft.taxRate}
-                onChange={(e) => setDraft({ ...draft, taxRate: e.target.value })}
+                onChange={e => setDraft({ ...draft, taxRate: e.target.value })}
                 className="kazi-input"
               />
             </div>
@@ -400,7 +410,9 @@ export function PurchaseOrdersPanel() {
               <h3 className="text-sm font-medium text-foreground">Items</h3>
               <button
                 type="button"
-                onClick={() => setLines([...lines, { productId: "", quantity: "1", unitPrice: "" }])}
+                onClick={() =>
+                  setLines([...lines, { productId: "", quantity: "1", unitPrice: "" }])
+                }
                 className="kazi-button-secondary px-3 py-1 text-xs"
               >
                 <Plus className="h-3 w-3" aria-hidden="true" />
@@ -418,13 +430,16 @@ export function PurchaseOrdersPanel() {
               {lines.map((line, index) => (
                 <div key={index} className="grid grid-cols-1 gap-2 sm:grid-cols-12 sm:items-end">
                   <div className="sm:col-span-6">
-                    <label className="mb-1 block text-xs text-muted-foreground" htmlFor={`po-line-product-${index}`}>
+                    <label
+                      className="mb-1 block text-xs text-muted-foreground"
+                      htmlFor={`po-line-product-${index}`}
+                    >
                       Product
                     </label>
                     <select
                       id={`po-line-product-${index}`}
                       value={line.productId}
-                      onChange={(e) => {
+                      onChange={e => {
                         const product = productById.get(e.target.value);
                         setLine(index, {
                           productId: e.target.value,
@@ -434,7 +449,7 @@ export function PurchaseOrdersPanel() {
                       className="kazi-input"
                     >
                       <option value="">Select a product</option>
-                      {products.map((product) => (
+                      {products.map(product => (
                         <option key={product.id} value={product.id}>
                           {product.name}
                           {product.sku ? ` (${product.sku})` : ""}
@@ -443,7 +458,10 @@ export function PurchaseOrdersPanel() {
                     </select>
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="mb-1 block text-xs text-muted-foreground" htmlFor={`po-line-qty-${index}`}>
+                    <label
+                      className="mb-1 block text-xs text-muted-foreground"
+                      htmlFor={`po-line-qty-${index}`}
+                    >
                       Quantity
                     </label>
                     <input
@@ -452,12 +470,15 @@ export function PurchaseOrdersPanel() {
                       min="0"
                       step="0.01"
                       value={line.quantity}
-                      onChange={(e) => setLine(index, { quantity: e.target.value })}
+                      onChange={e => setLine(index, { quantity: e.target.value })}
                       className="kazi-input"
                     />
                   </div>
                   <div className="sm:col-span-3">
-                    <label className="mb-1 block text-xs text-muted-foreground" htmlFor={`po-line-price-${index}`}>
+                    <label
+                      className="mb-1 block text-xs text-muted-foreground"
+                      htmlFor={`po-line-price-${index}`}
+                    >
                       Unit price
                     </label>
                     <input
@@ -466,7 +487,7 @@ export function PurchaseOrdersPanel() {
                       min="0"
                       step="0.01"
                       value={line.unitPrice}
-                      onChange={(e) => setLine(index, { unitPrice: e.target.value })}
+                      onChange={e => setLine(index, { unitPrice: e.target.value })}
                       className="kazi-input"
                     />
                   </div>
@@ -508,7 +529,7 @@ export function PurchaseOrdersPanel() {
             <textarea
               id="po-notes"
               value={draft.notes}
-              onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+              onChange={e => setDraft({ ...draft, notes: e.target.value })}
               className="kazi-input"
               rows={2}
               maxLength={500}
@@ -519,7 +540,11 @@ export function PurchaseOrdersPanel() {
             <button type="submit" className="kazi-button-primary px-4 text-sm" disabled={saving}>
               {saving ? "Saving..." : "Save as draft"}
             </button>
-            <button type="button" className="kazi-button-secondary px-4 text-sm" onClick={() => setShowForm(false)}>
+            <button
+              type="button"
+              className="kazi-button-secondary px-4 text-sm"
+              onClick={() => setShowForm(false)}
+            >
               Cancel
             </button>
           </div>
@@ -534,7 +559,7 @@ export function PurchaseOrdersPanel() {
           <input
             id="po-search"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={e => setSearch(e.target.value)}
             placeholder="Number, supplier or notes"
             className="kazi-input"
           />
@@ -543,11 +568,18 @@ export function PurchaseOrdersPanel() {
           <label className="mb-1 block text-sm text-muted-foreground" htmlFor="po-status">
             Status
           </label>
-          <select id="po-status" value={status} onChange={(e) => setStatus(e.target.value)} className="kazi-input">
-            {STATUSES.map((option) => (
+          <select
+            id="po-status"
+            value={status}
+            onChange={e => setStatus(e.target.value)}
+            className="kazi-input"
+          >
+            {STATUSES.map(option => (
               <option key={option.value} value={option.value}>
                 {option.label}
-                {option.value !== "ALL" && meta.byStatus[option.value] ? ` (${meta.byStatus[option.value]})` : ""}
+                {option.value !== "ALL" && meta.byStatus[option.value]
+                  ? ` (${meta.byStatus[option.value]})`
+                  : ""}
               </option>
             ))}
           </select>
@@ -571,18 +603,22 @@ export function PurchaseOrdersPanel() {
               </tr>
             </thead>
             <tbody>
-              {orders.map((order) => (
+              {orders.map(order => (
                 <tr key={order.id}>
                   <td className="font-medium text-foreground">{order.poNumber}</td>
                   <td>{order.supplier.name}</td>
                   <td>{order.expectedDate ? formatDate(order.expectedDate) : "-"}</td>
                   <td>
-                    <span className={`rounded-full px-2 py-1 text-xs font-medium ${badgeClass(order.status)}`}>
+                    <span
+                      className={`rounded-full px-2 py-1 text-xs font-medium ${badgeClass(order.status)}`}
+                    >
                       {order.status.replace(/_/g, " ")}
                     </span>
                   </td>
                   <td>{order._count?.items ?? 0}</td>
-                  <td className="text-right font-medium text-foreground">{money(order.totalAmount, order.currency)}</td>
+                  <td className="text-right font-medium text-foreground">
+                    {money(order.totalAmount, order.currency)}
+                  </td>
                   <td>
                     <div className="flex justify-end gap-2">
                       <button
@@ -654,7 +690,7 @@ export function PurchaseOrdersPanel() {
             <button
               type="button"
               className="kazi-button-secondary px-3 py-1 text-xs disabled:opacity-50"
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              onClick={() => setPage(current => Math.max(1, current - 1))}
               disabled={meta.page <= 1 || loading}
             >
               Previous
@@ -662,7 +698,7 @@ export function PurchaseOrdersPanel() {
             <button
               type="button"
               className="kazi-button-secondary px-3 py-1 text-xs disabled:opacity-50"
-              onClick={() => setPage((current) => current + 1)}
+              onClick={() => setPage(current => current + 1)}
               disabled={meta.page >= meta.totalPages || loading}
             >
               Next
@@ -685,7 +721,11 @@ export function PurchaseOrdersPanel() {
                 {detail.expectedDate ? `, expected ${formatDate(detail.expectedDate)}` : ""}
               </p>
             </div>
-            <button type="button" onClick={() => setDetail(null)} className="kazi-button-secondary px-3 py-1 text-xs">
+            <button
+              type="button"
+              onClick={() => setDetail(null)}
+              className="kazi-button-secondary px-3 py-1 text-xs"
+            >
               <X className="h-3 w-3" aria-hidden="true" />
               Close
             </button>
@@ -702,17 +742,21 @@ export function PurchaseOrdersPanel() {
                 </tr>
               </thead>
               <tbody>
-                {(detail.items ?? []).map((line) => (
+                {(detail.items ?? []).map(line => (
                   <tr key={line.id}>
                     <td>
                       {line.product?.name ?? "Unknown product"}
                       {line.product?.sku ? (
-                        <span className="ml-2 text-xs text-muted-foreground">{line.product.sku}</span>
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {line.product.sku}
+                        </span>
                       ) : null}
                     </td>
                     <td className="text-right">{line.quantity}</td>
                     <td className="text-right">{money(line.unitPrice, detail.currency)}</td>
-                    <td className="text-right font-medium text-foreground">{money(line.lineTotal, detail.currency)}</td>
+                    <td className="text-right font-medium text-foreground">
+                      {money(line.lineTotal, detail.currency)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -751,4 +795,3 @@ export function PurchaseOrdersPanel() {
     </div>
   );
 }
-

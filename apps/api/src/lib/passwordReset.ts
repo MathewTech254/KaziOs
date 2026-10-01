@@ -18,7 +18,11 @@ export interface IssuedReset {
  * Issues a single use reset token and emails the link. Any earlier unused token for
  * the same user is removed first, so only the newest link in a inbox can work.
  */
-export async function issuePasswordReset(userId: string, email: string, name: string): Promise<IssuedReset> {
+export async function issuePasswordReset(
+  userId: string,
+  email: string,
+  name: string
+): Promise<IssuedReset> {
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + resetWindowMinutes() * 60 * 1000);
 

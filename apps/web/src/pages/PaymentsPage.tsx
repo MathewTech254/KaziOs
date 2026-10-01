@@ -113,7 +113,7 @@ function statusClass(status: string): string {
 }
 
 function providerLabel(provider: string): string {
-  return PROVIDERS.find((item) => item.value === provider)?.label || provider;
+  return PROVIDERS.find(item => item.value === provider)?.label || provider;
 }
 
 function methodLabel(methodType: string): string {
@@ -157,11 +157,11 @@ export function PaymentsPage() {
     if (search.trim()) params.set("search", search.trim());
 
     try {
-      const res = await api.get<PaymentsResponse>(`/payments?${params}`);
+      const res = await api.get<PaymentsResponse>(`/payments?${params.toString()}`);
       setPayments(res.data.data);
       setTotal(res.data.total);
       setTotalPages(Math.max(1, res.data.totalPages));
-      setPage((current) => Math.min(current, Math.max(1, res.data.totalPages)));
+      setPage(current => Math.min(current, Math.max(1, res.data.totalPages)));
     } catch (err) {
       setError(getApiError(err));
     } finally {
@@ -191,20 +191,37 @@ export function PaymentsPage() {
     void Promise.allSettled([
       api.get<{ data: InvoiceOption[] }>("/invoices?limit=100"),
       api.get<{ data: CustomerOption[] }>("/customers?limit=100"),
-    ]).then(([invoiceResult, customerResult]) => {
-      if (invoiceResult.status === "fulfilled") setInvoices(invoiceResult.value.data.data || []);
-      if (customerResult.status === "fulfilled") setCustomers(customerResult.value.data.data || []);
-    }).finally(() => setLoadingOptions(false));
+    ])
+      .then(([invoiceResult, customerResult]) => {
+        if (invoiceResult.status === "fulfilled") setInvoices(invoiceResult.value.data.data || []);
+        if (customerResult.status === "fulfilled")
+          setCustomers(customerResult.value.data.data || []);
+      })
+      .finally(() => setLoadingOptions(false));
   }, [hasPermission]);
 
-  const visibleTotal = useMemo(() => payments.reduce((sum, payment) => sum + payment.amount, 0), [payments]);
-  const successfulCount = useMemo(() => payments.filter((payment) => payment.status === "SUCCESS").length, [payments]);
-  const pendingCount = useMemo(() => payments.filter((payment) => ["PENDING", "PROCESSING"].includes(payment.status)).length, [payments]);
-  const selectedProvider = PROVIDERS.find((provider) => provider.value === form.paymentProvider) || PROVIDERS[0];
+  const visibleTotal = useMemo(
+    () => payments.reduce((sum, payment) => sum + payment.amount, 0),
+    [payments]
+  );
+  const successfulCount = useMemo(
+    () => payments.filter(payment => payment.status === "SUCCESS").length,
+    [payments]
+  );
+  const pendingCount = useMemo(
+    () => payments.filter(payment => ["PENDING", "PROCESSING"].includes(payment.status)).length,
+    [payments]
+  );
+  const selectedProvider =
+    PROVIDERS.find(provider => provider.value === form.paymentProvider) || PROVIDERS[0];
 
   const updateProvider = (providerValue: PaymentForm["paymentProvider"]) => {
-    const provider = PROVIDERS.find((item) => item.value === providerValue) || PROVIDERS[0];
-    setForm((current) => ({ ...current, paymentProvider: providerValue, paymentMethodType: provider.methodType }));
+    const provider = PROVIDERS.find(item => item.value === providerValue) || PROVIDERS[0];
+    setForm(current => ({
+      ...current,
+      paymentProvider: providerValue,
+      paymentMethodType: provider.methodType,
+    }));
   };
 
   const handleCreate = async (event: FormEvent) => {
@@ -253,7 +270,9 @@ export function PaymentsPage() {
         <div className="kazi-card max-w-md p-8 text-center">
           <AlertCircle className="mx-auto mb-4 h-10 w-10 text-danger" />
           <h1 className="kazi-page-title">Payments access required</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Your role does not include the payments.view permission.</p>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Your role does not include the payments.view permission.
+          </p>
         </div>
       </div>
     );
@@ -264,15 +283,24 @@ export function PaymentsPage() {
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="kazi-page-title">Payments</h1>
-          <p className="kazi-page-subtitle">Track customer receipts, payment status, and settlement activity.</p>
+          <p className="kazi-page-subtitle">
+            Track customer receipts, payment status, and settlement activity.
+          </p>
         </div>
-        <button type="button" onClick={() => setShowForm(true)} className="kazi-button-primary px-4 text-sm">
+        <button
+          type="button"
+          onClick={() => setShowForm(true)}
+          className="kazi-button-primary px-4 text-sm"
+        >
           <Plus className="h-4 w-4" /> Record payment
         </button>
       </div>
 
       {error && (
-        <div role="alert" className="mb-5 flex items-start gap-3 rounded-lg border border-danger/30 bg-danger/10 p-4 text-sm text-danger">
+        <div
+          role="alert"
+          className="mb-5 flex items-start gap-3 rounded-lg border border-danger/30 bg-danger/10 p-4 text-sm text-danger"
+        >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <span>{error}</span>
         </div>
@@ -284,7 +312,9 @@ export function PaymentsPage() {
             <span className="kazi-stat-label">Page volume</span>
             <Receipt className="h-5 w-5 text-accent" />
           </div>
-          <p className="kazi-stat-value mt-1">{formatMoney(visibleTotal, payments[0]?.currency || "KES")}</p>
+          <p className="kazi-stat-value mt-1">
+            {formatMoney(visibleTotal, payments[0]?.currency || "KES")}
+          </p>
         </div>
         <div className="kazi-stat-card">
           <div className="flex items-center justify-between">
@@ -315,12 +345,21 @@ export function PaymentsPage() {
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Search</label>
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-              <input value={searchDraft} onChange={(event) => setSearchDraft(event.target.value)} placeholder="Reference, invoice, or customer" className="kazi-input pl-9" />
+              <input
+                value={searchDraft}
+                onChange={event => setSearchDraft(event.target.value)}
+                placeholder="Reference, invoice, or customer"
+                className="kazi-input pl-9"
+              />
             </div>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Status</label>
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="kazi-input">
+            <select
+              value={statusFilter}
+              onChange={event => setStatusFilter(event.target.value)}
+              className="kazi-input"
+            >
               <option value="ALL">All statuses</option>
               <option value="SUCCESS">Success</option>
               <option value="PENDING">Pending</option>
@@ -331,9 +370,17 @@ export function PaymentsPage() {
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-muted-foreground">Provider</label>
-            <select value={providerFilter} onChange={(event) => setProviderFilter(event.target.value)} className="kazi-input">
+            <select
+              value={providerFilter}
+              onChange={event => setProviderFilter(event.target.value)}
+              className="kazi-input"
+            >
               <option value="ALL">All providers</option>
-              {PROVIDERS.map((provider) => <option key={provider.value} value={provider.value}>{provider.label}</option>)}
+              {PROVIDERS.map(provider => (
+                <option key={provider.value} value={provider.value}>
+                  {provider.label}
+                </option>
+              ))}
             </select>
           </div>
           <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
@@ -352,38 +399,68 @@ export function PaymentsPage() {
           <table className="min-w-full divide-y divide-border">
             <thead className="bg-surface-muted">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase sm:px-6">Reference</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase sm:px-6">Customer</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase sm:px-6">Invoice</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase sm:px-6">Amount</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase sm:px-6">Method</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase sm:px-6">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase sm:px-6">Created</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase sm:px-6">
+                  Reference
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase sm:px-6">
+                  Customer
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase sm:px-6">
+                  Invoice
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase sm:px-6">
+                  Amount
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase sm:px-6">
+                  Method
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase sm:px-6">
+                  Status
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase sm:px-6">
+                  Created
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {payments.map((payment) => (
+              {payments.map(payment => (
                 <tr key={payment.id} className="hover:bg-surface-muted/40">
                   <td className="px-4 py-4 text-sm sm:px-6">
                     <div className="flex items-center gap-2">
                       <Receipt className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <div>
                         <p className="font-medium text-foreground">{payment.reference}</p>
-                        <p className="text-xs text-muted-foreground">{payment.providerRef || "No provider reference"}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {payment.providerRef || "No provider reference"}
+                        </p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-4 text-sm text-muted-foreground sm:px-6">{payment.customer?.name || "-"}</td>
-                  <td className="px-4 py-4 text-sm text-muted-foreground sm:px-6">{payment.invoice?.invoiceNumber || "-"}</td>
-                  <td className="px-4 py-4 text-sm font-semibold text-foreground sm:px-6">{formatMoney(payment.amount, payment.currency)}</td>
+                  <td className="px-4 py-4 text-sm text-muted-foreground sm:px-6">
+                    {payment.customer?.name || "-"}
+                  </td>
+                  <td className="px-4 py-4 text-sm text-muted-foreground sm:px-6">
+                    {payment.invoice?.invoiceNumber || "-"}
+                  </td>
+                  <td className="px-4 py-4 text-sm font-semibold text-foreground sm:px-6">
+                    {formatMoney(payment.amount, payment.currency)}
+                  </td>
                   <td className="px-4 py-4 text-sm text-muted-foreground sm:px-6">
                     <div>
                       <p className="text-foreground">{providerLabel(payment.provider)}</p>
                       <p className="text-xs">{methodLabel(payment.methodType)}</p>
                     </div>
                   </td>
-                  <td className="px-4 py-4 text-sm sm:px-6"><span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusClass(payment.status)}`}>{payment.status.toLowerCase()}</span></td>
-                  <td className="px-4 py-4 text-sm text-muted-foreground sm:px-6 whitespace-nowrap">{formatDate(payment.createdAt)}</td>
+                  <td className="px-4 py-4 text-sm sm:px-6">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusClass(payment.status)}`}
+                    >
+                      {payment.status.toLowerCase()}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4 text-sm text-muted-foreground sm:px-6 whitespace-nowrap">
+                    {formatDate(payment.createdAt)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -392,80 +469,190 @@ export function PaymentsPage() {
           <div className="flex min-h-[24rem] flex-col items-center justify-center text-center">
             <CreditCard className="mb-3 h-8 w-8 text-muted-foreground" />
             <h3 className="font-semibold text-foreground">No payments found</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Adjust the filters or record a new payment.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Adjust the filters or record a new payment.
+            </p>
           </div>
         )}
       </div>
 
       <div className="mt-5 flex items-center justify-between">
-        <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1 || loading} className="kazi-button-secondary px-4 text-sm disabled:opacity-40">
+        <button
+          type="button"
+          onClick={() => setPage(current => Math.max(1, current - 1))}
+          disabled={page <= 1 || loading}
+          className="kazi-button-secondary px-4 text-sm disabled:opacity-40"
+        >
           <ChevronLeft className="h-4 w-4" /> Previous
         </button>
-        <span className="text-sm text-muted-foreground">Page {page} of {totalPages}</span>
-        <button type="button" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={page >= totalPages || loading} className="kazi-button-secondary px-4 text-sm disabled:opacity-40">
+        <span className="text-sm text-muted-foreground">
+          Page {page} of {totalPages}
+        </span>
+        <button
+          type="button"
+          onClick={() => setPage(current => Math.min(totalPages, current + 1))}
+          disabled={page >= totalPages || loading}
+          className="kazi-button-secondary px-4 text-sm disabled:opacity-40"
+        >
           Next <ChevronRight className="h-4 w-4" />
         </button>
       </div>
 
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-labelledby="payment-form-title">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="payment-form-title"
+        >
           <div className="kazi-card w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
             <div className="mb-5 flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-accent">New transaction</p>
-                <h2 id="payment-form-title" className="kazi-page-title mt-1">Record payment</h2>
-                <p className="kazi-page-subtitle">Create a payment against an invoice or customer account.</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-accent">
+                  New transaction
+                </p>
+                <h2 id="payment-form-title" className="kazi-page-title mt-1">
+                  Record payment
+                </h2>
+                <p className="kazi-page-subtitle">
+                  Create a payment against an invoice or customer account.
+                </p>
               </div>
-              <button type="button" onClick={() => setShowForm(false)} aria-label="Close payment form" className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                aria-label="Close payment form"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
             <form onSubmit={handleCreate} className="space-y-5">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block text-sm text-muted-foreground">Invoice <span className="text-muted-foreground">(optional)</span></label>
-                  <select value={form.invoiceId} onChange={(event) => setForm({ ...form, invoiceId: event.target.value })} className="kazi-input">
+                  <label className="mb-1 block text-sm text-muted-foreground">
+                    Invoice <span className="text-muted-foreground">(optional)</span>
+                  </label>
+                  <select
+                    value={form.invoiceId}
+                    onChange={event => setForm({ ...form, invoiceId: event.target.value })}
+                    className="kazi-input"
+                  >
                     <option value="">No invoice</option>
-                    {invoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.invoiceNumber} · {formatMoney(invoice.total, invoice.currency)} · {invoice.status}</option>)}
+                    {invoices.map(invoice => (
+                      <option key={invoice.id} value={invoice.id}>
+                        {invoice.invoiceNumber} · {formatMoney(invoice.total, invoice.currency)} ·{" "}
+                        {invoice.status}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm text-muted-foreground">Customer <span className="text-muted-foreground">(optional)</span></label>
-                  <select value={form.customerId} onChange={(event) => setForm({ ...form, customerId: event.target.value })} className="kazi-input">
+                  <label className="mb-1 block text-sm text-muted-foreground">
+                    Customer <span className="text-muted-foreground">(optional)</span>
+                  </label>
+                  <select
+                    value={form.customerId}
+                    onChange={event => setForm({ ...form, customerId: event.target.value })}
+                    className="kazi-input"
+                  >
                     <option value="">No customer</option>
-                    {customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
+                    {customers.map(customer => (
+                      <option key={customer.id} value={customer.id}>
+                        {customer.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
                   <label className="mb-1 block text-sm text-muted-foreground">Amount</label>
-                  <input type="number" min="0.01" step="0.01" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} className="kazi-input" placeholder="0.00" required />
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={form.amount}
+                    onChange={event => setForm({ ...form, amount: event.target.value })}
+                    className="kazi-input"
+                    placeholder="0.00"
+                    required
+                  />
                 </div>
                 <div>
                   <label className="mb-1 block text-sm text-muted-foreground">Currency</label>
-                  <select value={form.currency} onChange={(event) => setForm({ ...form, currency: event.target.value })} className="kazi-input">
-                    {CURRENCIES.map((currency) => <option key={currency} value={currency}>{currency}</option>)}
+                  <select
+                    value={form.currency}
+                    onChange={event => setForm({ ...form, currency: event.target.value })}
+                    className="kazi-input"
+                  >
+                    {CURRENCIES.map(currency => (
+                      <option key={currency} value={currency}>
+                        {currency}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
                   <label className="mb-1 block text-sm text-muted-foreground">Provider</label>
-                  <select value={form.paymentProvider} onChange={(event) => updateProvider(event.target.value as PaymentForm["paymentProvider"])} className="kazi-input">
-                    {PROVIDERS.map((provider) => <option key={provider.value} value={provider.value}>{provider.label}</option>)}
+                  <select
+                    value={form.paymentProvider}
+                    onChange={event =>
+                      updateProvider(event.target.value as PaymentForm["paymentProvider"])
+                    }
+                    className="kazi-input"
+                  >
+                    {PROVIDERS.map(provider => (
+                      <option key={provider.value} value={provider.value}>
+                        {provider.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
                   <label className="mb-1 block text-sm text-muted-foreground">Method type</label>
-                  <input value={selectedProvider.methodType.replaceAll("_", " ")} disabled className="kazi-input bg-surface-muted text-muted-foreground" />
+                  <input
+                    value={selectedProvider.methodType.replaceAll("_", " ")}
+                    disabled
+                    className="kazi-input bg-surface-muted text-muted-foreground"
+                  />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm text-muted-foreground">Reference <span className="text-muted-foreground">(optional)</span></label>
-                  <input value={form.reference} onChange={(event) => setForm({ ...form, reference: event.target.value })} className="kazi-input" placeholder="Transaction reference" />
+                  <label className="mb-1 block text-sm text-muted-foreground">
+                    Reference <span className="text-muted-foreground">(optional)</span>
+                  </label>
+                  <input
+                    value={form.reference}
+                    onChange={event => setForm({ ...form, reference: event.target.value })}
+                    className="kazi-input"
+                    placeholder="Transaction reference"
+                  />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm text-muted-foreground">Notes <span className="text-muted-foreground">(optional)</span></label>
-                  <input value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} className="kazi-input" placeholder="Payment notes" />
+                  <label className="mb-1 block text-sm text-muted-foreground">
+                    Notes <span className="text-muted-foreground">(optional)</span>
+                  </label>
+                  <input
+                    value={form.notes}
+                    onChange={event => setForm({ ...form, notes: event.target.value })}
+                    className="kazi-input"
+                    placeholder="Payment notes"
+                  />
                 </div>
               </div>
               <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={() => setShowForm(false)} className="kazi-button-secondary px-4 text-sm">Cancel</button>
-                <button type="submit" disabled={submitting || loadingOptions} className="kazi-button-primary px-4 text-sm">{submitting ? "Recording..." : "Record payment"}</button>
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="kazi-button-secondary px-4 text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting || loadingOptions}
+                  className="kazi-button-primary px-4 text-sm"
+                >
+                  {submitting ? "Recording..." : "Record payment"}
+                </button>
               </div>
             </form>
           </div>

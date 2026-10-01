@@ -93,7 +93,7 @@ export function SettingsPreferencesPanel({ canManage }: { canManage: boolean }) 
   }, []);
 
   const setField = (sectionKey: string, fieldKey: string, value: unknown) =>
-    setValues((current) => ({
+    setValues(current => ({
       ...current,
       [sectionKey]: { ...(current[sectionKey] || {}), [fieldKey]: value },
     }));
@@ -104,7 +104,7 @@ export function SettingsPreferencesPanel({ canManage }: { canManage: boolean }) 
     setMessage("");
     try {
       const res = await api.put(`/settings/${sectionKey}`, values[sectionKey] || {});
-      setValues((current) => ({ ...current, [sectionKey]: res.data.data.value }));
+      setValues(current => ({ ...current, [sectionKey]: res.data.data.value }));
       setMessage(`${sectionKey} settings saved`);
     } catch (err) {
       setError(getApiError(err));
@@ -119,7 +119,7 @@ export function SettingsPreferencesPanel({ canManage }: { canManage: boolean }) 
     setMessage("");
     try {
       const res = await api.delete(`/settings/${sectionKey}`);
-      setValues((current) => ({ ...current, [sectionKey]: res.data.data.value }));
+      setValues(current => ({ ...current, [sectionKey]: res.data.data.value }));
       setMessage(`${sectionKey} settings restored to defaults`);
     } catch (err) {
       setError(getApiError(err));
@@ -128,14 +128,21 @@ export function SettingsPreferencesPanel({ canManage }: { canManage: boolean }) 
     }
   };
 
-  if (loading) return <div className="kazi-card p-6 text-sm text-muted-foreground">Loading preferences...</div>;
+  if (loading)
+    return (
+      <div className="kazi-card p-6 text-sm text-muted-foreground">Loading preferences...</div>
+    );
 
   return (
     <div className="space-y-6">
       {error && <div className="kazi-alert-card p-3 text-sm text-foreground">{error}</div>}
-      {message && <div className="rounded-lg border border-border bg-surface-muted p-3 text-sm text-foreground">{message}</div>}
+      {message && (
+        <div className="rounded-lg border border-border bg-surface-muted p-3 text-sm text-foreground">
+          {message}
+        </div>
+      )}
 
-      {SECTIONS.map((section) => {
+      {SECTIONS.map(section => {
         const busy = savingKey === section.key;
         return (
           <div key={section.key} className="kazi-card p-6">
@@ -145,30 +152,32 @@ export function SettingsPreferencesPanel({ canManage }: { canManage: boolean }) 
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {section.fields.map((field) => {
+              {section.fields.map(field => {
                 const value = values[section.key]?.[field.key];
                 return (
                   <div key={field.key}>
-                    <label className="mb-1 block text-sm text-muted-foreground">{field.label}</label>
+                    <label className="mb-1 block text-sm text-muted-foreground">
+                      {field.label}
+                    </label>
                     {field.type === "toggle" && (
                       <label className="flex items-center gap-2 text-sm text-foreground">
                         <input
                           type="checkbox"
                           checked={Boolean(value)}
-                          onChange={(e) => setField(section.key, field.key, e.target.checked)}
+                          onChange={e => setField(section.key, field.key, e.target.checked)}
                           disabled={!canManage || busy}
                         />
-                        <span>{Boolean(value) ? "Enabled" : "Disabled"}</span>
+                        <span>{value ? "Enabled" : "Disabled"}</span>
                       </label>
                     )}
                     {field.type === "select" && (
                       <select
                         value={value === undefined || value === null ? "" : String(value)}
-                        onChange={(e) => setField(section.key, field.key, e.target.value)}
+                        onChange={e => setField(section.key, field.key, e.target.value)}
                         className="kazi-input"
                         disabled={!canManage || busy}
                       >
-                        {field.options?.map((option) => (
+                        {field.options?.map(option => (
                           <option key={option.value} value={option.value}>
                             {option.label}
                           </option>
@@ -179,8 +188,12 @@ export function SettingsPreferencesPanel({ canManage }: { canManage: boolean }) 
                       <input
                         type={field.type === "number" ? "number" : "text"}
                         value={value === undefined || value === null ? "" : String(value)}
-                        onChange={(e) =>
-                          setField(section.key, field.key, field.type === "number" ? Number(e.target.value) : e.target.value)
+                        onChange={e =>
+                          setField(
+                            section.key,
+                            field.key,
+                            field.type === "number" ? Number(e.target.value) : e.target.value
+                          )
                         }
                         className="kazi-input"
                         disabled={!canManage || busy}

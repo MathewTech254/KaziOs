@@ -1,5 +1,6 @@
-import { Prisma } from "@prisma/client";
-import { StockMovementType, StockStatus, availableStock, stockStatusFor } from "@kazios/validation";
+import type { Prisma } from "@prisma/client";
+import type { StockMovementType, StockStatus } from "@kazios/validation";
+import { availableStock, stockStatusFor } from "@kazios/validation";
 import { prisma } from "../lib/prisma";
 import { AppError } from "../middleware/errorHandler";
 
@@ -24,9 +25,13 @@ export function stockLevel(quantity: number, reserved = 0, minStock = 0): StockL
 
 export async function getTrackedProduct(organizationId: string, productId: string) {
   const product = await prisma.product.findFirst({ where: { id: productId, organizationId } });
-  if (!product) throw new AppError(400, "The selected product is not available in this organization");
+  if (!product)
+    throw new AppError(400, "The selected product is not available in this organization");
   if (!isStockTracked(product)) {
-    throw new AppError(400, `${product.name} does not track stock, so stock cannot be adjusted or transferred`);
+    throw new AppError(
+      400,
+      `${product.name} does not track stock, so stock cannot be adjusted or transferred`
+    );
   }
   return product;
 }
@@ -36,7 +41,8 @@ export async function getOrganizationWarehouse(organizationId: string, warehouse
     where: { id: warehouseId, organizationId },
     include: { branch: true },
   });
-  if (!warehouse) throw new AppError(400, "The selected warehouse is not available in this organization");
+  if (!warehouse)
+    throw new AppError(400, "The selected warehouse is not available in this organization");
   return warehouse;
 }
 
@@ -81,7 +87,8 @@ export async function applyStockChange(
     where: { id: input.productId, organizationId: input.organizationId },
     select: { id: true, name: true, minStock: true },
   });
-  if (!product) throw new AppError(400, "The selected product is not available in this organization");
+  if (!product)
+    throw new AppError(400, "The selected product is not available in this organization");
 
   const label = input.productName || product.name;
   let quantity = 0;
@@ -90,14 +97,19 @@ export async function applyStockChange(
   if (delta < 0) {
     const needed = Math.abs(delta);
     const before = await client.inventory.findUnique({
-      where: { productId_warehouseId: { productId: input.productId, warehouseId: input.warehouseId } },
+      where: {
+        productId_warehouseId: { productId: input.productId, warehouseId: input.warehouseId },
+      },
     });
     const onHand = before?.quantity ?? 0;
     reserved = before?.reserved ?? 0;
     const available = availableStock(onHand, reserved);
 
     if (!before || available < needed) {
-      throw new AppError(409, `Only ${available} of ${label} is available in this warehouse, ${needed} requested`);
+      throw new AppError(
+        409,
+        `Only ${available} of ${label} is available in this warehouse, ${needed} requested`
+      );
     }
 
     const updated = await client.inventory.updateMany({
@@ -109,12 +121,17 @@ export async function applyStockChange(
       data: { quantity: { decrement: needed } },
     });
     if (updated.count !== 1) {
-      throw new AppError(409, `Stock for ${label} changed while processing. Review the current level and try again.`);
+      throw new AppError(
+        409,
+        `Stock for ${label} changed while processing. Review the current level and try again.`
+      );
     }
     quantity = onHand - needed;
   } else {
     const after = await client.inventory.upsert({
-      where: { productId_warehouseId: { productId: input.productId, warehouseId: input.warehouseId } },
+      where: {
+        productId_warehouseId: { productId: input.productId, warehouseId: input.warehouseId },
+      },
       update: { quantity: { increment: delta } },
       create: {
         organizationId: input.organizationId,
@@ -139,7 +156,14 @@ export async function applyStockChange(
       warehouseId: input.warehouseId,
       branchId: input.branchId ?? null,
     },
-    select: { id: true, type: true, quantity: true, reason: true, reference: true, createdAt: true },
+    select: {
+      id: true,
+      type: true,
+      quantity: true,
+      reason: true,
+      reference: true,
+      createdAt: true,
+    },
   });
 
   return { level: stockLevel(quantity, reserved, product.minStock), movement };

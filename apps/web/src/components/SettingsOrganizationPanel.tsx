@@ -65,7 +65,7 @@ export function SettingsOrganizationPanel({ canManage }: { canManage: boolean })
   }, []);
 
   const update = (field: keyof Organization, value: string) => {
-    setOrg((current) => (current ? { ...current, [field]: value } : current));
+    setOrg(current => (current ? { ...current, [field]: value } : current));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -96,8 +96,16 @@ export function SettingsOrganizationPanel({ canManage }: { canManage: boolean })
     }
   };
 
-  if (loading) return <div className="kazi-card p-6 text-sm text-muted-foreground">Loading organization...</div>;
-  if (!org) return <div className="kazi-card p-6 text-sm text-destructive">{error || "Organization unavailable"}</div>;
+  if (loading)
+    return (
+      <div className="kazi-card p-6 text-sm text-muted-foreground">Loading organization...</div>
+    );
+  if (!org)
+    return (
+      <div className="kazi-card p-6 text-sm text-destructive">
+        {error || "Organization unavailable"}
+      </div>
+    );
 
   return (
     <form onSubmit={handleSubmit} className="kazi-card p-6">
@@ -109,42 +117,72 @@ export function SettingsOrganizationPanel({ canManage }: { canManage: boolean })
       </div>
 
       {error && <div className="kazi-alert-card mb-4 p-3 text-sm text-foreground">{error}</div>}
-      {message && <div className="mb-4 rounded-lg border border-border bg-surface-muted p-3 text-sm text-foreground">{message}</div>}
+      {message && (
+        <div className="mb-4 rounded-lg border border-border bg-surface-muted p-3 text-sm text-foreground">
+          {message}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label className="mb-1 block text-sm text-muted-foreground">Legal name</label>
-          <input value={org.name} onChange={(e) => update("name", e.target.value)} className="kazi-input" required />
+          <input
+            value={org.name}
+            onChange={e => update("name", e.target.value)}
+            className="kazi-input"
+            required
+          />
         </div>
         <div>
           <label className="mb-1 block text-sm text-muted-foreground">Business category</label>
           <input
             value={org.businessCategory || ""}
-            onChange={(e) => update("businessCategory", e.target.value)}
+            onChange={e => update("businessCategory", e.target.value)}
             className="kazi-input"
             placeholder="Retail, Pharmacy, Restaurant"
           />
         </div>
         <div>
           <label className="mb-1 block text-sm text-muted-foreground">KRA PIN / Tax number</label>
-          <input value={org.taxNumber || ""} onChange={(e) => update("taxNumber", e.target.value)} className="kazi-input" />
+          <input
+            value={org.taxNumber || ""}
+            onChange={e => update("taxNumber", e.target.value)}
+            className="kazi-input"
+          />
         </div>
         <div>
           <label className="mb-1 block text-sm text-muted-foreground">Phone</label>
-          <input value={org.phone || ""} onChange={(e) => update("phone", e.target.value)} className="kazi-input" />
+          <input
+            value={org.phone || ""}
+            onChange={e => update("phone", e.target.value)}
+            className="kazi-input"
+          />
         </div>
         <div>
           <label className="mb-1 block text-sm text-muted-foreground">Billing email</label>
-          <input type="email" value={org.email || ""} onChange={(e) => update("email", e.target.value)} className="kazi-input" />
+          <input
+            type="email"
+            value={org.email || ""}
+            onChange={e => update("email", e.target.value)}
+            className="kazi-input"
+          />
         </div>
         <div>
           <label className="mb-1 block text-sm text-muted-foreground">Address</label>
-          <input value={org.address || ""} onChange={(e) => update("address", e.target.value)} className="kazi-input" />
+          <input
+            value={org.address || ""}
+            onChange={e => update("address", e.target.value)}
+            className="kazi-input"
+          />
         </div>
         <div>
           <label className="mb-1 block text-sm text-muted-foreground">Country</label>
-          <select value={org.country} onChange={(e) => update("country", e.target.value)} className="kazi-input">
-            {COUNTRIES.map((country) => (
+          <select
+            value={org.country}
+            onChange={e => update("country", e.target.value)}
+            className="kazi-input"
+          >
+            {COUNTRIES.map(country => (
               <option key={country.code} value={country.code}>
                 {country.label}
               </option>
@@ -153,8 +191,12 @@ export function SettingsOrganizationPanel({ canManage }: { canManage: boolean })
         </div>
         <div>
           <label className="mb-1 block text-sm text-muted-foreground">Base currency</label>
-          <select value={org.currency} onChange={(e) => update("currency", e.target.value)} className="kazi-input">
-            {CURRENCIES.map((currency) => (
+          <select
+            value={org.currency}
+            onChange={e => update("currency", e.target.value)}
+            className="kazi-input"
+          >
+            {CURRENCIES.map(currency => (
               <option key={currency} value={currency}>
                 {currency}
               </option>
@@ -163,8 +205,12 @@ export function SettingsOrganizationPanel({ canManage }: { canManage: boolean })
         </div>
         <div>
           <label className="mb-1 block text-sm text-muted-foreground">Timezone</label>
-          <select value={org.timezone} onChange={(e) => update("timezone", e.target.value)} className="kazi-input">
-            {TIMEZONES.map((timezone) => (
+          <select
+            value={org.timezone}
+            onChange={e => update("timezone", e.target.value)}
+            className="kazi-input"
+          >
+            {TIMEZONES.map(timezone => (
               <option key={timezone} value={timezone}>
                 {timezone}
               </option>
@@ -173,14 +219,22 @@ export function SettingsOrganizationPanel({ canManage }: { canManage: boolean })
         </div>
         <div>
           <label className="mb-1 block text-sm text-muted-foreground">Language</label>
-          <select value={org.language} onChange={(e) => update("language", e.target.value)} className="kazi-input">
+          <select
+            value={org.language}
+            onChange={e => update("language", e.target.value)}
+            className="kazi-input"
+          >
             <option value="en">English</option>
             <option value="sw">Kiswahili</option>
           </select>
         </div>
       </div>
 
-      <button type="submit" disabled={!canManage || saving} className="kazi-button-primary mt-6 px-4 text-sm disabled:opacity-50">
+      <button
+        type="submit"
+        disabled={!canManage || saving}
+        className="kazi-button-primary mt-6 px-4 text-sm disabled:opacity-50"
+      >
         {saving ? "Saving..." : "Save organization"}
       </button>
     </form>

@@ -11,37 +11,52 @@ interface Hit {
 }
 
 interface SearchResults {
-  products?: Array<{ id: string; name: string; sku: string | null }>;
-  suppliers?: Array<{ id: string; name: string; email: string | null }>;
-  customers?: Array<{ id: string; name: string; email: string | null }>;
-  purchaseOrders?: Array<{ id: string; poNumber: string; status: string; supplier: { name: string } }>;
-  invoices?: Array<{ id: string; invoiceNumber: string; status: string; customer: { name: string } }>;
+  products?: { id: string; name: string; sku: string | null }[];
+  suppliers?: { id: string; name: string; email: string | null }[];
+  customers?: { id: string; name: string; email: string | null }[];
+  purchaseOrders?: {
+    id: string;
+    poNumber: string;
+    status: string;
+    supplier: { name: string };
+  }[];
+  invoices?: {
+    id: string;
+    invoiceNumber: string;
+    status: string;
+    customer: { name: string };
+  }[];
 }
 
+// Every one of these has to match a real route in apps/web/src/routes/router.tsx.
+// They used to point at /products and /invoices, which do not exist: the pages live
+// under /dashboard. Choosing a result navigated to nothing and the router, having no
+// catch all, rendered a blank white page.
 const PAGES = [
-  { label: "Go to Dashboard", to: "/" },
-  { label: "Go to Products", to: "/products" },
-  { label: "Go to Customers", to: "/customers" },
+  { label: "Go to Dashboard", to: "/dashboard" },
+  { label: "Go to Products", to: "/dashboard/products" },
+  { label: "Go to Customers", to: "/dashboard/customers" },
+  { label: "Go to Invoices", to: "/dashboard/invoices" },
+  { label: "Go to Payments", to: "/dashboard/payments" },
+  { label: "Go to Reports", to: "/dashboard/reports" },
   { label: "Go to Suppliers and purchase orders", to: "/purchases" },
   { label: "Go to Inventory", to: "/inventory" },
-  { label: "Go to Invoices", to: "/invoices" },
-  { label: "Go to Payments", to: "/payments" },
-  { label: "Go to Reports", to: "/reports" },
   { label: "Go to Point of sale", to: "/pos" },
+  { label: "Go to Settings", to: "/settings" },
 ];
 
 /** Converts the grouped API response into one flat, keyboard-navigable list. */
 function toHits(results: SearchResults): Hit[] {
   const hits: Hit[] = [];
-  (results.products ?? []).forEach((row) =>
+  (results.products ?? []).forEach(row =>
     hits.push({
       id: `product-${row.id}`,
       label: row.name,
       detail: row.sku ? `Product Â· ${row.sku}` : "Product",
-      to: "/products",
+      to: "/dashboard/products",
     })
   );
-  (results.suppliers ?? []).forEach((row) =>
+  (results.suppliers ?? []).forEach(row =>
     hits.push({
       id: `supplier-${row.id}`,
       label: row.name,
@@ -49,15 +64,15 @@ function toHits(results: SearchResults): Hit[] {
       to: "/purchases",
     })
   );
-  (results.customers ?? []).forEach((row) =>
+  (results.customers ?? []).forEach(row =>
     hits.push({
       id: `customer-${row.id}`,
       label: row.name,
       detail: row.email ? `Customer Â· ${row.email}` : "Customer",
-      to: "/customers",
+      to: "/dashboard/customers",
     })
   );
-  (results.purchaseOrders ?? []).forEach((row) =>
+  (results.purchaseOrders ?? []).forEach(row =>
     hits.push({
       id: `po-${row.id}`,
       label: row.poNumber,
@@ -65,12 +80,12 @@ function toHits(results: SearchResults): Hit[] {
       to: "/purchases",
     })
   );
-  (results.invoices ?? []).forEach((row) =>
+  (results.invoices ?? []).forEach(row =>
     hits.push({
       id: `invoice-${row.id}`,
       label: row.invoiceNumber,
       detail: `Invoice Â· ${row.customer.name} Â· ${row.status.toLowerCase()}`,
-      to: "/invoices",
+      to: "/dashboard/invoices",
     })
   );
   return hits;
@@ -101,7 +116,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const pageHits = useMemo(
     () =>
       term
-        ? PAGES.filter((page) => page.label.toLowerCase().includes(term.toLowerCase())).map((page) => ({
+        ? PAGES.filter(page => page.label.toLowerCase().includes(term.toLowerCase())).map(page => ({
             id: `page-${page.to}`,
             label: page.label,
             detail: "Page",
@@ -163,10 +178,10 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         onClose();
       } else if (event.key === "ArrowDown") {
         event.preventDefault();
-        setCursor((c) => (hits.length ? (c + 1) % hits.length : 0));
+        setCursor(c => (hits.length ? (c + 1) % hits.length : 0));
       } else if (event.key === "ArrowUp") {
         event.preventDefault();
-        setCursor((c) => (hits.length ? (c - 1 + hits.length) % hits.length : 0));
+        setCursor(c => (hits.length ? (c - 1 + hits.length) % hits.length : 0));
       } else if (event.key === "Enter" && hits[cursor]) {
         event.preventDefault();
         go(hits[cursor]);
@@ -191,7 +206,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     >
       <div
         className="kazi-card w-full max-w-xl overflow-hidden p-0"
-        onClick={(event) => event.stopPropagation()}
+        onClick={event => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label="Search"
@@ -201,19 +216,22 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           <input
             ref={inputRef}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={event => setQuery(event.target.value)}
             placeholder="Search products, suppliers, customers, orders and invoices"
             className="w-full bg-transparent py-4 text-sm outline-none placeholder:text-muted-foreground"
             aria-label="Search the workspace"
           />
-          <button type="button" onClick={onClose} className="kazi-button-secondary px-2 py-1 text-xs">
+          <button
+            type="button"
+            onClick={onClose}
+            className="kazi-button-secondary px-2 py-1 text-xs"
+          >
             <X className="h-3 w-3" aria-hidden="true" />
             Esc
           </button>
         </div>
 
         {error && <p className="border-b border-border px-4 py-2 text-sm text-danger">{error}</p>}
-
 
         <ul ref={listRef} className="max-h-80 overflow-y-auto">
           {hits.map((hit, index) => {
@@ -231,7 +249,9 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                   <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-foreground">{hit.label}</span>
-                    <span className="block truncate text-xs text-muted-foreground">{hit.detail}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {hit.detail}
+                    </span>
                   </span>
                 </button>
               </li>
@@ -243,12 +263,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               {loading
                 ? "Searching..."
                 : term.length >= 2
-                ? `Nothing matches "${term}".`
-                : "Type at least two characters."}
+                  ? `Nothing matches "${term}".`
+                  : "Type at least two characters."}
             </li>
           )}
         </ul>
-
 
         <div className="flex items-center gap-4 border-t border-border px-4 py-2 text-xs text-muted-foreground">
           <span>Up/Down to move</span>
@@ -259,5 +278,3 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     </div>
   );
 }
-
-

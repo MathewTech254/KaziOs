@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
 import { validateSession } from "../lib/auth";
 
@@ -10,8 +10,30 @@ export interface AuthRequest extends Request {
   roles?: any[];
 }
 
-export async function requireAuth(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
-  const token = req.headers.authorization?.replace("Bearer ", "") || req.signedCookies?.sid;
+/**
+ * Reads the bearer token from the Authorization header, falling back to the `access_token`
+ * query parameter.
+ *
+ * A browser's EventSource cannot attach an Authorization header to the request it opens,
+ * so the real time notification stream has no other way to prove who it belongs to. That
+ * fallback is deliberately confined to this function rather than being honoured on every
+ * route, because a token in a URL is liable to be written to access logs; only the
+ * stream, which is already an authenticated long lived connection, uses it.
+ */
+function readToken(req: Request): string | undefined {
+  const header = req.headers.authorization?.replace("Bearer ", "");
+  if (header) return header;
+  const fromQuery = req.query?.access_token;
+  if (typeof fromQuery === "string" && fromQuery) return fromQuery;
+  return req.signedCookies?.sid;
+}
+
+export async function requireAuth(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  const token = readToken(req);
   if (!token) {
     res.status(401).json({ error: "Authentication required" });
     return;
@@ -43,8 +65,8 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
 export function requirePermission(permission: string) {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
     const roles: any[] = req.roles || [];
-    const hasPerm = roles.some((r: any) =>
-      r.role.permissions.includes("*") || r.role.permissions.includes(permission)
+    const hasPerm = roles.some(
+      (r: any) => r.role.permissions.includes("*") || r.role.permissions.includes(permission)
     );
     if (!hasPerm) {
       res.status(403).json({ error: "Insufficient permissions" });

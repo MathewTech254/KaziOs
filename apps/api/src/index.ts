@@ -14,7 +14,16 @@ export {
 } from "./lib/auth";
 export { AppError } from "./middleware/errorHandler";
 export { assertProductionEnv, corsOriginWarning, productionEnvProblems } from "./lib/productionEnv";
-export { generateId, generateInvoiceNumber, generatePoNumber, generateQuoteNumber, generateOrderNumber, generateStockReference, paginate, toFloat } from "./lib/utils";
+export {
+  generateId,
+  generateInvoiceNumber,
+  generatePoNumber,
+  generateQuoteNumber,
+  generateOrderNumber,
+  generateStockReference,
+  paginate,
+  toFloat,
+} from "./lib/utils";
 
 import express from "express";
 import helmet from "helmet";
@@ -26,6 +35,7 @@ import { RedisStore } from "connect-redis";
 import { prisma } from "./lib/prisma";
 import { assertProductionEnv, corsOriginWarning } from "./lib/productionEnv";
 import { redisClient, connectRedis } from "./lib/redis";
+import { startRealtimeSubscriber } from "./lib/realtime";
 import { authRouter } from "./routes/auth";
 import { organizationRouter } from "./routes/organization";
 import { productRouter } from "./routes/products";
@@ -38,17 +48,19 @@ import { taxCategoryRouter } from "./routes/tax-categories";
 import { userRouter } from "./routes/users";
 import { roleRouter } from "./routes/roles";
 import { posRouter } from "./routes/pos";
+import { cardPaymentRouter, paystackWebhookRouter } from "./routes/card-payments";
+import { notificationRouter } from "./routes/notifications";
 import { inventoryRouter } from "./routes/inventory";
 import { supplierRouter } from "./routes/suppliers";
 import { purchaseOrderRouter } from "./routes/purchase-orders";
 import { auditMiddleware } from "./middleware/audit";
-import { errorHandler } from "./middleware/errorHandler";
+import { errorHandler, lastResortGuard } from "./middleware/errorHandler";
 
 /** CORS_ORIGIN may list several origins, e.g. a Pages URL plus a custom domain. */
 function getCorsOrigins(): string[] {
   return (process.env.CORS_ORIGIN || "")
     .split(",")
-    .map((value) => value.trim())
+    .map(value => value.trim())
     .filter(Boolean);
 }
 
@@ -69,7 +81,9 @@ export function createApp() {
     standardHeaders: "draft-7",
     legacyHeaders: false,
     skipSuccessfulRequests: true,
-    message: { error: "Too many failed sign in attempts. Please wait a few minutes and try again." },
+    message: {
+      error: "Too many failed sign in attempts. Please wait a few minutes and try again.",
+    },
   });
 
   // The general ceiling is deliberately generous. It exists to stop a runaway script, not
@@ -92,7 +106,16 @@ export function createApp() {
       credentials: true,
     })
   );
-  app.use(express.json({ limit: "10mb" }));
+  // Paystack signs the exact bytes it sent, so the webhook has to see the untouched body.
+  // express.json parses it as usual and hands the original bytes to rawBody.
+  app.use(
+    express.json({
+      limit: "10mb",
+      verify: (req: any, _res, buf) => {
+        req.rawBody = buf;
+      },
+    })
+  );
   app.use(cookieParser());
   app.use(
     session({
@@ -116,6 +139,10 @@ export function createApp() {
   // what actually stops the guessing. The rest of the API gets a wider allowance so a
   // busy till is never mistaken for an attack. Health sits above both, so a monitoring
   // probe can never throttle the API it is checking.
+  // Paystack posts here with no session. It sits above the rate limiters so a burst of
+  // provider retries is never mistaken for an attack, and is trusted only by signature.
+  app.use("/api/v1/webhooks", paystackWebhookRouter);
+
   app.use("/api/v1/auth", authLimiter);
   app.use("/api/v1", apiLimiter);
 
@@ -157,19 +184,39 @@ export function createApp() {
   app.use("/api/v1/users", userRouter);
   app.use("/api/v1/roles", roleRouter);
   app.use("/api/v1/pos", posRouter);
+  app.use("/api/v1/card-payments", cardPaymentRouter);
+  app.use("/api/v1/notifications", notificationRouter);
   app.use("/api/v1/inventory", inventoryRouter);
   app.use("/api/v1/suppliers", supplierRouter);
   app.use("/api/v1/purchase-orders", purchaseOrderRouter);
 
   app.use(errorHandler);
+  // Anything that somehow escapes the error handler, including a rejection thrown from
+  // a callback rather than a route, is answered instead of being left to terminate the
+  // process.
+  app.use(lastResortGuard());
   return app;
 }
+
+// A rejection that never reaches Express would otherwise stop Node outright. Logged and
+// survived rather than exited on: an API that answers 500 can be retried, whereas a
+// process that has quietly stopped just looks broken to everyone using it.
+process.on("unhandledRejection", reason => {
+  console.error("Unhandled promise rejection:", reason);
+});
+process.on("uncaughtException", err => {
+  console.error("Uncaught exception:", err);
+});
 
 async function start() {
   assertProductionEnv();
   const corsWarning = corsOriginWarning();
   if (corsWarning) console.warn(`Warning: ${corsWarning}`);
   await connectRedis();
+  // Alerts published by the worker, or by another replica, reach this one through
+  // Redis. Started before the server listens so no browser can connect to a process
+  // that is not yet listening for cross process events.
+  startRealtimeSubscriber();
   await prisma.$connect();
   const app = createApp();
   // PaaS hosts (Render, Railway, Fly, Koyeb) inject PORT; API_PORT stays for local use.
@@ -180,7 +227,7 @@ async function start() {
 }
 
 if (require.main === module) {
-  start().catch((err) => {
+  start().catch(err => {
     console.error("Failed to start API:", err);
     process.exit(1);
   });

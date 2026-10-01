@@ -11,8 +11,9 @@
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "typecheck": "tsc --noEmit",
     "test": "jest --detectOpenHandles --forceExit",
-    "test:unit": "jest --detectOpenHandles --forceExit --testPathPattern='.*\\.test\\.(ts|tsx)$'",
-    "test:integration": "jest --detectOpenHandles --forceExit --testPathPattern='.*\\.integration\\.(ts|tsx)$'"
+    "test:unit": "jest --detectOpenHandles --forceExit --testPathPattern=\".*\\.test\\.(ts|tsx)$\" --passWithNoTests",
+    "test:integration": "jest --detectOpenHandles --forceExit --testPathPattern=\".*\\.integration\\.(ts|tsx)$\" --passWithNoTests",
+    "test:overlay": "node scripts/check-overlay.mjs"
   },
   "dependencies": {
     "@kazios/ui": "1.0.0",
@@ -57,6 +58,8 @@
     "@testing-library/jest-dom": "^6.4.8",
     "@testing-library/react": "^14.3.1",
     "jsdom": "^24.1.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "playwright-core": "^1.47.0",
     "postcss": "^8.4.38",
     "prettier": "^3.3.2",
     "tailwindcss": "^3.4.4",

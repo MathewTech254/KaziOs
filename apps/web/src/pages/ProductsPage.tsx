@@ -17,7 +17,14 @@ export function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", sku: "", costPrice: 0, sellingPrice: 0, minStock: 0, productType: "PHYSICAL" });
+  const [form, setForm] = useState({
+    name: "",
+    sku: "",
+    costPrice: 0,
+    sellingPrice: 0,
+    minStock: 0,
+    productType: "PHYSICAL",
+  });
 
   const load = async () => {
     try {
@@ -28,13 +35,22 @@ export function ProductsPage() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await api.post("/products", form);
     setShowForm(false);
-    setForm({ name: "", sku: "", costPrice: 0, sellingPrice: 0, minStock: 0, productType: "PHYSICAL" });
+    setForm({
+      name: "",
+      sku: "",
+      costPrice: 0,
+      sellingPrice: 0,
+      minStock: 0,
+      productType: "PHYSICAL",
+    });
     load();
   };
 
@@ -47,10 +63,7 @@ export function ProductsPage() {
           <h1 className="kazi-page-title">Products</h1>
           <p className="kazi-page-subtitle">Manage your product catalog</p>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="kazi-button-primary px-4 text-sm"
-        >
+        <button onClick={() => setShowForm(!showForm)} className="kazi-button-primary px-4 text-sm">
           <Plus className="h-4 w-4" />
           {showForm ? "Cancel" : "Add Product"}
         </button>
@@ -64,7 +77,7 @@ export function ProductsPage() {
               <label className="mb-1 block text-sm text-muted-foreground">Name</label>
               <input
                 value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                onChange={e => setForm({ ...form, name: e.target.value })}
                 className="kazi-input"
                 required
               />
@@ -73,7 +86,7 @@ export function ProductsPage() {
               <label className="mb-1 block text-sm text-muted-foreground">SKU</label>
               <input
                 value={form.sku}
-                onChange={(e) => setForm({ ...form, sku: e.target.value })}
+                onChange={e => setForm({ ...form, sku: e.target.value })}
                 className="kazi-input"
               />
             </div>
@@ -83,7 +96,7 @@ export function ProductsPage() {
                 type="number"
                 step="0.01"
                 value={form.costPrice}
-                onChange={(e) => setForm({ ...form, costPrice: parseFloat(e.target.value) })}
+                onChange={e => setForm({ ...form, costPrice: parseFloat(e.target.value) })}
                 className="kazi-input"
                 required
               />
@@ -94,7 +107,7 @@ export function ProductsPage() {
                 type="number"
                 step="0.01"
                 value={form.sellingPrice}
-                onChange={(e) => setForm({ ...form, sellingPrice: parseFloat(e.target.value) })}
+                onChange={e => setForm({ ...form, sellingPrice: parseFloat(e.target.value) })}
                 className="kazi-input"
                 required
               />
@@ -104,7 +117,7 @@ export function ProductsPage() {
               <input
                 type="number"
                 value={form.minStock}
-                onChange={(e) => setForm({ ...form, minStock: parseInt(e.target.value) })}
+                onChange={e => setForm({ ...form, minStock: parseInt(e.target.value) })}
                 className="kazi-input"
               />
             </div>
@@ -112,7 +125,7 @@ export function ProductsPage() {
               <label className="mb-1 block text-sm text-muted-foreground">Type</label>
               <select
                 value={form.productType}
-                onChange={(e) => setForm({ ...form, productType: e.target.value })}
+                onChange={e => setForm({ ...form, productType: e.target.value })}
                 className="kazi-input"
               >
                 <option value="PHYSICAL">Physical</option>
@@ -131,15 +144,25 @@ export function ProductsPage() {
         <table className="min-w-full divide-y divide-border">
           <thead className="bg-surface-muted">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Name</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">SKU</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Cost</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Sell</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Type</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                Name
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                SKU
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                Cost
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                Sell
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                Type
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {products.map((p) => (
+            {products.map(p => (
               <tr key={p.id} className="hover:bg-surface-muted/50">
                 <td className="px-6 py-4 text-sm font-medium text-foreground">{p.name}</td>
                 <td className="px-6 py-4 text-sm text-muted-foreground">{p.sku || "-"}</td>

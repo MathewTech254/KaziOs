@@ -1,6 +1,6 @@
-import { Response, NextFunction } from "express";
+import type { Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
-import { AuthRequest } from "./auth";
+import type { AuthRequest } from "./auth";
 
 export async function auditMiddleware(req: AuthRequest, res: Response, next: NextFunction) {
   const originalSend = res.json.bind(res);
@@ -19,7 +19,7 @@ export async function auditMiddleware(req: AuthRequest, res: Response, next: Nex
             userAgent: req.get("User-Agent") || "",
           },
         })
-        .catch(() => {});
+        .catch(() => undefined);
     }
     return originalSend(body);
   };

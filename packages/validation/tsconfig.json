@@ -18,8 +18,13 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "Node16"
+    "moduleResolution": "Node16",
+    // Required by ts-jest for hybrid module resolution, and it also keeps the test
+    // run to one transpile per file instead of building a whole program.
+    "isolatedModules": true,
+    "types": ["node", "jest"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
+  // See the API tsconfig: tests are typechecked, not skipped, so they cannot drift.
+  "exclude": ["node_modules", "dist"]
 }

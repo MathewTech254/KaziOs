@@ -38,19 +38,26 @@ export function formatCents(cents: number): string {
  * cannot declare its own totals.
  */
 export function computeInvoiceTotals(
-  lines: Array<{
+  lines: {
     quantity: number;
     unitPrice: number;
     discountAmount?: number | null;
     taxRate?: number | null;
-  }>
-): MoneyBreakdown & { lines: Array<{ lineTotalCents: number; discountCents: number; taxCents: number; netCents: number }> } {
+  }[]
+): MoneyBreakdown & {
+  lines: {
+    lineTotalCents: number;
+    discountCents: number;
+    taxCents: number;
+    netCents: number;
+  }[];
+} {
   let subtotalCents = 0;
   let taxCents = 0;
   let discountCents = 0;
   let totalCents = 0;
 
-  const computed = lines.map((line) => {
+  const computed = lines.map(line => {
     const grossCents = Math.round(toCents(line.unitPrice) * line.quantity);
     // A discount larger than the line is a discount larger than the sale.
     const lineDiscountCents = Math.min(Math.max(toCents(line.discountAmount ?? 0), 0), grossCents);

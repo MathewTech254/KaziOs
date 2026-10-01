@@ -31,7 +31,10 @@ export function SettingsRolesPanel({ canManage }: { canManage: boolean }) {
 
   const load = async () => {
     try {
-      const [roleRes, permissionRes] = await Promise.all([api.get("/roles"), api.get("/roles/permissions")]);
+      const [roleRes, permissionRes] = await Promise.all([
+        api.get("/roles"),
+        api.get("/roles/permissions"),
+      ]);
       setRoles(roleRes.data.data);
       setGroups(permissionRes.data.data);
     } catch (err) {
@@ -46,7 +49,9 @@ export function SettingsRolesPanel({ canManage }: { canManage: boolean }) {
   }, []);
 
   const togglePermission = (key: string) =>
-    setSelected((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
+    setSelected(current =>
+      current.includes(key) ? current.filter(item => item !== key) : [...current, key]
+    );
 
   const resetForm = () => {
     setForm(emptyForm);
@@ -57,7 +62,7 @@ export function SettingsRolesPanel({ canManage }: { canManage: boolean }) {
   const startEdit = (role: Role) => {
     setEditingId(role.id);
     setForm({ name: role.name, type: role.type, description: role.description || "" });
-    setSelected(role.permissions.filter((permission) => permission !== "*"));
+    setSelected(role.permissions.filter(permission => permission !== "*"));
     setMessage("");
   };
 
@@ -101,15 +106,20 @@ export function SettingsRolesPanel({ canManage }: { canManage: boolean }) {
     }
   };
 
-  if (loading) return <div className="kazi-card p-6 text-sm text-muted-foreground">Loading roles...</div>;
+  if (loading)
+    return <div className="kazi-card p-6 text-sm text-muted-foreground">Loading roles...</div>;
 
-  const editingRole = roles.find((role) => role.id === editingId) ?? null;
+  const editingRole = roles.find(role => role.id === editingId) ?? null;
   const lockedForEdit = Boolean(editingRole && editingRole.type === "OWNER");
 
   return (
     <div className="space-y-6">
       {error && <div className="kazi-alert-card p-3 text-sm text-foreground">{error}</div>}
-      {message && <div className="rounded-lg border border-border bg-surface-muted p-3 text-sm text-foreground">{message}</div>}
+      {message && (
+        <div className="rounded-lg border border-border bg-surface-muted p-3 text-sm text-foreground">
+          {message}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="kazi-card p-6">
         <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-foreground">
@@ -122,7 +132,7 @@ export function SettingsRolesPanel({ canManage }: { canManage: boolean }) {
             <label className="mb-1 block text-sm text-muted-foreground">Role name</label>
             <input
               value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              onChange={e => setForm({ ...form, name: e.target.value })}
               className="kazi-input"
               placeholder="Cashier"
               required
@@ -132,7 +142,7 @@ export function SettingsRolesPanel({ canManage }: { canManage: boolean }) {
             <label className="mb-1 block text-sm text-muted-foreground">Type</label>
             <input
               value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value })}
+              onChange={e => setForm({ ...form, type: e.target.value })}
               className="kazi-input"
               placeholder="CUSTOM"
             />
@@ -141,7 +151,7 @@ export function SettingsRolesPanel({ canManage }: { canManage: boolean }) {
             <label className="mb-1 block text-sm text-muted-foreground">Description</label>
             <input
               value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              onChange={e => setForm({ ...form, description: e.target.value })}
               className="kazi-input"
               placeholder="What can this role do?"
             />
@@ -155,12 +165,15 @@ export function SettingsRolesPanel({ canManage }: { canManage: boolean }) {
           </div>
         )}
         <div className="space-y-4">
-          {groups.map((group) => (
+          {groups.map(group => (
             <div key={group.label}>
               <p className="kazi-section-title mb-2">{group.label}</p>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {group.permissions.map((permission) => (
-                  <label key={permission.key} className="flex items-center gap-2 text-sm text-foreground">
+                {group.permissions.map(permission => (
+                  <label
+                    key={permission.key}
+                    className="flex items-center gap-2 text-sm text-foreground"
+                  >
                     <input
                       type="checkbox"
                       checked={selected.includes(permission.key)}
@@ -188,7 +201,11 @@ export function SettingsRolesPanel({ canManage }: { canManage: boolean }) {
             {saving ? "Saving..." : editingId ? "Update role" : "Create role"}
           </button>
           {editingId && (
-            <button type="button" onClick={resetForm} className="kazi-button-secondary px-4 text-sm">
+            <button
+              type="button"
+              onClick={resetForm}
+              className="kazi-button-secondary px-4 text-sm"
+            >
               Cancel
             </button>
           )}
@@ -199,11 +216,21 @@ export function SettingsRolesPanel({ canManage }: { canManage: boolean }) {
         <table className="min-w-full divide-y divide-border">
           <thead className="bg-surface-muted">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">Role</th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">Type</th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">Permissions</th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">Members</th>
-              <th className="px-6 py-3 text-right text-xs font-medium uppercase text-muted-foreground">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
+                Role
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
+                Type
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
+                Permissions
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
+                Members
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium uppercase text-muted-foreground">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -214,19 +241,25 @@ export function SettingsRolesPanel({ canManage }: { canManage: boolean }) {
                 </td>
               </tr>
             )}
-            {roles.map((role) => {
+            {roles.map(role => {
               const isOwner = role.type === "OWNER";
               return (
                 <tr key={role.id} className="hover:bg-surface-muted/50">
                   <td className="px-6 py-4 text-sm font-medium text-foreground">
                     {role.name}
-                    {role.description && <p className="text-xs text-muted-foreground">{role.description}</p>}
+                    {role.description && (
+                      <p className="text-xs text-muted-foreground">{role.description}</p>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-sm text-muted-foreground">{role.type}</td>
                   <td className="px-6 py-4 text-sm text-muted-foreground">
-                    {role.permissions.includes("*") ? "Full access (*)" : `${role.permissions.length} granted`}
+                    {role.permissions.includes("*")
+                      ? "Full access (*)"
+                      : `${role.permissions.length} granted`}
                   </td>
-                  <td className="px-6 py-4 text-sm text-muted-foreground">{role._count?.users || 0}</td>
+                  <td className="px-6 py-4 text-sm text-muted-foreground">
+                    {role._count?.users || 0}
+                  </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-2">
                       <button

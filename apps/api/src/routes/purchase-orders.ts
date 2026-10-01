@@ -1,17 +1,22 @@
 import { Router } from "express";
-import { Prisma } from "@prisma/client";
-import { z } from "zod";
+import type { Prisma } from "@prisma/client";
+import type { z } from "zod";
 import { prisma } from "../lib/prisma";
-import { AuthRequest, requireAuth, requirePermission } from "../middleware/auth";
+import type { AuthRequest } from "../middleware/auth";
+import { requireAuth, requirePermission } from "../middleware/auth";
 import { AppError, paginate } from "../lib";
-import { zPurchaseOrderQuerySchema, zPurchaseOrderSchema, zPurchaseOrderUpdateSchema } from "@kazios/validation";
+import {
+  zPurchaseOrderQuerySchema,
+  zPurchaseOrderSchema,
+  zPurchaseOrderUpdateSchema,
+} from "@kazios/validation";
+import type { OrderLineInput } from "../services/purchaseOrders";
 import {
   assertOrderItemsValid,
   assertSupplierInOrg,
   assertWarehouseInOrg,
   calculateOrderTotals,
   generateUniquePoNumber,
-  OrderLineInput,
 } from "../services/purchaseOrders";
 
 export const purchaseOrderRouter = Router();
@@ -35,8 +40,15 @@ const detailInclude = {
 type CreateInput = z.infer<typeof zPurchaseOrderSchema>;
 
 /** Shared create path so POST and any future copy action cannot diverge. */
-async function createPurchaseOrder(organizationId: string, userId: string | undefined, input: CreateInput) {
-  const organization = await prisma.organization.findUnique({ where: { id: organizationId }, select: { currency: true } });
+async function createPurchaseOrder(
+  organizationId: string,
+  userId: string | undefined,
+  input: CreateInput
+) {
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { currency: true },
+  });
   const currency = (input.currency || organization?.currency || "USD").toUpperCase();
 
   await assertSupplierInOrg(organizationId, input.supplierId);
@@ -63,7 +75,7 @@ async function createPurchaseOrder(organizationId: string, userId: string | unde
       totalAmount: totals.totalAmount,
       createdById: userId || null,
       items: {
-        create: totals.lines.map((line) => ({
+        create: totals.lines.map(line => ({
           productId: line.productId,
           quantity: line.quantity,
           unitPrice: line.unitPrice,
@@ -99,9 +111,19 @@ purchaseOrderRouter.get(
       }
 
       const [data, total, counts] = await Promise.all([
-        prisma.purchaseOrder.findMany({ where, include: listInclude, orderBy: { createdAt: "desc" }, skip, take }),
+        prisma.purchaseOrder.findMany({
+          where,
+          include: listInclude,
+          orderBy: { createdAt: "desc" },
+          skip,
+          take,
+        }),
         prisma.purchaseOrder.count({ where }),
-        prisma.purchaseOrder.groupBy({ by: ["status"], where: { organizationId }, _count: { _all: true } }),
+        prisma.purchaseOrder.groupBy({
+          by: ["status"],
+          where: { organizationId },
+          _count: { _all: true },
+        }),
       ]);
 
       res.json({
@@ -111,7 +133,7 @@ purchaseOrderRouter.get(
           limit,
           total,
           totalPages: Math.ceil(total / limit),
-          byStatus: Object.fromEntries(counts.map((row) => [row.status, row._count._all])),
+          byStatus: Object.fromEntries(counts.map(row => [row.status, row._count._all])),
         },
       });
     } catch (err) {
@@ -167,13 +189,18 @@ purchaseOrderRouter.patch(
       });
       if (!current) throw new AppError(404, "Purchase order not found");
       if (current.status !== "DRAFT") {
-        throw new AppError(409, `This purchase order is ${current.status.toLowerCase()} and can no longer be edited`, "PO_LOCKED");
+        throw new AppError(
+          409,
+          `This purchase order is ${current.status.toLowerCase()} and can no longer be edited`,
+          "PO_LOCKED"
+        );
       }
 
       if (input.supplierId) await assertSupplierInOrg(req.organizationId!, input.supplierId);
-      if (input.warehouseId !== undefined) await assertWarehouseInOrg(req.organizationId!, input.warehouseId);
+      if (input.warehouseId !== undefined)
+        await assertWarehouseInOrg(req.organizationId!, input.warehouseId);
 
-      const order = await prisma.$transaction(async (tx) => {
+      const order = await prisma.$transaction(async tx => {
         const updated = await tx.purchaseOrder.update({
           where: { id: current.id },
           data: {
@@ -188,13 +215,20 @@ purchaseOrderRouter.patch(
           },
         });
 
-        if (!input.items) return tx.purchaseOrder.findUniqueOrThrow({ where: { id: updated.id }, include: detailInclude });
+        if (!input.items)
+          return tx.purchaseOrder.findUniqueOrThrow({
+            where: { id: updated.id },
+            include: detailInclude,
+          });
 
         await assertOrderItemsValid(req.organizationId!, input.items as OrderLineInput[]);
-        const totals = calculateOrderTotals(input.items as OrderLineInput[], input.taxRate ?? current.taxRate);
+        const totals = calculateOrderTotals(
+          input.items as OrderLineInput[],
+          input.taxRate ?? current.taxRate
+        );
         await tx.purchaseOrderItem.deleteMany({ where: { purchaseOrderId: updated.id } });
         await tx.purchaseOrderItem.createMany({
-          data: totals.lines.map((line) => ({
+          data: totals.lines.map(line => ({
             purchaseOrderId: updated.id,
             productId: line.productId,
             quantity: line.quantity,
@@ -213,7 +247,10 @@ purchaseOrderRouter.patch(
           },
         });
 
-        return tx.purchaseOrder.findUniqueOrThrow({ where: { id: updated.id }, include: detailInclude });
+        return tx.purchaseOrder.findUniqueOrThrow({
+          where: { id: updated.id },
+          include: detailInclude,
+        });
       });
 
       res.json({ data: order });
@@ -241,14 +278,19 @@ purchaseOrderRouter.post(
     try {
       const order = await findOrder(req.organizationId!, req.params.id);
       if (order.status !== "DRAFT") {
-        throw new AppError(409, `Only a draft can be sent, this one is ${order.status.toLowerCase()}`, "PO_STATUS");
+        throw new AppError(
+          409,
+          `Only a draft can be sent, this one is ${order.status.toLowerCase()}`,
+          "PO_STATUS"
+        );
       }
 
       const sent = await prisma.purchaseOrder.updateMany({
         where: { id: order.id, status: "DRAFT" },
         data: { status: "SENT", sentAt: new Date() },
       });
-      if (sent.count !== 1) throw new AppError(409, "This purchase order was already processed", "PO_STATUS");
+      if (sent.count !== 1)
+        throw new AppError(409, "This purchase order was already processed", "PO_STATUS");
 
       res.json({ data: await findOrder(req.organizationId!, order.id) });
     } catch (err) {
@@ -266,14 +308,19 @@ purchaseOrderRouter.post(
     try {
       const order = await findOrder(req.organizationId!, req.params.id);
       if (order.status !== "DRAFT" && order.status !== "SENT") {
-        throw new AppError(409, `This purchase order is ${order.status.toLowerCase()} and cannot be cancelled`, "PO_STATUS");
+        throw new AppError(
+          409,
+          `This purchase order is ${order.status.toLowerCase()} and cannot be cancelled`,
+          "PO_STATUS"
+        );
       }
 
       const cancelled = await prisma.purchaseOrder.updateMany({
         where: { id: order.id, status: { in: ["DRAFT", "SENT"] } },
         data: { status: "CANCELLED" },
       });
-      if (cancelled.count !== 1) throw new AppError(409, "This purchase order was already processed", "PO_STATUS");
+      if (cancelled.count !== 1)
+        throw new AppError(409, "This purchase order was already processed", "PO_STATUS");
 
       res.json({ data: await findOrder(req.organizationId!, order.id) });
     } catch (err) {
@@ -294,7 +341,11 @@ purchaseOrderRouter.delete(
     try {
       const order = await findOrder(req.organizationId!, req.params.id);
       if (order.status !== "DRAFT" && order.status !== "CANCELLED") {
-        throw new AppError(409, "Only a draft or cancelled order can be deleted, cancel it instead", "PO_STATUS");
+        throw new AppError(
+          409,
+          "Only a draft or cancelled order can be deleted, cancel it instead",
+          "PO_STATUS"
+        );
       }
 
       await prisma.purchaseOrder.delete({ where: { id: order.id } });

@@ -6,7 +6,7 @@ export const redisClient = new Redis(process.env.REDIS_URL || "redis://localhost
 });
 
 redisClient.on("connect", () => console.log("Redis connected"));
-redisClient.on("error", (err) => console.error("Redis error:", err.message));
+redisClient.on("error", err => console.error("Redis error:", err.message));
 
 export async function connectRedis() {
   try {

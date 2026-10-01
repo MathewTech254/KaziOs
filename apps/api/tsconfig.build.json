@@ -1,0 +1,8 @@
+{
+  // The build uses this instead of tsconfig.json so the two can disagree on one point:
+  // tests are typechecked by the editor and by `npm run typecheck`, but they are not
+  // compiled into dist. Shipping them would put jest and test fixtures inside the
+  // deployed artifact for no benefit, and they would run against production.
+  "extends": "./tsconfig.json",
+  "exclude": ["node_modules", "dist", "tests", "**/*.test.ts", "**/*.integration.ts"]
+}

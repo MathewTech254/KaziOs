@@ -56,6 +56,7 @@ model Organization {
   settings       Setting[]
   salesOrders    SalesOrder[]
   purchaseOrders PurchaseOrder[]
+  cardPayments   CardPayment[]
   quotations     Quotation[]
   expenses       Expense[]
 }
@@ -337,6 +338,7 @@ model Invoice {
   idempotencyKey String?       @unique
   items          InvoiceItem[]
   payments       Payment[]
+  cardPayments   CardPayment[]
 }
 
 model InvoiceItem {
@@ -715,10 +717,26 @@ model Notification {
   readAt    DateTime?
   createdAt DateTime  @default(now())
 
+  /// A stable identity for the thing being announced, e.g. "low-stock:<product>:<warehouse>".
+  /// The same problem can be detected repeatedly (a sweep runs every few minutes), so the
+  /// key lets an alert be raised once and then stay quiet until the condition clears,
+  /// instead of filling a user's list with identical rows.
+  dedupeKey String?
+
+  /// Where the browser should take the user when the notification is opened.
+  link String?
+
+  /// Who or what caused it, e.g. the cashier who rang the sale.
+  actorName String?
+
   organization   Organization @relation(fields: [organizationId], references: [id])
   organizationId String
   user           User         @relation(fields: [userId], references: [id])
   userId         String
+
+  @@index([organizationId, userId, createdAt])
+  @@index([organizationId, userId, readAt])
+  @@index([dedupeKey, createdAt])
 }
 
 model File {
@@ -760,4 +778,31 @@ model PasswordResetToken {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+// A card payment taken through Paystack. The row is written when the customer opens the
+// payment popup and only moves to SUCCESS when Paystack confirms the money, either by a
+// signed webhook or by the server asking Paystack directly. No value here is ever set
+// from something the browser supplied.
+model CardPayment {
+  id               String    @id @default(uuid())
+  reference        String    @unique
+  invoiceId        String
+  organizationId   String
+  amountCents      Int
+  currency         String
+  email            String
+  status           String    @default("PENDING")
+  providerRef      String?
+  authorizationUrl String?
+  paidAt           DateTime?
+  failureReason    String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  invoice      Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, status])
+  @@index([invoiceId])
 }

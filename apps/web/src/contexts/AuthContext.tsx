@@ -1,4 +1,5 @@
-import { useState, useEffect, createContext, useContext, ReactNode, useCallback } from "react";
+import type { ReactNode } from "react";
+import { useState, useEffect, createContext, useContext, useCallback } from "react";
 import { api } from "../lib/api";
 
 interface User {
@@ -47,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (token) {
       api
         .get("/auth/me")
-        .then((res) => {
+        .then(res => {
           setUser(res.data.data);
           localStorage.setItem("kazios_user", JSON.stringify(res.data.data));
         })
@@ -73,16 +74,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    try { await api.post("/auth/logout"); } catch {}
+    try {
+      await api.post("/auth/logout");
+    } catch {
+      // A failed sign out call must not strand the user in a signed in state, so the
+      // local session is cleared either way.
+    }
     localStorage.removeItem("kazios_token");
     localStorage.removeItem("kazios_user");
     setUser(null);
   };
 
-  const hasPermission = useCallback((perm: string) => {
-    if (!user) return false;
-    return user.roles.some((r) => r.permissions.includes("*") || r.permissions.includes(perm));
-  }, [user]);
+  const hasPermission = useCallback(
+    (perm: string) => {
+      if (!user) return false;
+      return user.roles.some(r => r.permissions.includes("*") || r.permissions.includes(perm));
+    },
+    [user]
+  );
 
   return (
     <AuthContext.Provider value={{ user, loading, login, register, logout, hasPermission }}>

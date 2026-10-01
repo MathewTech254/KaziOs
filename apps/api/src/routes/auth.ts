@@ -3,8 +3,14 @@ import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { prisma } from "../lib/prisma";
 import { hashPassword, signToken, createSession, AppError } from "../lib";
-import { AuthRequest, requireAuth } from "../middleware/auth";
-import { zRegisterSchema, zLoginSchema, zForgotPasswordSchema, zResetPasswordSchema } from "@kazios/validation";
+import type { AuthRequest } from "../middleware/auth";
+import { requireAuth } from "../middleware/auth";
+import {
+  zRegisterSchema,
+  zLoginSchema,
+  zForgotPasswordSchema,
+  zResetPasswordSchema,
+} from "@kazios/validation";
 import { sendMail, welcomeEmail, passwordChangedEmail } from "../lib/email";
 import { consumeResetToken, inspectResetToken, issuePasswordReset } from "../lib/passwordReset";
 
@@ -17,7 +23,10 @@ authRouter.post("/register", async (req, res, next) => {
     if (existing) throw new AppError(409, "Email already registered", "EMAIL_EXISTS");
 
     const passwordHash = await hashPassword(data.password);
-    const slug = data.organizationName.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "");
+    const slug = data.organizationName
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .replace(/^-|-$/g, "");
 
     const result = await prisma.$transaction(async (tx: any) => {
       const org = await tx.organization.create({
@@ -57,17 +66,46 @@ authRouter.post("/register", async (req, res, next) => {
       });
 
       await tx.warehouse.create({
-        data: { name: "Main Warehouse", code: "WH-01", organizationId: org.id, branchId: mainBranch.id },
+        data: {
+          name: "Main Warehouse",
+          code: "WH-01",
+          organizationId: org.id,
+          branchId: mainBranch.id,
+        },
       });
 
       await tx.account.createMany({
         data: [
           { code: "1000", name: "Cash", type: "ASSET", organizationId: org.id, isSystem: true },
           { code: "1100", name: "Bank", type: "ASSET", organizationId: org.id, isSystem: true },
-          { code: "2000", name: "Accounts Payable", type: "LIABILITY", organizationId: org.id, isSystem: true },
-          { code: "4000", name: "Sales Revenue", type: "REVENUE", organizationId: org.id, isSystem: true },
-          { code: "5000", name: "Cost of Goods Sold", type: "EXPENSE", organizationId: org.id, isSystem: true },
-          { code: "5100", name: "General Expenses", type: "EXPENSE", organizationId: org.id, isSystem: true },
+          {
+            code: "2000",
+            name: "Accounts Payable",
+            type: "LIABILITY",
+            organizationId: org.id,
+            isSystem: true,
+          },
+          {
+            code: "4000",
+            name: "Sales Revenue",
+            type: "REVENUE",
+            organizationId: org.id,
+            isSystem: true,
+          },
+          {
+            code: "5000",
+            name: "Cost of Goods Sold",
+            type: "EXPENSE",
+            organizationId: org.id,
+            isSystem: true,
+          },
+          {
+            code: "5100",
+            name: "General Expenses",
+            type: "EXPENSE",
+            organizationId: org.id,
+            isSystem: true,
+          },
         ],
       });
 
@@ -158,7 +196,7 @@ authRouter.post("/login", async (req, res, next) => {
 
 authRouter.post("/logout", requireAuth, async (req: AuthRequest, res, next) => {
   try {
-    await prisma.session.delete({ where: { id: req.sessionId } }).catch(() => {});
+    await prisma.session.delete({ where: { id: req.sessionId } }).catch(() => undefined);
     res.json({ data: { success: true } });
   } catch (err) {
     next(err);
@@ -200,7 +238,10 @@ authRouter.post("/forgot-password", async (req, res, next) => {
   try {
     const data = zForgotPasswordSchema.parse(req.body);
     const email = data.email.toLowerCase().trim();
-    const user = await prisma.user.findUnique({ where: { email }, select: { id: true, email: true, name: true, status: true } });
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, email: true, name: true, status: true },
+    });
 
     if (user && user.status === "ACTIVE") {
       await issuePasswordReset(user.id, user.email, user.name);
@@ -226,8 +267,8 @@ authRouter.post("/reset-password/verify", async (req, res, next) => {
         outcome.reason === "EXPIRED"
           ? "This reset link has expired. Please request a new one."
           : outcome.reason === "USED"
-          ? "This reset link has already been used. Please request a new one."
-          : "This reset link is not valid.";
+            ? "This reset link has already been used. Please request a new one."
+            : "This reset link is not valid.";
       throw new AppError(400, message, "RESET_TOKEN_" + outcome.reason);
     }
     res.json({ data: { valid: true, email: maskEmail(outcome.email || "") } });
@@ -246,14 +287,17 @@ authRouter.post("/reset-password", async (req, res, next) => {
         result.reason === "EXPIRED"
           ? "This reset link has expired. Please request a new one."
           : result.reason === "USED"
-          ? "This reset link has already been used."
-          : "This reset link is not valid.";
+            ? "This reset link has already been used."
+            : "This reset link is not valid.";
       throw new AppError(400, message, "RESET_TOKEN_" + result.reason);
     }
 
     // Confirmation goes to the address on the account, never to the request body, so a
     // reset request cannot be used to send mail to somebody else.
-    const user = await prisma.user.findUnique({ where: { id: result.userId! }, select: { email: true, name: true } });
+    const user = await prisma.user.findUnique({
+      where: { id: result.userId! },
+      select: { email: true, name: true },
+    });
     if (user) sendMail(passwordChangedEmail(user.email, user.name));
 
     res.json({ data: { message: "Your password has been changed. Please sign in with it." } });
@@ -269,4 +313,3 @@ function maskEmail(email: string): string {
   const head = name.slice(0, 2);
   return `${head}${"*".repeat(Math.max(1, name.length - 2))}@${domain}`;
 }
-

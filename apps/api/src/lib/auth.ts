@@ -15,7 +15,11 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
   return bcrypt.compare(password, hash);
 }
 
-export function signToken(payload: { userId: string; sessionId: string; organizationId: string }): string {
+export function signToken(payload: {
+  userId: string;
+  sessionId: string;
+  organizationId: string;
+}): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions);
 }
 
@@ -71,7 +75,7 @@ export async function rotateSession(sessionId: string) {
 }
 
 export async function destroySession(token: string) {
-  await prisma.session.delete({ where: { token } }).catch(() => {});
+  await prisma.session.delete({ where: { token } }).catch(() => undefined);
 }
 
 export async function getUserOrganization(userId: string) {

@@ -1,9 +1,21 @@
 import { z } from "zod";
 
 export const zString = (min = 1, max = 255) =>
-  z.string().min(min, `Must be at least ${min} characters`).max(max, `Must be at most ${max} characters`);
+  z
+    .string()
+    .min(min, `Must be at least ${min} characters`)
+    .max(max, `Must be at most ${max} characters`);
 
-export const zEmail = z.string().email("Invalid email address");
+/**
+ * Every address is stored in lower case, with surrounding whitespace removed.
+ *
+ * Addresses reach the system from a browser, a password manager and a pasted
+ * invitation, so the same person can type "Owner@Shop.com" and "owner@shop.com".
+ * Any place that compares an address — a sign in, a password reset lookup, a
+ * duplicate check — has to compare the same normalised value, or the account
+ * exists and simply cannot be reached.
+ */
+export const zEmail = z.string().trim().toLowerCase().email("Invalid email address");
 
 export const zPhone = z.string().min(5, "Invalid phone number");
 
@@ -23,7 +35,7 @@ export const zDecimal = z.union([
 ]);
 
 export const zPositiveDecimal = zDecimal.refine(
-  (val) => {
+  val => {
     if (typeof val === "string") return parseFloat(val) >= 0;
     if (typeof val === "number") return val >= 0;
     return parseFloat(val.value) >= 0;
@@ -45,7 +57,10 @@ export const zDateRangeSchema = z.object({
 
 export const zOrganizationSchema = z.object({
   name: zString(2, 100),
-  slug: zString(2, 50).regex(/^[a-z0-9-]+$/, "Slug can only contain lowercase letters, numbers, and hyphens"),
+  slug: zString(2, 50).regex(
+    /^[a-z0-9-]+$/,
+    "Slug can only contain lowercase letters, numbers, and hyphens"
+  ),
   country: zCountry,
   currency: zCurrency,
   timezone: zString(3, 50),
@@ -77,23 +92,27 @@ export const zForgotPasswordSchema = z.object({
   email: zEmail,
 });
 
-export const zResetPasswordSchema = z.object({
-  token: zString(),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  confirmPassword: z.string().min(8, "Password must be at least 8 characters"),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords do not match",
-  path: ["confirmPassword"],
-});
+export const zResetPasswordSchema = z
+  .object({
+    token: zString(),
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: z.string().min(8, "Password must be at least 8 characters"),
+  })
+  .refine(data => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
 
-export const zChangePasswordSchema = z.object({
-  currentPassword: z.string().min(1, "Current password is required"),
-  newPassword: z.string().min(8, "Password must be at least 8 characters"),
-  confirmPassword: z.string().min(8, "Password must be at least 8 characters"),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: "Passwords do not match",
-  path: ["confirmPassword"],
-});
+export const zChangePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Current password is required"),
+    newPassword: z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: z.string().min(8, "Password must be at least 8 characters"),
+  })
+  .refine(data => data.newPassword === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
 
 export const zCustomerSchema = z.object({
   name: zString(2, 100),
@@ -227,27 +246,31 @@ export const zPosSaleSchema = z.object({
   idempotencyKey: z.string().max(100).optional(),
 });
 
-export const zJournalEntrySchema = z.object({
-  organizationId: zUuid,
-  description: zString(1, 500),
-  reference: zString(1, 100),
-  journalDate: z.string().datetime(),
-  lines: z.array(
-    z.object({
-      accountId: zUuid,
-      description: zString(0, 500).optional(),
-      debit: z.number().nonnegative(),
-      credit: z.number().nonnegative(),
-    })
-  ).min(2, "At least two journal lines are required"),
-}).refine(
-  (data) => {
-    const totalDebit = data.lines.reduce((sum, line) => sum + line.debit, 0);
-    const totalCredit = data.lines.reduce((sum, line) => sum + line.credit, 0);
-    return Math.abs(totalDebit - totalCredit) < 0.01;
-  },
-  { message: "Journal entries must balance (debits = credits)" }
-);
+export const zJournalEntrySchema = z
+  .object({
+    organizationId: zUuid,
+    description: zString(1, 500),
+    reference: zString(1, 100),
+    journalDate: z.string().datetime(),
+    lines: z
+      .array(
+        z.object({
+          accountId: zUuid,
+          description: zString(0, 500).optional(),
+          debit: z.number().nonnegative(),
+          credit: z.number().nonnegative(),
+        })
+      )
+      .min(2, "At least two journal lines are required"),
+  })
+  .refine(
+    data => {
+      const totalDebit = data.lines.reduce((sum, line) => sum + line.debit, 0);
+      const totalCredit = data.lines.reduce((sum, line) => sum + line.credit, 0);
+      return Math.abs(totalDebit - totalCredit) < 0.01;
+    },
+    { message: "Journal entries must balance (debits = credits)" }
+  );
 
 export const zUserRoleSchema = z.object({
   userId: zUuid,
@@ -296,9 +319,16 @@ export const zStockMovementType = z.enum(STOCK_MOVEMENT_TYPES);
 export const STOCK_STATUSES = ["IN_STOCK", "LOW_STOCK", "OUT_OF_STOCK"] as const;
 export type StockStatus = (typeof STOCK_STATUSES)[number];
 
-/** Available quantity a warehouse can actually sell (on hand minus reservations). */
+/**
+ * Available quantity a warehouse can actually sell: on hand minus reserved.
+ *
+ * Clamped at zero. Reservations are taken against stock that is expected to arrive or
+ * be confirmed, so over-reserving is a real possibility, and a negative figure is
+ * nonsense that then flows into the till, the reorder alert and the stock report as
+ * though the warehouse owed stock.
+ */
 export function availableStock(quantity: number, reserved = 0): number {
-  return Number((quantity - reserved).toFixed(4));
+  return Math.max(0, Number((quantity - reserved).toFixed(4)));
 }
 
 export function stockStatusFor(available: number, minStock = 0): StockStatus {
@@ -312,7 +342,10 @@ export const zInventoryQuerySchema = z.object({
   warehouseId: zUuid.optional(),
   productId: zUuid.optional(),
   categoryId: zUuid.optional(),
-  status: z.enum(["ALL", ...STOCK_STATUSES]).optional().default("ALL"),
+  status: z
+    .enum(["ALL", ...STOCK_STATUSES])
+    .optional()
+    .default("ALL"),
   page: z.coerce.number().int().positive().optional().default(1),
   limit: z.coerce.number().int().positive().max(200).optional().default(50),
 });
@@ -386,7 +419,10 @@ export const zPurchaseOrderUpdateSchema = zPurchaseOrderSchema.partial();
 
 export const zPurchaseOrderQuerySchema = z.object({
   search: zString(0, 100).optional(),
-  status: z.enum(["ALL", ...PURCHASE_ORDER_STATUSES]).optional().default("ALL"),
+  status: z
+    .enum(["ALL", ...PURCHASE_ORDER_STATUSES])
+    .optional()
+    .default("ALL"),
   supplierId: zUuid.optional(),
   page: z.coerce.number().int().positive().optional().default(1),
   limit: z.coerce.number().int().positive().max(200).optional().default(50),
@@ -566,8 +602,8 @@ export const PERMISSION_GROUPS = [
   },
 ] as const;
 
-export const PERMISSIONS: [string, ...string[]] = PERMISSION_GROUPS.flatMap((group) =>
-  group.permissions.map((permission) => permission.key)
+export const PERMISSIONS: [string, ...string[]] = PERMISSION_GROUPS.flatMap(group =>
+  group.permissions.map(permission => permission.key)
 ) as unknown as [string, ...string[]];
 
 export const zPermission = z.enum(PERMISSIONS);
@@ -655,12 +691,12 @@ export function allSettingDefaults(): SettingValues {
 
 const zNullableText = <T extends z.ZodTypeAny>(schema: T) =>
   z.preprocess(
-    (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+    value => (typeof value === "string" && value.trim() === "" ? null : value),
     schema.nullable()
   );
 
 const zCountryUpdate = z.preprocess(
-  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  value => (typeof value === "string" && value.trim() === "" ? undefined : value),
   zCountry.optional()
 );
 

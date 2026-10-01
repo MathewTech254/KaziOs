@@ -1,9 +1,19 @@
 import { AlertCircle, CheckCircle } from "lucide-react";
 
 /** Inline status message used for errors and confirmations across pages. */
-export function Notice({ tone, title, message }: { tone: "error" | "success"; title: string; message: string }) {
+export function Notice({
+  tone,
+  title,
+  message,
+}: {
+  tone: "error" | "success";
+  title: string;
+  message: string;
+}) {
   const styles =
-    tone === "error" ? "border-danger/40 bg-danger/10 text-danger" : "border-success/40 bg-success/10 text-success";
+    tone === "error"
+      ? "border-danger/40 bg-danger/10 text-danger"
+      : "border-success/40 bg-success/10 text-success";
   const Icon = tone === "error" ? AlertCircle : CheckCircle;
 
   return (
@@ -23,7 +33,10 @@ export function Notice({ tone, title, message }: { tone: "error" | "success"; ti
 export function LoadingBlock({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 p-6 text-sm text-muted-foreground">
-      <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent" aria-hidden="true" />
+      <span
+        className="h-4 w-4 animate-spin rounded-full border-2 border-accent border-t-transparent"
+        aria-hidden="true"
+      />
       {label}
     </div>
   );

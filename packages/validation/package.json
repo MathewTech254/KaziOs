@@ -6,14 +6,18 @@
   "exports": {
     ".": "./dist/index.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "dev": "tsc --watch",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
     "typecheck": "tsc --noEmit",
-    "test": "jest"
+    "test": "jest",
+    "test:unit": "jest --testPathPattern=.*\\.test\\.ts$ --passWithNoTests",
+    "test:integration": "jest --testPathPattern=.*\\.integration\\.ts$ --passWithNoTests"
   },
   "dependencies": {
     "zod": "^3.23.8"

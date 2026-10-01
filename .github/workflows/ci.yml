@@ -59,7 +59,9 @@ jobs:
       - run: npm ci
       - run: npm run prisma:generate
         working-directory: ./apps/api
-      - run: npm run prisma:migrate deploy
+      # `migrate deploy` applies committed migrations without prompting or creating any.
+      # `migrate dev` would try to generate one and is wrong here.
+      - run: npm run prisma:migrate:deploy
         working-directory: ./apps/api
       - run: npm run test:unit
 
@@ -92,7 +94,7 @@ jobs:
       - run: npm ci --include=dev
       - run: npm run prisma:generate
         working-directory: ./apps/api
-      - run: npm run prisma:migrate deploy
+      - run: npm run prisma:migrate:deploy
         working-directory: ./apps/api
       - run: npm run test:integration
 

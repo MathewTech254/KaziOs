@@ -55,7 +55,7 @@ export interface EtimInvoicePayload {
   dueDate: string;
   customerName: string;
   customerTIN?: string;
-  items: Array<{
+  items: {
     itemCode: string;
     itemName: string;
     unitPrice: number;
@@ -63,7 +63,7 @@ export interface EtimInvoicePayload {
     taxRate: number;
     taxAmount: number;
     totalAmount: number;
-  }>;
+  }[];
   subtotal: number;
   taxTotal: number;
   grandTotal: number;
@@ -77,14 +77,14 @@ export interface EtimCreditNotePayload {
   creditNoteNumber: string;
   issueDate: string;
   reason: string;
-  items: Array<{
+  items: {
     itemCode: string;
     itemName: string;
     quantity: number;
     unitPrice: number;
     taxAmount: number;
     totalAmount: number;
-  }>;
+  }[];
   grandTotal: number;
   currency: string;
 }
@@ -103,7 +103,9 @@ export interface EtimReceiptPayload {
 
 export class EtimProviderNotConfiguredError extends Error {
   constructor() {
-    super("eTIMS provider is not configured. Set ETIMS_API_URL, ETIMS_CLIENT_ID, and ETIMS_CLIENT_SECRET.");
+    super(
+      "eTIMS provider is not configured. Set ETIMS_API_URL, ETIMS_CLIENT_ID, and ETIMS_CLIENT_SECRET."
+    );
     this.name = "EtimProviderNotConfiguredError";
   }
 }
@@ -291,7 +293,9 @@ export function createEtimProvider(config: {
   clientSecret?: string;
 }): EtimProvider {
   if (config.apiUrl && config.clientId && config.clientSecret) {
-    return new EtimProviderImpl(config as { apiUrl: string; clientId: string; clientSecret: string });
+    return new EtimProviderImpl(
+      config as { apiUrl: string; clientId: string; clientSecret: string }
+    );
   }
   return new StubEtimProvider();
 }

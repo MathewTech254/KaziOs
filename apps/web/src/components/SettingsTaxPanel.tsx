@@ -81,7 +81,10 @@ export function SettingsTaxPanel({ canManage }: { canManage: boolean }) {
     }
   };
 
-  const totalProducts = categories.reduce((sum, category) => sum + (category._count?.products || 0), 0);
+  const totalProducts = categories.reduce(
+    (sum, category) => sum + (category._count?.products || 0),
+    0
+  );
 
   return (
     <div className="space-y-6">
@@ -96,12 +99,18 @@ export function SettingsTaxPanel({ canManage }: { canManage: boolean }) {
         </div>
         <div className="kazi-stat-card">
           <p className="kazi-stat-label">Highest rate</p>
-          <p className="kazi-stat-value mt-1">{categories.length ? `${Math.max(...categories.map((c) => c.rate))}%` : "-"}</p>
+          <p className="kazi-stat-value mt-1">
+            {categories.length ? `${Math.max(...categories.map(c => c.rate))}%` : "-"}
+          </p>
         </div>
       </div>
 
       {error && <div className="kazi-alert-card p-3 text-sm text-foreground">{error}</div>}
-      {message && <div className="rounded-lg border border-border bg-surface-muted p-3 text-sm text-foreground">{message}</div>}
+      {message && (
+        <div className="rounded-lg border border-border bg-surface-muted p-3 text-sm text-foreground">
+          {message}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="kazi-card p-6">
         <h2 className="mb-4 text-lg font-semibold text-foreground">
@@ -112,7 +121,7 @@ export function SettingsTaxPanel({ canManage }: { canManage: boolean }) {
             <label className="mb-1 block text-sm text-muted-foreground">Name</label>
             <input
               value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              onChange={e => setForm({ ...form, name: e.target.value })}
               className="kazi-input"
               placeholder="VAT Standard"
               required
@@ -126,26 +135,38 @@ export function SettingsTaxPanel({ canManage }: { canManage: boolean }) {
               min="0"
               max="100"
               value={form.rate}
-              onChange={(e) => setForm({ ...form, rate: parseFloat(e.target.value) })}
+              onChange={e => setForm({ ...form, rate: parseFloat(e.target.value) })}
               className="kazi-input"
               required
             />
           </div>
           <div>
             <label className="mb-1 block text-sm text-muted-foreground">Calculation</label>
-            <select value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })} className="kazi-input">
+            <select
+              value={form.mode}
+              onChange={e => setForm({ ...form, mode: e.target.value })}
+              className="kazi-input"
+            >
               <option value="EXCLUSIVE">Exclusive (added to price)</option>
               <option value="INCLUSIVE">Inclusive (included in price)</option>
             </select>
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
-          <button type="submit" disabled={!canManage || saving} className="kazi-button-primary px-4 text-sm disabled:opacity-50">
+          <button
+            type="submit"
+            disabled={!canManage || saving}
+            className="kazi-button-primary px-4 text-sm disabled:opacity-50"
+          >
             <Plus className="h-4 w-4" />
             {saving ? "Saving..." : editingId ? "Update category" : "Add category"}
           </button>
           {editingId && (
-            <button type="button" onClick={resetForm} className="kazi-button-secondary px-4 text-sm">
+            <button
+              type="button"
+              onClick={resetForm}
+              className="kazi-button-secondary px-4 text-sm"
+            >
               Cancel
             </button>
           )}
@@ -156,11 +177,21 @@ export function SettingsTaxPanel({ canManage }: { canManage: boolean }) {
         <table className="min-w-full divide-y divide-border">
           <thead className="bg-surface-muted">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">Name</th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">Rate</th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">Mode</th>
-              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">In use</th>
-              <th className="px-6 py-3 text-right text-xs font-medium uppercase text-muted-foreground">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
+                Name
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
+                Rate
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
+                Mode
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
+                In use
+              </th>
+              <th className="px-6 py-3 text-right text-xs font-medium uppercase text-muted-foreground">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -178,13 +209,14 @@ export function SettingsTaxPanel({ canManage }: { canManage: boolean }) {
                 </td>
               </tr>
             )}
-            {categories.map((category) => (
+            {categories.map(category => (
               <tr key={category.id} className="hover:bg-surface-muted/50">
                 <td className="px-6 py-4 text-sm font-medium text-foreground">{category.name}</td>
                 <td className="px-6 py-4 text-sm text-muted-foreground">{category.rate}%</td>
                 <td className="px-6 py-4 text-sm text-muted-foreground">{category.mode}</td>
                 <td className="px-6 py-4 text-sm text-muted-foreground">
-                  {category._count?.products || 0} products / {category._count?.invoiceItems || 0} lines
+                  {category._count?.products || 0} products / {category._count?.invoiceItems || 0}{" "}
+                  lines
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex justify-end gap-2">

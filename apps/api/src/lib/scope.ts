@@ -1,5 +1,5 @@
-import { Request } from "express";
-import { AuthRequest } from "../middleware/auth";
+import type { Request } from "express";
+import type { AuthRequest } from "../middleware/auth";
 
 /**
  * Tenant and role scoping helpers shared by every business route.
@@ -19,10 +19,12 @@ export function getUserId(req: Request): string | undefined {
 
 export function getScopedValues(req: Request, key: "branchId" | "warehouseId"): string[] {
   const roles = (req as AuthRequest).roles || [];
-  const values = roles.flatMap((assignment) => {
+  const values = roles.flatMap(assignment => {
     const relation = key === "branchId" ? assignment.branch : assignment.warehouse;
     const direct = key === "branchId" ? assignment.branchId : assignment.warehouseId;
-    return [typeof direct === "string" ? direct : undefined, relation?.id].filter((value): value is string => Boolean(value));
+    return [typeof direct === "string" ? direct : undefined, relation?.id].filter(
+      (value): value is string => Boolean(value)
+    );
   });
   return Array.from(new Set(values));
 }

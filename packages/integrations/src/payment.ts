@@ -119,7 +119,9 @@ export class StubPaymentProvider implements PaymentProvider {
 
 export class PaymentProviderNotConfiguredError extends Error {
   constructor(public providerType: PaymentProviderType) {
-    super(`${providerType} payment provider is not configured. Set the required environment variables.`);
+    super(
+      `${providerType} payment provider is not configured. Set the required environment variables.`
+    );
     this.name = "PaymentProviderNotConfiguredError";
   }
 }

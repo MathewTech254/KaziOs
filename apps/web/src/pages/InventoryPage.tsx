@@ -87,7 +87,15 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
-const MOVEMENT_TYPES = ["OPENING", "PURCHASE", "SALE", "ADJUSTMENT", "TRANSFER_IN", "TRANSFER_OUT", "RETURN"] as const;
+const MOVEMENT_TYPES = [
+  "OPENING",
+  "PURCHASE",
+  "SALE",
+  "ADJUSTMENT",
+  "TRANSFER_IN",
+  "TRANSFER_OUT",
+  "RETURN",
+] as const;
 
 function formatMoney(value: number, currency: string): string {
   try {
@@ -173,10 +181,10 @@ function StockAdjustmentForm({ warehouses, onDone, onCancel }: StockFormProps) {
     setLoadingOptions(true);
     api
       .get("/inventory", { params: { warehouseId, status: "ALL", limit: 200 } })
-      .then((res) => {
+      .then(res => {
         if (active) setOptions(res.data.data as LevelRow[]);
       })
-      .catch((err) => {
+      .catch(err => {
         if (active) setError(getApiError(err));
       })
       .finally(() => {
@@ -191,7 +199,7 @@ function StockAdjustmentForm({ warehouses, onDone, onCancel }: StockFormProps) {
     setProductId("");
   }, [warehouseId]);
 
-  const selected = options.find((row) => row.productId === productId);
+  const selected = options.find(row => row.productId === productId);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -239,7 +247,8 @@ function StockAdjustmentForm({ warehouses, onDone, onCancel }: StockFormProps) {
     <form onSubmit={submit} className="kazi-card mb-6 p-6">
       <h2 className="mb-1 text-lg font-semibold text-foreground">Adjust stock</h2>
       <p className="mb-4 text-sm text-muted-foreground">
-        Corrections are written to the stock ledger as an adjustment movement. Decreases check the available quantity first.
+        Corrections are written to the stock ledger as an adjustment movement. Decreases check the
+        available quantity first.
       </p>
 
       {error && <Notice tone="error" title="Adjustment not saved" message={error} />}
@@ -252,12 +261,12 @@ function StockAdjustmentForm({ warehouses, onDone, onCancel }: StockFormProps) {
           <select
             id="adjust-warehouse"
             value={warehouseId}
-            onChange={(e) => setWarehouseId(e.target.value)}
+            onChange={e => setWarehouseId(e.target.value)}
             className="kazi-input"
             required
           >
             <option value="">Select a warehouse</option>
-            {warehouses.map((warehouse) => (
+            {warehouses.map(warehouse => (
               <option key={warehouse.id} value={warehouse.id}>
                 {warehouse.name}
               </option>
@@ -271,13 +280,13 @@ function StockAdjustmentForm({ warehouses, onDone, onCancel }: StockFormProps) {
           <select
             id="adjust-product"
             value={productId}
-            onChange={(e) => setProductId(e.target.value)}
+            onChange={e => setProductId(e.target.value)}
             className="kazi-input"
             disabled={!warehouseId || loadingOptions}
             required
           >
             <option value="">{loadingOptions ? "Loading products..." : "Select a product"}</option>
-            {options.map((row) => (
+            {options.map(row => (
               <option key={row.productId} value={row.productId}>
                 {row.name}
                 {row.sku ? ` (${row.sku})` : ""} - {formatNumber(row.available)} available
@@ -292,7 +301,7 @@ function StockAdjustmentForm({ warehouses, onDone, onCancel }: StockFormProps) {
           <select
             id="adjust-type"
             value={adjustmentType}
-            onChange={(e) => setAdjustmentType(e.target.value as "INCREASE" | "DECREASE")}
+            onChange={e => setAdjustmentType(e.target.value as "INCREASE" | "DECREASE")}
             className="kazi-input"
           >
             <option value="INCREASE">Increase (add stock)</option>
@@ -309,14 +318,14 @@ function StockAdjustmentForm({ warehouses, onDone, onCancel }: StockFormProps) {
             min="1"
             step="1"
             value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
+            onChange={e => setQuantity(e.target.value)}
             className="kazi-input"
             required
           />
           {selected && (
             <p className="mt-1 text-xs text-muted-foreground">
-              On hand {formatNumber(selected.quantity)} - reserved {formatNumber(selected.reserved)} - available{" "}
-              {formatNumber(selected.available)}
+              On hand {formatNumber(selected.quantity)} - reserved {formatNumber(selected.reserved)}{" "}
+              - available {formatNumber(selected.available)}
             </p>
           )}
         </div>
@@ -327,7 +336,7 @@ function StockAdjustmentForm({ warehouses, onDone, onCancel }: StockFormProps) {
           <input
             id="adjust-reason"
             value={reason}
-            onChange={(e) => setReason(e.target.value)}
+            onChange={e => setReason(e.target.value)}
             placeholder="Stock count correction, damage, opening balance..."
             className="kazi-input"
             maxLength={200}
@@ -341,7 +350,7 @@ function StockAdjustmentForm({ warehouses, onDone, onCancel }: StockFormProps) {
           <input
             id="adjust-reference"
             value={reference}
-            onChange={(e) => setReference(e.target.value)}
+            onChange={e => setReference(e.target.value)}
             placeholder="Leave blank to auto-generate a ledger reference"
             className="kazi-input"
             maxLength={100}
@@ -383,10 +392,10 @@ function StockTransferForm({ warehouses, onDone, onCancel }: StockFormProps) {
     setLoadingOptions(true);
     api
       .get("/inventory", { params: { warehouseId: sourceWarehouseId, status: "ALL", limit: 200 } })
-      .then((res) => {
+      .then(res => {
         if (active) setOptions(res.data.data as LevelRow[]);
       })
-      .catch((err) => {
+      .catch(err => {
         if (active) setError(getApiError(err));
       })
       .finally(() => {
@@ -401,8 +410,10 @@ function StockTransferForm({ warehouses, onDone, onCancel }: StockFormProps) {
     setProductId("");
   }, [sourceWarehouseId]);
 
-  const selected = options.find((row) => row.productId === productId);
-  const sourceName = warehouses.find((warehouse) => warehouse.id === sourceWarehouseId)?.name ?? "the source warehouse";
+  const selected = options.find(row => row.productId === productId);
+  const sourceName =
+    warehouses.find(warehouse => warehouse.id === sourceWarehouseId)?.name ??
+    "the source warehouse";
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -454,8 +465,8 @@ function StockTransferForm({ warehouses, onDone, onCancel }: StockFormProps) {
     <form onSubmit={submit} className="kazi-card mb-6 p-6">
       <h2 className="mb-1 text-lg font-semibold text-foreground">New warehouse transfer</h2>
       <p className="mb-4 text-sm text-muted-foreground">
-        Transfers stay pending until completed. Completing one issues the stock from the source and receives it at the
-        destination in a single transaction.
+        Transfers stay pending until completed. Completing one issues the stock from the source and
+        receives it at the destination in a single transaction.
       </p>
 
       {error && <Notice tone="error" title="Transfer not created" message={error} />}
@@ -468,12 +479,12 @@ function StockTransferForm({ warehouses, onDone, onCancel }: StockFormProps) {
           <select
             id="transfer-source"
             value={sourceWarehouseId}
-            onChange={(e) => setSourceWarehouseId(e.target.value)}
+            onChange={e => setSourceWarehouseId(e.target.value)}
             className="kazi-input"
             required
           >
             <option value="">Select the source</option>
-            {warehouses.map((warehouse) => (
+            {warehouses.map(warehouse => (
               <option key={warehouse.id} value={warehouse.id}>
                 {warehouse.name}
               </option>
@@ -481,18 +492,21 @@ function StockTransferForm({ warehouses, onDone, onCancel }: StockFormProps) {
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-sm text-muted-foreground" htmlFor="transfer-destination">
+          <label
+            className="mb-1 block text-sm text-muted-foreground"
+            htmlFor="transfer-destination"
+          >
             To warehouse
           </label>
           <select
             id="transfer-destination"
             value={destinationWarehouseId}
-            onChange={(e) => setDestinationWarehouseId(e.target.value)}
+            onChange={e => setDestinationWarehouseId(e.target.value)}
             className="kazi-input"
             required
           >
             <option value="">Select the destination</option>
-            {warehouses.map((warehouse) => (
+            {warehouses.map(warehouse => (
               <option key={warehouse.id} value={warehouse.id}>
                 {warehouse.name}
               </option>
@@ -506,13 +520,13 @@ function StockTransferForm({ warehouses, onDone, onCancel }: StockFormProps) {
           <select
             id="transfer-product"
             value={productId}
-            onChange={(e) => setProductId(e.target.value)}
+            onChange={e => setProductId(e.target.value)}
             className="kazi-input"
             disabled={!sourceWarehouseId || loadingOptions}
             required
           >
             <option value="">{loadingOptions ? "Loading products..." : "Select a product"}</option>
-            {options.map((row) => (
+            {options.map(row => (
               <option key={row.productId} value={row.productId} disabled={row.available <= 0}>
                 {row.name}
                 {row.sku ? ` (${row.sku})` : ""} - {formatNumber(row.available)} available
@@ -530,7 +544,7 @@ function StockTransferForm({ warehouses, onDone, onCancel }: StockFormProps) {
             min="1"
             step="1"
             value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
+            onChange={e => setQuantity(e.target.value)}
             className="kazi-input"
             required
           />
@@ -547,7 +561,7 @@ function StockTransferForm({ warehouses, onDone, onCancel }: StockFormProps) {
           <input
             id="transfer-reference"
             value={reference}
-            onChange={(e) => setReference(e.target.value)}
+            onChange={e => setReference(e.target.value)}
             placeholder="Leave blank to auto-generate"
             className="kazi-input"
             maxLength={100}
@@ -560,7 +574,7 @@ function StockTransferForm({ warehouses, onDone, onCancel }: StockFormProps) {
           <input
             id="transfer-notes"
             value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            onChange={e => setNotes(e.target.value)}
             placeholder="Vehicle, dispatch note, requested by..."
             className="kazi-input"
             maxLength={300}
@@ -596,7 +610,11 @@ export function InventoryPage() {
   const [levels, setLevels] = useState<LevelRow[]>([]);
   const [levelsLoading, setLevelsLoading] = useState(true);
   const [levelsError, setLevelsError] = useState<string | null>(null);
-  const [levelsMeta, setLevelsMeta] = useState<{ scope: string; total: number; truncated: boolean } | null>(null);
+  const [levelsMeta, setLevelsMeta] = useState<{
+    scope: string;
+    total: number;
+    truncated: boolean;
+  } | null>(null);
   const [movements, setMovements] = useState<MovementRow[]>([]);
   const [movementsLoading, setMovementsLoading] = useState(false);
   const [movementsError, setMovementsError] = useState<string | null>(null);
@@ -775,14 +793,16 @@ export function InventoryPage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="kazi-page-title">Inventory</h1>
-          <p className="kazi-page-subtitle">Stock levels, movement history and warehouse-to-warehouse transfers</p>
+          <p className="kazi-page-subtitle">
+            Stock levels, movement history and warehouse-to-warehouse transfers
+          </p>
         </div>
         {canManage && (
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => {
-                setShowAdjustForm((open) => !open);
+                setShowAdjustForm(open => !open);
                 setShowTransferForm(false);
               }}
               className="kazi-button-primary px-4 text-sm"
@@ -793,7 +813,7 @@ export function InventoryPage() {
             <button
               type="button"
               onClick={() => {
-                setShowTransferForm((open) => !open);
+                setShowTransferForm(open => !open);
                 setShowAdjustForm(false);
               }}
               className="kazi-button-secondary px-4 text-sm"
@@ -807,14 +827,17 @@ export function InventoryPage() {
 
       {!canManage && (
         <div className="kazi-alert-card mb-4 p-4 text-sm text-foreground">
-          You have read-only access. An owner can grant the <span className="font-medium">inventory.manage</span> permission
-          to let you adjust stock and move it between warehouses.
+          You have read-only access. An owner can grant the{" "}
+          <span className="font-medium">inventory.manage</span> permission to let you adjust stock
+          and move it between warehouses.
         </div>
       )}
 
       {notice && <Notice tone="success" title="Done" message={notice} />}
       {actionError && <Notice tone="error" title="Action failed" message={actionError} />}
-      {summaryError && <Notice tone="error" title="Could not load the inventory summary" message={summaryError} />}
+      {summaryError && (
+        <Notice tone="error" title="Could not load the inventory summary" message={summaryError} />
+      )}
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
@@ -847,11 +870,11 @@ export function InventoryPage() {
           <select
             id="inventory-warehouse"
             value={warehouseFilter}
-            onChange={(e) => setWarehouseFilter(e.target.value)}
+            onChange={e => setWarehouseFilter(e.target.value)}
             className="kazi-input"
           >
             <option value="">All warehouses</option>
-            {warehouses.map((warehouse) => (
+            {warehouses.map(warehouse => (
               <option key={warehouse.id} value={warehouse.id}>
                 {warehouse.name}
                 {warehouse.branchName ? ` - ${warehouse.branchName}` : ""}
@@ -863,25 +886,31 @@ export function InventoryPage() {
         {tab === "levels" && (
           <>
             <div className="w-full sm:w-64">
-              <label className="mb-1 block text-sm text-muted-foreground" htmlFor="inventory-search">
+              <label
+                className="mb-1 block text-sm text-muted-foreground"
+                htmlFor="inventory-search"
+              >
                 Search
               </label>
               <input
                 id="inventory-search"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={e => setSearch(e.target.value)}
                 placeholder="Product name, SKU or barcode"
                 className="kazi-input"
               />
             </div>
             <div className="w-full sm:w-48">
-              <label className="mb-1 block text-sm text-muted-foreground" htmlFor="inventory-status">
+              <label
+                className="mb-1 block text-sm text-muted-foreground"
+                htmlFor="inventory-status"
+              >
                 Availability
               </label>
               <select
                 id="inventory-status"
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={e => setStatusFilter(e.target.value)}
                 className="kazi-input"
               >
                 <option value="ALL">All levels</option>
@@ -900,17 +929,20 @@ export function InventoryPage() {
 
         {tab === "movements" && (
           <div className="w-full sm:w-56">
-            <label className="mb-1 block text-sm text-muted-foreground" htmlFor="inventory-movement-type">
+            <label
+              className="mb-1 block text-sm text-muted-foreground"
+              htmlFor="inventory-movement-type"
+            >
               Movement type
             </label>
             <select
               id="inventory-movement-type"
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
+              onChange={e => setTypeFilter(e.target.value)}
               className="kazi-input"
             >
               <option value="">All movements</option>
-              {MOVEMENT_TYPES.map((type) => (
+              {MOVEMENT_TYPES.map(type => (
                 <option key={type} value={type}>
                   {movementLabel(type)}
                 </option>
@@ -921,13 +953,16 @@ export function InventoryPage() {
 
         {tab === "transfers" && (
           <div className="w-full sm:w-48">
-            <label className="mb-1 block text-sm text-muted-foreground" htmlFor="inventory-transfer-status">
+            <label
+              className="mb-1 block text-sm text-muted-foreground"
+              htmlFor="inventory-transfer-status"
+            >
               Status
             </label>
             <select
               id="inventory-transfer-status"
               value={transferStatusFilter}
-              onChange={(e) => setTransferStatusFilter(e.target.value)}
+              onChange={e => setTransferStatusFilter(e.target.value)}
               className="kazi-input"
             >
               <option value="ALL">All transfers</option>
@@ -940,7 +975,7 @@ export function InventoryPage() {
       </div>
 
       <div className="mb-6 flex flex-wrap gap-2">
-        {TABS.map((item) => {
+        {TABS.map(item => {
           const Icon = item.icon;
           const active = tab === item.id;
           return (
@@ -955,7 +990,9 @@ export function InventoryPage() {
               <Icon className="h-4 w-4" aria-hidden="true" />
               {item.label}
               {item.id === "transfers" && pendingTransfers > 0 && (
-                <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning">{pendingTransfers}</span>
+                <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning">
+                  {pendingTransfers}
+                </span>
               )}
             </button>
           );
@@ -963,15 +1000,25 @@ export function InventoryPage() {
       </div>
 
       {showAdjustForm && canManage && (
-        <StockAdjustmentForm warehouses={warehouses} onDone={handleFormDone} onCancel={() => setShowAdjustForm(false)} />
+        <StockAdjustmentForm
+          warehouses={warehouses}
+          onDone={handleFormDone}
+          onCancel={() => setShowAdjustForm(false)}
+        />
       )}
       {showTransferForm && canManage && (
-        <StockTransferForm warehouses={warehouses} onDone={handleFormDone} onCancel={() => setShowTransferForm(false)} />
+        <StockTransferForm
+          warehouses={warehouses}
+          onDone={handleFormDone}
+          onCancel={() => setShowTransferForm(false)}
+        />
       )}
 
       {tab === "levels" && (
         <div>
-          {levelsError && <Notice tone="error" title="Could not load stock levels" message={levelsError} />}
+          {levelsError && (
+            <Notice tone="error" title="Could not load stock levels" message={levelsError} />
+          )}
           {levelsLoading ? (
             <div className="kazi-card">
               <LoadingBlock label="Loading stock levels..." />
@@ -981,43 +1028,75 @@ export function InventoryPage() {
               <table className="min-w-full divide-y divide-border">
                 <thead className="bg-surface-muted">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Product</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Warehouse</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">On hand</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Reserved</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Available</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Min</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Status</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Value (cost)</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Last movement</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Product
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Warehouse
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      On hand
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Reserved
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Available
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Min
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Value (cost)
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Last movement
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {levels.map((row) => (
-                    <tr key={`${row.productId}-${row.warehouseId ?? "all"}`} className="hover:bg-surface-muted/50">
+                  {levels.map(row => (
+                    <tr
+                      key={`${row.productId}-${row.warehouseId ?? "all"}`}
+                      className="hover:bg-surface-muted/50"
+                    >
                       <td className="px-4 py-3 text-sm font-medium text-foreground">
                         {row.name}
-                        {row.sku && <span className="ml-2 text-xs text-muted-foreground">{row.sku}</span>}
+                        {row.sku && (
+                          <span className="ml-2 text-xs text-muted-foreground">{row.sku}</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
-                        {row.warehouseName ?? `${row.warehouseCount} warehouse${row.warehouseCount === 1 ? "" : "s"}`}
+                        {row.warehouseName ??
+                          `${row.warehouseCount} warehouse${row.warehouseCount === 1 ? "" : "s"}`}
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
                         {formatNumber(row.quantity)}
                         {row.unit ? ` ${row.unit}` : ""}
                       </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">{formatNumber(row.reserved)}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-foreground">{formatNumber(row.available)}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                        {formatNumber(row.reserved)}
+                      </td>
+                      <td className="px-4 py-3 text-sm font-medium text-foreground">
+                        {formatNumber(row.available)}
+                      </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">{row.minStock}</td>
                       <td className="px-4 py-3 text-sm">
-                        <span className={`rounded-full px-2 py-1 text-xs font-medium ${badgeClass(row.status)}`}>
+                        <span
+                          className={`rounded-full px-2 py-1 text-xs font-medium ${badgeClass(row.status)}`}
+                        >
                           {statusLabel(row.status)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
                         {formatMoney(row.available * row.costPrice, currency)}
                       </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">{formatDateTime(row.lastMovementAt)}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                        {formatDateTime(row.lastMovementAt)}
+                      </td>
                     </tr>
                   ))}
                   {!levels.length && (
@@ -1032,9 +1111,12 @@ export function InventoryPage() {
           )}
           {!levelsLoading && levels.length > 0 && (
             <p className="mt-3 text-xs text-muted-foreground">
-              Showing {levels.length} of {levelsMeta?.total ?? levels.length} - {levelCounts.inStock} in stock -{" "}
-              {levelCounts.low} low - {levelCounts.out} out of stock
-              {levelsMeta?.truncated ? " - results truncated, narrow the filters for a complete view" : ""}
+              Showing {levels.length} of {levelsMeta?.total ?? levels.length} -{" "}
+              {levelCounts.inStock} in stock - {levelCounts.low} low - {levelCounts.out} out of
+              stock
+              {levelsMeta?.truncated
+                ? " - results truncated, narrow the filters for a complete view"
+                : ""}
             </p>
           )}
         </div>
@@ -1042,7 +1124,9 @@ export function InventoryPage() {
 
       {tab === "movements" && (
         <div>
-          {movementsError && <Notice tone="error" title="Could not load stock movements" message={movementsError} />}
+          {movementsError && (
+            <Notice tone="error" title="Could not load stock movements" message={movementsError} />
+          )}
           {movementsLoading ? (
             <div className="kazi-card">
               <LoadingBlock label="Loading movement history..." />
@@ -1052,31 +1136,55 @@ export function InventoryPage() {
               <table className="min-w-full divide-y divide-border">
                 <thead className="bg-surface-muted">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">When</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Type</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Product</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Warehouse</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Change</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Reference</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Reason</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      When
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Type
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Product
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Warehouse
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Change
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Reference
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Reason
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {movements.map((movement) => (
+                  {movements.map(movement => (
                     <tr key={movement.id} className="hover:bg-surface-muted/50">
-                      <td className="px-4 py-3 text-sm text-muted-foreground">{formatDateTime(movement.createdAt)}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                        {formatDateTime(movement.createdAt)}
+                      </td>
                       <td className="px-4 py-3 text-sm">
-                        <span className={`rounded-full px-2 py-1 text-xs font-medium ${badgeClass(movement.quantity < 0 ? "CANCELLED" : "COMPLETED")}`}>
+                        <span
+                          className={`rounded-full px-2 py-1 text-xs font-medium ${badgeClass(movement.quantity < 0 ? "CANCELLED" : "COMPLETED")}`}
+                        >
                           {movementLabel(movement.type)}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-foreground">
                         {movement.product?.name ?? "-"}
-                        {movement.product?.sku && <span className="ml-2 text-xs text-muted-foreground">{movement.product.sku}</span>}
+                        {movement.product?.sku && (
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {movement.product.sku}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
                         {movement.warehouse?.name ?? "-"}
-                        {movement.branch?.name ? <span className="ml-1 text-xs">({movement.branch.name})</span> : null}
+                        {movement.branch?.name ? (
+                          <span className="ml-1 text-xs">({movement.branch.name})</span>
+                        ) : null}
                       </td>
                       <td
                         className={`px-4 py-3 text-sm font-medium ${
@@ -1086,12 +1194,19 @@ export function InventoryPage() {
                         {movement.quantity > 0 ? "+" : ""}
                         {formatNumber(movement.quantity)}
                       </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">{movement.reference ?? "-"}</td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">{movement.reason ?? "-"}</td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                        {movement.reference ?? "-"}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">
+                        {movement.reason ?? "-"}
+                      </td>
                     </tr>
                   ))}
                   {!movements.length && (
-                    <EmptyRow colSpan={7} message="No stock movements recorded yet. Sales, adjustments and completed transfers appear here." />
+                    <EmptyRow
+                      colSpan={7}
+                      message="No stock movements recorded yet. Sales, adjustments and completed transfers appear here."
+                    />
                   )}
                 </tbody>
               </table>
@@ -1102,7 +1217,9 @@ export function InventoryPage() {
 
       {tab === "transfers" && (
         <div>
-          {transfersError && <Notice tone="error" title="Could not load transfers" message={transfersError} />}
+          {transfersError && (
+            <Notice tone="error" title="Could not load transfers" message={transfersError} />
+          )}
           {transfersLoading ? (
             <div className="kazi-card">
               <LoadingBlock label="Loading transfers..." />
@@ -1112,29 +1229,51 @@ export function InventoryPage() {
               <table className="min-w-full divide-y divide-border">
                 <thead className="bg-surface-muted">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Reference</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Product</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Route</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Quantity</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Status</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Raised</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Actions</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Reference
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Product
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Route
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Quantity
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Raised
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {transfers.map((transfer) => (
+                  {transfers.map(transfer => (
                     <tr key={transfer.id} className="hover:bg-surface-muted/50">
-                      <td className="px-4 py-3 text-sm font-medium text-foreground">{transfer.reference ?? transfer.id.slice(0, 8)}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-foreground">
+                        {transfer.reference ?? transfer.id.slice(0, 8)}
+                      </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
                         {transfer.product?.name ?? "-"}
-                        {transfer.product?.sku && <span className="ml-2 text-xs">{transfer.product.sku}</span>}
+                        {transfer.product?.sku && (
+                          <span className="ml-2 text-xs">{transfer.product.sku}</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">
                         {transfer.sourceWarehouse.name} to {transfer.destinationWarehouse.name}
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium text-foreground">{formatNumber(transfer.quantity)}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-foreground">
+                        {formatNumber(transfer.quantity)}
+                      </td>
                       <td className="px-4 py-3 text-sm">
-                        <span className={`rounded-full px-2 py-1 text-xs font-medium ${badgeClass(transfer.status)}`}>
+                        <span
+                          className={`rounded-full px-2 py-1 text-xs font-medium ${badgeClass(transfer.status)}`}
+                        >
                           {transfer.status.charAt(0) + transfer.status.slice(1).toLowerCase()}
                         </span>
                       </td>
@@ -1142,9 +1281,13 @@ export function InventoryPage() {
                         {formatDateTime(transfer.createdAt)}
                         <span className="block text-xs">
                           {transfer.createdBy?.name ? `by ${transfer.createdBy.name}` : ""}
-                          {transfer.completedAt ? ` - completed ${formatDateTime(transfer.completedAt)}` : ""}
+                          {transfer.completedAt
+                            ? ` - completed ${formatDateTime(transfer.completedAt)}`
+                            : ""}
                         </span>
-                        {transfer.notes && <span className="block text-xs italic">{transfer.notes}</span>}
+                        {transfer.notes && (
+                          <span className="block text-xs italic">{transfer.notes}</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         {transfer.status === "PENDING" && canManage ? (
@@ -1186,7 +1329,8 @@ export function InventoryPage() {
           )}
           {!transfersLoading && transfers.length > 0 && (
             <p className="mt-3 text-xs text-muted-foreground">
-              Showing {transfers.length} transfer{transfers.length === 1 ? "" : "s"} - {pendingTransfers} pending
+              Showing {transfers.length} transfer{transfers.length === 1 ? "" : "s"} -{" "}
+              {pendingTransfers} pending
             </p>
           )}
         </div>
