@@ -27,6 +27,17 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
       - run: npm ci --include=dev
+      # Both of these are prerequisites for type aware linting, not optional setup.
+      #
+      # ESLint's `-type-checked` rules read real types. Without a generated Prisma client
+      # every query result resolves to `any` or `unknown`, and the rules then report
+      # errors in code that is actually correct. Without the workspace packages built,
+      # `@kazios/*` imports resolve to nothing for the same reason. The test jobs below
+      # already do this; this job was the one place it was missing, which is why it was
+      # the only job failing.
+      - run: npm run prisma:generate
+        working-directory: ./apps/api
+      - run: npm run build:packages
       - run: npm run lint
       - run: npm run typecheck
 
