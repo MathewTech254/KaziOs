@@ -62,9 +62,30 @@ Every workspace has its own Jest config, and the suite runs in layers:
 
 | Suite | Command | What it covers |
 |---|---|---|
-| Unit | `npm run test:unit` | Money arithmetic, validation schemas, stock rules |
-| Integration | `npm run test:integration` | The `*.integration.ts` suites |
+| Unit | `npm run test:unit` | Money arithmetic, validation schemas, audit redaction, stock rules |
+| Integration | `npm run test:integration` | Real HTTP against a real database: tenant isolation, permissions, a full sale, the ledger |
 | UI | `npm test --workspace=@kazios/web` | React components under jsdom |
+
+`npm test` in `apps/api` runs the unit and integration layers in sequence.
+
+The integration layer is the one that catches the failures that cost money. The unit
+suites mock Prisma, so they cannot see a route that was never wired, a permission that
+was never applied, or one business reading another's data — all of which shipped here
+with a green build before being found by hand. It creates its own businesses, exercises
+them, and deletes them again.
+
+It runs against a **separate database whose name must contain "test"**, derived from
+your `DATABASE_URL`, and refuses to start otherwise. Set `TEST_DATABASE_URL` to point
+somewhere else:
+
+```powershell
+# Uses DATABASE_URL from apps/api/.env, so the database must be reachable.
+npm run test:integration --workspace=@kazios/api
+
+# Or name a different scratch database.
+$env:TEST_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/kazios_test"
+npm run test:integration --workspace=@kazios/api
+```
 
 Tests are **typechecked but not compiled into the build** (`tsconfig.build.json`), so a
 test can never drift from the signature it asserts against, and no test code is ever

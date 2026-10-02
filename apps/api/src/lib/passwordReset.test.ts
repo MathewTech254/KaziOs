@@ -102,11 +102,18 @@ describe("issuePasswordReset", () => {
   });
 
   it("expires the token one short window from now", async () => {
+    // Bracketing the call rather than measuring from a timestamp taken before it.
+    // The old version read the clock, then awaited the function, so on a loaded machine
+    // the work between the two took long enough to push the result to 15.000016 minutes
+    // and fail an assertion that is really about the window, not about scheduling.
     const before = Date.now();
     const { expiresAt } = await issuePasswordReset("usr_1", activeUser.email, activeUser.name);
-    const minutes = (expiresAt.getTime() - before) / 60_000;
-    expect(minutes).toBeGreaterThan(14);
-    expect(minutes).toBeLessThanOrEqual(15);
+    const after = Date.now();
+
+    const windowMs = 15 * 60 * 1000;
+    // True regardless of where in the call the clock was read.
+    expect(expiresAt.getTime()).toBeGreaterThanOrEqual(before + windowMs);
+    expect(expiresAt.getTime()).toBeLessThanOrEqual(after + windowMs);
   });
 
   it("issues a different token every time", async () => {
