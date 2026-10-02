@@ -38,6 +38,11 @@ jobs:
       - run: npm run prisma:generate
         working-directory: ./apps/api
       - run: npm run build:packages
+      # The worker imports `prisma` and the notification helpers straight from the API
+      # package, so the API has to be built for the worker's typecheck to resolve it.
+      # build:packages deliberately covers shared packages only and stops short of the
+      # apps, so this is listed explicitly rather than folded into it.
+      - run: npm run build --workspace=@kazios/api
       - run: npm run lint
       - run: npm run typecheck
 
