@@ -15,6 +15,7 @@ import { PaymentsPage } from "../pages/PaymentsPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { InventoryPage } from "../pages/InventoryPage";
 import { PurchasingPage } from "../pages/PurchasingPage";
+import { ExpensesPage } from "../pages/ExpensesPage";
 import { AuthGuard } from "../components/Guard";
 
 /**
@@ -106,6 +107,15 @@ export const router = createBrowserRouter([
       </AuthGuard>
     ),
     children: [{ index: true, element: <PurchasingPage /> }],
+  },
+  {
+    path: "/expenses",
+    element: (
+      <AuthGuard>
+        <Layout />
+      </AuthGuard>
+    ),
+    children: [{ index: true, element: <ExpensesPage /> }],
   },
   {
     path: "/dashboard",
