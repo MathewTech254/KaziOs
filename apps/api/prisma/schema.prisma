@@ -59,6 +59,7 @@ model Organization {
   cardPayments   CardPayment[]
   quotations     Quotation[]
   expenses       Expense[]
+  expenseCategories ExpenseCategory[]
 }
 
 model User {
@@ -84,6 +85,10 @@ model User {
   stockTransfers StockTransfer[]
   purchaseOrders PurchaseOrder[]
   passwordResetTokens PasswordResetToken[]
+  // Named relations, because a user both records and approves expenses and Prisma will
+  // not infer which of the two foreign keys a back reference refers to.
+  recordedExpenses Expense[] @relation("ExpenseRecordedBy")
+  approvedExpenses Expense[] @relation("ExpenseApprovedBy")
 }
 
 model Session {
@@ -539,6 +544,31 @@ model Quotation {
   branchId       String?
 }
 
+// A category of spending, owned by one organization.
+//
+// This was a bare `categoryId` string on Expense with no table behind it, so every
+// expense either carried a meaningless id or nothing at all, and no report could group
+// spend. A business cannot answer "where did the money go" without it.
+//
+// `accountCode` is the ledger account the category posts to, which is what lets a
+// recorded expense produce a real journal entry instead of a number that only exists in
+// a list. The codes are seeded per organization from the defaults below.
+model ExpenseCategory {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  // The account this category charges, e.g. "6000" for rent. Nullable so an
+  // organization can add a category before an accountant has mapped its account.
+  accountCode String?
+  createdAt   DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  expenses       Expense[]
+
+  @@unique([organizationId, name])
+}
+
 model Expense {
   id            String   @id @default(uuid())
   vendorName    String
@@ -550,15 +580,36 @@ model Expense {
   notes         String?
   createdAt     DateTime @default(now())
 
+  // A cash expense leaves the till; a credit one is still owed to whoever was paid.
+  // Money already spent is not quietly editable, so a recorded expense is corrected by
+  // voiding it and recording the right one, which is what the audit trail has to show.
+  status        String   @default("RECORDED")
+  // When set, a reversal entry was written to cancel the original, so the ledger stays
+  // balanced and the history of what happened is never erased.
+  voidedAt      DateTime?
+  voidReason    String?
+  journalEntryId String?
+
   organization   Organization @relation(fields: [organizationId], references: [id])
   organizationId String
   supplierId     String?
   supplier       Supplier?    @relation(fields: [supplierId], references: [id])
   categoryId     String?
+  category       ExpenseCategory? @relation(fields: [categoryId], references: [id])
   branch         Branch?      @relation(fields: [branchId], references: [id])
   branchId       String?
   project        Project?     @relation(fields: [projectId], references: [id])
   projectId      String?
+  // Who recorded it and who approved it. An expense claimed by staff is a claim until
+  // somebody with authority signs it off, so the approver is part of the record.
+  recordedById   String?
+  recordedBy     User?        @relation("ExpenseRecordedBy", fields: [recordedById], references: [id])
+  approvedById   String?
+  approvedBy     User?        @relation("ExpenseApprovedBy", fields: [approvedById], references: [id])
+  approvedAt     DateTime?
+
+  @@index([organizationId, expenseDate])
+  @@index([organizationId, categoryId])
 }
 
 model Project {
