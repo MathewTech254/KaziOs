@@ -18,6 +18,9 @@ import { api } from "../lib/api";
 import { getApiError } from "../lib/api";
 import { useCardPayment } from "../lib/useCardPayment";
 import { useAuth } from "../contexts/AuthContext";
+// The till prices a cart with the same maths the server prices it with. If the two
+// disagree, the total on screen is not the total that gets charged.
+import { computeCartTotals, summarizeTender, toCurrency } from "../lib/posTotals";
 
 interface Branch {
   id: string;
@@ -122,32 +125,6 @@ interface ProductsResponse {
 // Paystack confirms the money before the invoice is ever marked paid.
 const immediatePaymentProviders = new Set(["CASH", "BANK", "MANUAL", "CHECK", "PAYSTACK"]);
 
-function roundCents(value: number): number {
-  return Math.round(value + Number.EPSILON);
-}
-
-function toCents(value: number): number {
-  return Math.round(value * 100);
-}
-
-function toCurrency(value: number): number {
-  return value / 100;
-}
-
-function lineBaseCents(product: Product, quantity: number, discountAmount: number): number {
-  const grossCents = roundCents(toCents(product.sellingPrice) * quantity);
-  const discountCents = Math.min(grossCents, Math.max(0, toCents(discountAmount)));
-  return grossCents - discountCents;
-}
-
-function lineTaxCents(product: Product, baseCents: number): number {
-  if (!product.taxRate) return 0;
-  if (product.taxMode === "INCLUSIVE") {
-    return baseCents - Math.round(baseCents / (1 + product.taxRate / 100));
-  }
-  return Math.round((baseCents * product.taxRate) / 100);
-}
-
 function formatMoney(value: number, currency: string): string {
   try {
     return new Intl.NumberFormat("en-US", {
@@ -177,6 +154,9 @@ export function PosPage() {
   const [search, setSearch] = useState("");
   const [paymentMethodId, setPaymentMethodId] = useState("");
   const [tenderedAmount, setTenderedAmount] = useState("");
+  // Once the cashier types a figure, the total no longer overwrites it. Until then the
+  // field is derived from the cart and stays correct as items are added or removed.
+  const [tenderedTouched, setTenderedTouched] = useState(false);
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
@@ -208,32 +188,22 @@ export function PosPage() {
     : false;
 
   const totals = useMemo(() => {
-    const subtotalCents = cart.reduce(
-      (sum, line) =>
-        sum +
-        lineBaseCents(line, line.quantity, line.discountAmount) -
-        lineTaxCents(line, lineBaseCents(line, line.quantity, line.discountAmount)),
-      0
-    );
-    const taxCents = cart.reduce((sum, line) => {
-      const baseCents = lineBaseCents(line, line.quantity, line.discountAmount);
-      return sum + lineTaxCents(line, baseCents);
-    }, 0);
-    const totalCents = cart.reduce(
-      (sum, line) => sum + lineBaseCents(line, line.quantity, line.discountAmount),
-      0
-    );
-    const discountCents = cart.reduce((sum, line) => {
-      const grossCents = roundCents(toCents(line.sellingPrice) * line.quantity);
-      return sum + grossCents - lineBaseCents(line, line.quantity, line.discountAmount);
-    }, 0);
+    const result = computeCartTotals(cart);
     return {
-      subtotal: toCurrency(subtotalCents),
-      tax: toCurrency(taxCents),
-      discount: toCurrency(discountCents),
-      total: toCurrency(totalCents),
+      ...result,
+      subtotal: toCurrency(result.subtotalCents),
+      tax: toCurrency(result.taxCents),
+      discount: toCurrency(result.discountCents),
+      total: toCurrency(result.totalCents),
     };
   }, [cart]);
+
+  // How the cash in hand stands against the total, so the cashier is told what is
+  // missing or what change to hand back rather than being met with a rejection.
+  const tender = useMemo(
+    () => summarizeTender(tenderedAmount, totals.totalCents),
+    [tenderedAmount, totals.totalCents]
+  );
 
   const loadContext = async () => {
     setError("");
@@ -293,12 +263,19 @@ export function PosPage() {
     return () => window.clearTimeout(timer);
   }, [context, branchId, warehouseId, categoryId, search, hasPermission]);
 
+  // The cash tendered field follows the total until the cashier overrides it by typing.
+  //
+  // It used to be seeded only while the field was empty, so once it held the total for
+  // the first product it was never refreshed: adding a second product left the old
+  // figure in the box, and submitting a sale whose total had grown was rejected with
+  // "Tendered amount must be at least the sale total" against a number the cashier had
+  // never entered. A field the cashier has typed into is left alone, because a note
+  // rounded up to the next 500 is a deliberate choice, not a stale value.
   useEffect(() => {
     if (!selectedPaymentMethod) return;
-    if (selectedPaymentMethod.provider === "CASH" && !tenderedAmount) {
-      setTenderedAmount(totals.total.toFixed(2));
-    }
-  }, [selectedPaymentMethod, totals.total, tenderedAmount]);
+    if (selectedPaymentMethod.provider !== "CASH" || tenderedTouched) return;
+    setTenderedAmount(totals.total.toFixed(2));
+  }, [selectedPaymentMethod, totals.total, tenderedTouched]);
 
   const addToCart = (product: Product) => {
     if (product.stockQuantity <= 0) return;
@@ -342,10 +319,16 @@ export function PosPage() {
     setError("");
     const total = totals.total;
     const isCard = selectedPaymentMethod.provider === "PAYSTACK";
-    const tendered =
-      selectedPaymentMethod.provider === "CASH" ? Number(tenderedAmount || 0) : total;
-    if (tendered < total) {
-      setError("Tendered amount must be at least the sale total");
+    const isCash = selectedPaymentMethod.provider === "CASH";
+    if (isCash && !tender.coversTotal) {
+      // The amount is named because "not enough" leaves the cashier to guess by how
+      // much, and a till that only says no is a till that stalls the queue.
+      setError(
+        `Tendered amount must be at least the sale total. Short by ${formatMoney(
+          toCurrency(tender.shortfallCents),
+          context?.organization.currency || "KES"
+        )}`
+      );
       setSubmitting(false);
       return;
     }
@@ -381,7 +364,7 @@ export function PosPage() {
             provider: selectedPaymentMethod.provider,
             methodType: selectedPaymentMethod.methodType,
             amount: total,
-            ...(selectedPaymentMethod.provider === "CASH" ? { tenderedAmount: tendered } : {}),
+            ...(isCash ? { tenderedAmount: toCurrency(tender.tenderedCents) } : {}),
             ...(reference.trim() ? { reference: reference.trim() } : {}),
           },
         ],
@@ -421,6 +404,9 @@ export function PosPage() {
 
       setCart([]);
       setTenderedAmount("");
+      // The next sale starts from a derived tendered field again, so it follows its
+      // first product rather than inheriting a figure typed for the last one.
+      setTenderedTouched(false);
       setReference("");
       setNotes("");
       if (isCard) setCustomerEmail("");
@@ -436,6 +422,7 @@ export function PosPage() {
     setReceipt(null);
     setCart([]);
     setTenderedAmount("");
+    setTenderedTouched(false);
     setReference("");
     setNotes("");
     setError("");
@@ -783,10 +770,28 @@ export function PosPage() {
                   min="0"
                   step="0.01"
                   value={tenderedAmount}
-                  onChange={event => setTenderedAmount(event.target.value)}
+                  onChange={event => {
+                    setTenderedTouched(true);
+                    setTenderedAmount(event.target.value);
+                  }}
                   className="kazi-input pl-9"
                 />
               </div>
+              {/* The cashier needs the change while the customer is still at the
+                  counter. Without it the only feedback is a rejection on submit, which
+                  arrives after the money has already been counted out. */}
+              {cart.length > 0 && tender.changeCents > 0 && (
+                <p className="mt-1.5 text-xs text-success">
+                  Change due:{" "}
+                  {formatMoney(toCurrency(tender.changeCents), context.organization.currency)}
+                </p>
+              )}
+              {cart.length > 0 && tender.shortfallCents > 0 && (
+                <p className="mt-1.5 text-xs text-danger">
+                  Short by{" "}
+                  {formatMoney(toCurrency(tender.shortfallCents), context.organization.currency)}
+                </p>
+              )}
             </div>
           )}
           {selectedPaymentMethod &&
