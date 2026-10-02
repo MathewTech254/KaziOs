@@ -14,3 +14,7 @@ coverage
 .vscode
 .idea
 *.log
+
+# Local database dumps taken before a migration. A committed dump is both a data leak
+# and a source of noise; take one with pg_dump when a migration is risky.
+.kazios-backup-*.sql

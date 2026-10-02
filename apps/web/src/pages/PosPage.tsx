@@ -18,6 +18,9 @@ import { api } from "../lib/api";
 import { getApiError } from "../lib/api";
 import { useCardPayment } from "../lib/useCardPayment";
 import { useAuth } from "../contexts/AuthContext";
+// The till prices a cart with the same maths the server prices it with. If the two
+// disagree, the total on screen is not the total that gets charged.
+import { computeCartTotals, summarizeTender, toCurrency } from "../lib/posTotals";
 
 interface Branch {
   id: string;
@@ -95,6 +98,8 @@ interface ReceiptData {
     createdAt: string;
     status: string;
     paidAmount: number;
+    // Present on a sale that was attributed to someone, null on a walk-in.
+    customer?: { id: string; name: string; phone?: string | null } | null;
     items: {
       id: string;
       description: string;
@@ -118,35 +123,16 @@ interface ProductsResponse {
   meta: { page: number; limit: number; total: number };
 }
 
+interface PosCustomer {
+  id: string;
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+}
+
 // Card is listed because the server verifies it properly: the till records the sale, then
 // Paystack confirms the money before the invoice is ever marked paid.
 const immediatePaymentProviders = new Set(["CASH", "BANK", "MANUAL", "CHECK", "PAYSTACK"]);
-
-function roundCents(value: number): number {
-  return Math.round(value + Number.EPSILON);
-}
-
-function toCents(value: number): number {
-  return Math.round(value * 100);
-}
-
-function toCurrency(value: number): number {
-  return value / 100;
-}
-
-function lineBaseCents(product: Product, quantity: number, discountAmount: number): number {
-  const grossCents = roundCents(toCents(product.sellingPrice) * quantity);
-  const discountCents = Math.min(grossCents, Math.max(0, toCents(discountAmount)));
-  return grossCents - discountCents;
-}
-
-function lineTaxCents(product: Product, baseCents: number): number {
-  if (!product.taxRate) return 0;
-  if (product.taxMode === "INCLUSIVE") {
-    return baseCents - Math.round(baseCents / (1 + product.taxRate / 100));
-  }
-  return Math.round((baseCents * product.taxRate) / 100);
-}
 
 function formatMoney(value: number, currency: string): string {
   try {
@@ -177,6 +163,9 @@ export function PosPage() {
   const [search, setSearch] = useState("");
   const [paymentMethodId, setPaymentMethodId] = useState("");
   const [tenderedAmount, setTenderedAmount] = useState("");
+  // Once the cashier types a figure, the total no longer overwrites it. Until then the
+  // field is derived from the cart and stays correct as items are added or removed.
+  const [tenderedTouched, setTenderedTouched] = useState(false);
   const [reference, setReference] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
@@ -186,6 +175,17 @@ export function PosPage() {
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   // Paystack sends the customer a receipt, so card payments need an email up front.
   const [customerEmail, setCustomerEmail] = useState("");
+  // Null is a walk-in sale, which is the default for ordinary retail. It is stored as a
+  // null customer rather than a placeholder "Walk-in Customer" row, because creating one
+  // row per anonymous sale would flood the customer table and corrupt every report that
+  // counts customers. Attaching a real customer is what makes history and loyalty work.
+  const [customer, setCustomer] = useState<PosCustomer | null>(null);
+  const [customerQuery, setCustomerQuery] = useState("");
+  const [customerResults, setCustomerResults] = useState<PosCustomer[]>([]);
+  const [searchingCustomers, setSearchingCustomers] = useState(false);
+  // A cashier may attach a customer they can see but must not be able to invent one, so
+  // quick create is offered only to a role that already holds customers.create.
+  const canCreateCustomers = hasPermission("customers.create");
   const cardPayment = useCardPayment();
 
   const availablePaymentMethods = useMemo(
@@ -208,32 +208,22 @@ export function PosPage() {
     : false;
 
   const totals = useMemo(() => {
-    const subtotalCents = cart.reduce(
-      (sum, line) =>
-        sum +
-        lineBaseCents(line, line.quantity, line.discountAmount) -
-        lineTaxCents(line, lineBaseCents(line, line.quantity, line.discountAmount)),
-      0
-    );
-    const taxCents = cart.reduce((sum, line) => {
-      const baseCents = lineBaseCents(line, line.quantity, line.discountAmount);
-      return sum + lineTaxCents(line, baseCents);
-    }, 0);
-    const totalCents = cart.reduce(
-      (sum, line) => sum + lineBaseCents(line, line.quantity, line.discountAmount),
-      0
-    );
-    const discountCents = cart.reduce((sum, line) => {
-      const grossCents = roundCents(toCents(line.sellingPrice) * line.quantity);
-      return sum + grossCents - lineBaseCents(line, line.quantity, line.discountAmount);
-    }, 0);
+    const result = computeCartTotals(cart);
     return {
-      subtotal: toCurrency(subtotalCents),
-      tax: toCurrency(taxCents),
-      discount: toCurrency(discountCents),
-      total: toCurrency(totalCents),
+      ...result,
+      subtotal: toCurrency(result.subtotalCents),
+      tax: toCurrency(result.taxCents),
+      discount: toCurrency(result.discountCents),
+      total: toCurrency(result.totalCents),
     };
   }, [cart]);
+
+  // How the cash in hand stands against the total, so the cashier is told what is
+  // missing or what change to hand back rather than being met with a rejection.
+  const tender = useMemo(
+    () => summarizeTender(tenderedAmount, totals.totalCents),
+    [tenderedAmount, totals.totalCents]
+  );
 
   const loadContext = async () => {
     setError("");
@@ -293,12 +283,91 @@ export function PosPage() {
     return () => window.clearTimeout(timer);
   }, [context, branchId, warehouseId, categoryId, search, hasPermission]);
 
+  // The cash tendered field follows the total until the cashier overrides it by typing.
+  //
+  // It used to be seeded only while the field was empty, so once it held the total for
+  // the first product it was never refreshed: adding a second product left the old
+  // figure in the box, and submitting a sale whose total had grown was rejected with
+  // "Tendered amount must be at least the sale total" against a number the cashier had
+  // never entered. A field the cashier has typed into is left alone, because a note
+  // rounded up to the next 500 is a deliberate choice, not a stale value.
   useEffect(() => {
     if (!selectedPaymentMethod) return;
-    if (selectedPaymentMethod.provider === "CASH" && !tenderedAmount) {
-      setTenderedAmount(totals.total.toFixed(2));
+    if (selectedPaymentMethod.provider !== "CASH" || tenderedTouched) return;
+    setTenderedAmount(totals.total.toFixed(2));
+  }, [selectedPaymentMethod, totals.total, tenderedTouched]);
+
+  /**
+   * Looks a customer up as the cashier types, by name, phone or email.
+   *
+   * Debounced and cancelled on every change, so a fast typist does not have one search's
+   * results overwrite another's and leave the wrong customer on the list. A two character
+   * floor matches the rest of the system: a one character term would return a large slice
+   * of the customer table and tell the cashier nothing.
+   */
+  useEffect(() => {
+    const term = customerQuery.trim();
+    if (term.length < 2) {
+      setCustomerResults([]);
+      setSearchingCustomers(false);
+      return;
     }
-  }, [selectedPaymentMethod, totals.total, tenderedAmount]);
+    let active = true;
+    setSearchingCustomers(true);
+    const timer = window.setTimeout(async () => {
+      try {
+        const res = await api.get(`/customers?search=${encodeURIComponent(term)}&limit=8`);
+        // A response for a term the cashier has already replaced is discarded, so the
+        // list always matches what is in the box.
+        if (active) setCustomerResults(res.data.data || []);
+      } catch {
+        if (active) setCustomerResults([]);
+      } finally {
+        if (active) setSearchingCustomers(false);
+      }
+    }, 250);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [customerQuery]);
+
+  const selectCustomer = (next: PosCustomer | null) => {
+    setCustomer(next);
+    setCustomerQuery("");
+    setCustomerResults([]);
+  };
+
+  /**
+   * Creates a customer and attaches them in one action, so a manager selling to someone
+   * new does not have to leave the till, save the sale, and go and register them
+   * afterwards. The sale is not blocked if this fails: the customer simply stays
+   * unattached and the sale still completes.
+   */
+  const quickCreateCustomer = async (name: string, phone: string) => {
+    const trimmedName = name.trim();
+    if (trimmedName.length < 2) {
+      setError("Enter the customer's name to add them.");
+      return null;
+    }
+    try {
+      const res = await api.post("/customers", {
+        name: trimmedName,
+        // Phone is the one field worth asking for at a till: it is how the person will be
+        // recognised next time, and how a receipt or reminder would reach them.
+        phone: phone.trim() || null,
+      });
+      const created: PosCustomer = res.data.data;
+      selectCustomer(created);
+      // A card receipt goes to an email, and typing one the customer has already given
+      // beats asking for it a second time.
+      if (created.email) setCustomerEmail(created.email);
+      return created;
+    } catch (err) {
+      setError(getApiError(err));
+      return null;
+    }
+  };
 
   const addToCart = (product: Product) => {
     if (product.stockQuantity <= 0) return;
@@ -342,10 +411,16 @@ export function PosPage() {
     setError("");
     const total = totals.total;
     const isCard = selectedPaymentMethod.provider === "PAYSTACK";
-    const tendered =
-      selectedPaymentMethod.provider === "CASH" ? Number(tenderedAmount || 0) : total;
-    if (tendered < total) {
-      setError("Tendered amount must be at least the sale total");
+    const isCash = selectedPaymentMethod.provider === "CASH";
+    if (isCash && !tender.coversTotal) {
+      // The amount is named because "not enough" leaves the cashier to guess by how
+      // much, and a till that only says no is a till that stalls the queue.
+      setError(
+        `Tendered amount must be at least the sale total. Short by ${formatMoney(
+          toCurrency(tender.shortfallCents),
+          context?.organization.currency || "KES"
+        )}`
+      );
       setSubmitting(false);
       return;
     }
@@ -369,7 +444,8 @@ export function PosPage() {
       }>("/pos/sale", {
         branchId: branchId || null,
         warehouseId: warehouseId || null,
-        customerId: null,
+        // Null for a walk-in, which is the ordinary case and needs no registration.
+        customerId: customer?.id || null,
         items: cart.map(line => ({
           productId: line.id,
           quantity: line.quantity,
@@ -381,7 +457,7 @@ export function PosPage() {
             provider: selectedPaymentMethod.provider,
             methodType: selectedPaymentMethod.methodType,
             amount: total,
-            ...(selectedPaymentMethod.provider === "CASH" ? { tenderedAmount: tendered } : {}),
+            ...(isCash ? { tenderedAmount: toCurrency(tender.tenderedCents) } : {}),
             ...(reference.trim() ? { reference: reference.trim() } : {}),
           },
         ],
@@ -421,6 +497,13 @@ export function PosPage() {
 
       setCart([]);
       setTenderedAmount("");
+      // The next sale starts as a fresh walk-in. Carrying the previous customer over
+      // would silently attribute an unrelated sale to them, which is worse than losing
+      // the attribution on a genuine walk-in.
+      selectCustomer(null);
+      // The next sale starts from a derived tendered field again, so it follows its
+      // first product rather than inheriting a figure typed for the last one.
+      setTenderedTouched(false);
       setReference("");
       setNotes("");
       if (isCard) setCustomerEmail("");
@@ -436,6 +519,8 @@ export function PosPage() {
     setReceipt(null);
     setCart([]);
     setTenderedAmount("");
+    setTenderedTouched(false);
+    selectCustomer(null);
     setReference("");
     setNotes("");
     setError("");
@@ -661,6 +746,90 @@ export function PosPage() {
           )}
         </div>
 
+        {/* Customer, sitting above the cart because who is buying is a decision made
+            before what they are buying, and because attaching one afterwards is exactly
+            the step a busy till forgets. */}
+        <div className="rounded-lg border border-border bg-surface-muted/40 p-3">
+          {customer ? (
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-foreground">{customer.name}</p>
+                {customer.phone && (
+                  <p className="truncate text-xs text-muted-foreground">{customer.phone}</p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => selectCustomer(null)}
+                className="shrink-0 text-xs text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </button>
+            </div>
+          ) : (
+            <>
+              <label
+                className="mb-1.5 block text-xs font-medium text-muted-foreground"
+                htmlFor="pos-customer"
+              >
+                Customer
+              </label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <input
+                  id="pos-customer"
+                  value={customerQuery}
+                  onChange={event => setCustomerQuery(event.target.value)}
+                  className="kazi-input pl-9"
+                  placeholder="Walk-in, or search by name or phone"
+                  autoComplete="off"
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Walk-in is fine for most sales. Attach a customer to keep their history.
+              </p>
+
+              {(searchingCustomers || customerResults.length > 0) && (
+                <div className="mt-2 rounded-md border border-border bg-surface">
+                  {searchingCustomers && !customerResults.length && (
+                    <p className="px-3 py-2 text-xs text-muted-foreground">Searching…</p>
+                  )}
+                  {customerResults.map(result => (
+                    <button
+                      key={result.id}
+                      type="button"
+                      onClick={() => selectCustomer(result)}
+                      className="block w-full px-3 py-2 text-left text-sm hover:bg-surface-muted"
+                    >
+                      <span className="block truncate font-medium text-foreground">
+                        {result.name}
+                      </span>
+                      {result.phone && (
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {result.phone}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {canCreateCustomers &&
+                customerQuery.trim().length >= 2 &&
+                !customerResults.length && (
+                  <button
+                    type="button"
+                    onClick={() => void quickCreateCustomer(customerQuery, "")}
+                    className="mt-2 inline-flex items-center gap-1 text-xs text-accent hover:underline"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add “{customerQuery.trim()}” as a new customer
+                  </button>
+                )}
+            </>
+          )}
+        </div>
+
         <div className="flex min-h-[14rem] max-h-[32rem] flex-col gap-2 overflow-y-auto pr-1">
           {cart.length ? (
             cart.map(line => (
@@ -783,10 +952,28 @@ export function PosPage() {
                   min="0"
                   step="0.01"
                   value={tenderedAmount}
-                  onChange={event => setTenderedAmount(event.target.value)}
+                  onChange={event => {
+                    setTenderedTouched(true);
+                    setTenderedAmount(event.target.value);
+                  }}
                   className="kazi-input pl-9"
                 />
               </div>
+              {/* The cashier needs the change while the customer is still at the
+                  counter. Without it the only feedback is a rejection on submit, which
+                  arrives after the money has already been counted out. */}
+              {cart.length > 0 && tender.changeCents > 0 && (
+                <p className="mt-1.5 text-xs text-success">
+                  Change due:{" "}
+                  {formatMoney(toCurrency(tender.changeCents), context.organization.currency)}
+                </p>
+              )}
+              {cart.length > 0 && tender.shortfallCents > 0 && (
+                <p className="mt-1.5 text-xs text-danger">
+                  Short by{" "}
+                  {formatMoney(toCurrency(tender.shortfallCents), context.organization.currency)}
+                </p>
+              )}
             </div>
           )}
           {selectedPaymentMethod &&
@@ -909,7 +1096,13 @@ export function PosPage() {
                   <h2 className="kazi-page-title">
                     {isReceiptPaid ? "Sale completed" : "Sale saved, payment due"}
                   </h2>
-                  <p className="kazi-page-subtitle">Receipt {receipt.receiptNumber}</p>
+                  <p className="kazi-page-subtitle">
+                    Receipt {receipt.receiptNumber}
+                    {/* The cashier needs to see the attribution on the receipt they hand
+                        over: a sale attached to the wrong person is a credit and loyalty
+                        problem that is far harder to unpick later. */}
+                    {receipt.invoice.customer && ` · ${receipt.invoice.customer.name}`}
+                  </p>
                 </div>
               </div>
               <button

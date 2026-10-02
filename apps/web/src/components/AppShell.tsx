@@ -14,6 +14,7 @@ import {
   Sun,
   User,
   Users,
+  Wallet,
   Warehouse,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
@@ -53,7 +54,10 @@ const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: "Finance",
-    items: [{ to: "/dashboard/reports", label: "Reports", icon: BarChart3 }],
+    items: [
+      { to: "/dashboard/reports", label: "Reports", icon: BarChart3 },
+      { to: "/expenses", label: "Expenses", icon: Wallet },
+    ],
   },
   {
     label: "Organization",

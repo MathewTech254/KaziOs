@@ -1,46 +1,131 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import {
+  AlertTriangle,
+  ArrowRight,
+  BarChart3,
+  FileText,
+  Package,
+  Receipt,
+  TrendingUp,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
-import { api } from "../lib/api";
-import { useCurrency, formatMoney } from "../lib/currency";
-import { Package, Users, FileText, BarChart2, TrendingUp, AlertTriangle } from "lucide-react";
+import { api, getApiError } from "../lib/api";
+import { formatMoney } from "../lib/currency";
+import { Notice, EmptyRow } from "../components/Feedback";
 
-interface ReportData {
-  totalInvoices: number;
-  totalRevenue: number;
-  totalTax: number;
-  totalDiscounts: number;
-  totalPayments: number;
+/**
+ * The shape the API returns. Every figure is counted in the database; nothing here is
+ * derived from a static array or a hardcoded total.
+ */
+interface DashboardData {
+  currency: string;
+  today: { revenue: number; transactions: number };
+  month: {
+    revenue: number;
+    expenses: number;
+    profit: number;
+    transactions: number;
+    averageOrderValue: number;
+  };
+  receivables: { outstanding: number; overdueInvoices: number };
+  stock: { lowStock: number; outOfStock: number };
+  recentInvoices: {
+    id: string;
+    invoiceNumber: string;
+    total: number;
+    status: string;
+    paidAmount: number;
+    createdAt: string;
+    customer?: { name: string } | null;
+    branch?: { name: string } | null;
+  }[];
+  topProducts: {
+    productId: string | null;
+    name: string;
+    sku?: string | null;
+    quantity: number;
+    revenue: number;
+  }[];
 }
 
 export function DashboardPage() {
   const { user } = useAuth();
-  const currency = useCurrency();
-  const [stats, setStats] = useState<ReportData | null>(null);
+  const [stats, setStats] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.get("/reports/dashboard");
+      setStats(res.data.data);
+    } catch (err) {
+      // Shown rather than swallowed. A dashboard that quietly renders an empty grid after
+      // a failed request is indistinguishable from a business that traded nothing.
+      setError(getApiError(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    api
-      .get("/reports/sales-summary")
-      .then(res => setStats(res.data.data))
-      .catch(() => undefined);
-  }, []);
+    void load();
+  }, [load]);
+
+  // Falls back to KES while loading: the browser cannot know the organization's currency
+  // until the figures arrive, and rendering nothing beats rendering the wrong symbol.
+  const money = (value: number) => formatMoney(value, stats?.currency ?? "KES");
 
   const cards = stats
     ? [
-        { label: "Total Invoices", value: stats.totalInvoices, icon: FileText, color: "text-info" },
         {
-          label: "Revenue",
-          value: formatMoney(stats.totalRevenue, currency),
+          label: "Today's Takings",
+          value: money(stats.today.revenue),
+          hint: `${stats.today.transactions} sale${stats.today.transactions === 1 ? "" : "s"}`,
           icon: TrendingUp,
           color: "text-success",
         },
         {
-          label: "Tax Collected",
-          value: formatMoney(stats.totalTax, currency),
-          icon: BarChart2,
-          color: "text-accent",
+          label: "Revenue This Month",
+          value: money(stats.month.revenue),
+          hint: `${stats.month.transactions} sale${stats.month.transactions === 1 ? "" : "s"}`,
+          icon: FileText,
+          color: "text-info",
         },
-        { label: "Payments", value: stats.totalPayments, icon: Package, color: "text-warning" },
+        {
+          label: "Expenses This Month",
+          value: money(stats.month.expenses),
+          hint: "Recorded business spend",
+          icon: Wallet,
+          color: "text-warning",
+        },
+        {
+          label: "Profit This Month",
+          value: money(stats.month.profit),
+          hint: "Revenue less expenses",
+          icon: BarChart3,
+          // A loss is shown in red. Profit is the one figure a shopkeeper cannot
+          // misread at a glance, so it is the last to leave ambiguous.
+          color: stats.month.profit < 0 ? "text-danger" : "text-accent",
+        },
+        {
+          label: "Awaiting Payment",
+          value: money(stats.receivables.outstanding),
+          hint: `${stats.receivables.overdueInvoices} overdue`,
+          icon: Receipt,
+          color: stats.receivables.overdueInvoices > 0 ? "text-danger" : "text-muted-foreground",
+        },
+        {
+          label: "Low Stock",
+          value: stats.stock.lowStock + stats.stock.outOfStock,
+          hint: `${stats.stock.outOfStock} out of stock`,
+          icon: Package,
+          color: stats.stock.outOfStock > 0 ? "text-danger" : "text-muted-foreground",
+        },
       ]
     : [];
 
@@ -53,7 +138,9 @@ export function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {error ? <Notice tone="error" title="Could not load your dashboard" message={error} /> : null}
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {cards.map(stat => {
           const Icon = stat.icon;
           return (
@@ -62,10 +149,104 @@ export function DashboardPage() {
                 <p className="kazi-stat-label">{stat.label}</p>
                 <Icon className={`h-5 w-5 ${stat.color}`} />
               </div>
-              <p className="kazi-stat-value mt-1">{stat.value}</p>
+              <p className={`kazi-stat-value mt-1 ${stat.color}`}>{stat.value}</p>
+              {stat.hint ? <p className="text-xs text-muted-foreground">{stat.hint}</p> : null}
             </div>
           );
         })}
+      </div>
+
+      {loading ? (
+        <p className="mt-4 text-sm text-muted-foreground">Loading your figures...</p>
+      ) : null}
+
+      <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="kazi-section-title">Recent Sales</h2>
+            <Link
+              to="/dashboard/invoices"
+              className="flex items-center gap-1 text-sm text-accent hover:underline"
+            >
+              All invoices <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+          <div className="kazi-card overflow-hidden">
+            {stats?.recentInvoices.length ? (
+              <table className="kazi-table">
+                <thead>
+                  <tr>
+                    <th>Invoice</th>
+                    <th>Customer</th>
+                    <th>Status</th>
+                    <th className="text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.recentInvoices.map(invoice => (
+                    <tr key={invoice.id}>
+                      <td className="font-mono text-xs">{invoice.invoiceNumber}</td>
+                      {/* A walk-in sale has no customer row, so it is labelled as such
+                          rather than left blank. */}
+                      <td>{invoice.customer?.name || "Walk-in"}</td>
+                      <td className="text-xs text-muted-foreground">{invoice.status}</td>
+                      <td className="text-right font-medium">{money(invoice.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <EmptyRow
+                message={loading ? "Loading sales..." : "No sales recorded yet."}
+                colSpan={4}
+              />
+            )}
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="kazi-section-title">Top Products This Month</h2>
+            <Link
+              to="/dashboard/reports"
+              className="flex items-center gap-1 text-sm text-accent hover:underline"
+            >
+              Reports <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+          <div className="kazi-card overflow-hidden">
+            {stats?.topProducts.length ? (
+              <table className="kazi-table">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th className="text-right">Sold</th>
+                    <th className="text-right">Revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.topProducts.map(product => (
+                    <tr key={product.productId ?? product.name}>
+                      <td>
+                        {product.name}
+                        {product.sku ? (
+                          <span className="ml-2 text-xs text-muted-foreground">{product.sku}</span>
+                        ) : null}
+                      </td>
+                      <td className="text-right">{product.quantity}</td>
+                      <td className="text-right font-medium">{money(product.revenue)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <EmptyRow
+                message={loading ? "Loading products..." : "No products sold this month yet."}
+                colSpan={3}
+              />
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="mt-8">
@@ -99,25 +280,33 @@ export function DashboardPage() {
             to="/dashboard/reports"
             className="kazi-action-card flex flex-col items-start p-4 text-left"
           >
-            <BarChart2 className="mb-3 h-5 w-5 text-warning" />
+            <BarChart3 className="mb-3 h-5 w-5 text-warning" />
             <span className="text-sm font-medium text-foreground">View Reports</span>
             <span className="text-xs text-muted-foreground">Sales and financial reports</span>
           </Link>
         </div>
       </div>
 
-      <div className="mt-8">
-        <h2 className="kazi-section-title mb-4">Low Stock Alerts</h2>
-        <div className="kazi-alert-card p-4">
-          <div className="flex items-center gap-2 text-warning">
-            <AlertTriangle className="h-5 w-5" />
-            <span className="text-sm font-medium text-foreground">Inventory monitoring active</span>
+      {/* Replaces a static "inventory monitoring active" banner that was true of no
+          business in particular. The counts above are the same thing, measured. */}
+      {stats && stats.stock.lowStock + stats.stock.outOfStock > 0 ? (
+        <div className="mt-8">
+          <h2 className="kazi-section-title mb-4">Stock Attention Needed</h2>
+          <div className="kazi-alert-card p-4">
+            <div className="flex items-center gap-2 text-warning">
+              <AlertTriangle className="h-5 w-5" />
+              <span className="text-sm font-medium text-foreground">
+                {stats.stock.outOfStock > 0
+                  ? `${stats.stock.outOfStock} product${stats.stock.outOfStock === 1 ? " is" : "s are"} out of stock`
+                  : `${stats.stock.lowStock} product${stats.stock.lowStock === 1 ? " is" : "s are"} below minimum level`}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Review these lines before the next delivery, or they will stop you selling.
+            </p>
           </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            You will receive notifications when products fall below minimum stock levels.
-          </p>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }

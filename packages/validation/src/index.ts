@@ -131,6 +131,81 @@ export const zSupplierSchema = z.object({
   taxNumber: zString(1, 50).optional().nullable(),
 });
 
+/**
+ * How an expense was paid. The set is deliberately the rails an African business
+ * actually uses: M-PESA is how most small Kenyan businesses settle a day, often before
+ * the money ever reaches an account, and its commission is a real cost that has to be
+ * capturable as a category of its own.
+ */
+export const EXPENSE_PAYMENT_METHODS = [
+  "CASH",
+  "MPESA",
+  "BANK",
+  "PAYSTACK",
+  "CARD",
+  "CHEQUE",
+  "CREDIT",
+  "OTHER",
+] as const;
+
+export const EXPENSE_STATUSES = ["PENDING", "APPROVED", "REJECTED", "RECORDED", "VOIDED"] as const;
+
+export const zExpenseCategorySchema = z.object({
+  name: zString(2, 100),
+  description: zString(0, 200).optional().nullable(),
+  accountCode: zString(1, 20).optional().nullable(),
+});
+
+export const zExpenseCategoryUpdateSchema = zExpenseCategorySchema.partial();
+
+// Replaced the previous, unreferenced zExpenseSchema that lived further down this file.
+//
+// That version required a categoryId, listed no supplier, and used a payment method
+// enum of CASH/CARD/BANK_TRANSFER/CHECK/MOBILE_MONEY. It was never imported by any
+// route, so nothing depended on it, and the enum is wrong for the market this is
+// built for: a Kenyan business pays for rent and supplies by M-PESA and by bank
+// transfer far more often than by cheque, and a schema that cannot name MPESA forces
+// every one of those payments to be filed as OTHER and then hand sorted.
+//
+// The consolidated schema below is the one the expenses route actually uses. Category
+// and supplier are both optional because a real expense frequently has neither: fuel
+// bought at the roadside, or a market stall with no supplier record.
+export const zExpenseSchema = z.object({
+  vendorName: zString(2, 200),
+  amount: z
+    .number()
+    .positive("Amount must be greater than zero")
+    // A single expense above a billion is a data entry mistake, not a purchase, and
+    // letting it through poisons every total it is summed into.
+    .max(1_000_000_000, "Amount is unrealistically large"),
+  expenseDate: z.string().datetime(),
+  paymentMethod: z.enum(EXPENSE_PAYMENT_METHODS).default("CASH"),
+  categoryId: zUuid.optional().nullable(),
+  supplierId: zUuid.optional().nullable(),
+  branchId: zUuid.optional().nullable(),
+  receiptNumber: zString(1, 100).optional().nullable(),
+  notes: zString(0, 500).optional().nullable(),
+});
+
+export const zExpenseQuerySchema = z.object({
+  search: zString(0, 100).optional(),
+  categoryId: zUuid.optional(),
+  branchId: zUuid.optional(),
+  status: z.enum(EXPENSE_STATUSES).optional(),
+  paymentMethod: z.enum(EXPENSE_PAYMENT_METHODS).optional(),
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
+  page: z.coerce.number().int().positive().optional().default(1),
+  limit: z.coerce.number().int().positive().max(200).optional().default(50),
+});
+
+export const zExpenseVoidSchema = z.object({
+  // A void is a correction to a financial record, so it must say why. An unexplained
+  // void is indistinguishable from someone tidying the books. The message is given
+  // inline rather than through zString, which takes only a length.
+  reason: z.string().trim().min(3, "A reason is required to void an expense").max(300),
+});
+
 export const zSupplierQuerySchema = z.object({
   search: zString(0, 100).optional(),
   page: z.coerce.number().int().positive().optional().default(1),
@@ -479,19 +554,6 @@ export const zProjectSchema = z.object({
   budget: z.number().nonnegative().optional().nullable(),
 });
 
-export const zExpenseSchema = z.object({
-  categoryId: zUuid,
-  vendorName: zString(1, 100),
-  amount: z.number().positive("Amount must be positive"),
-  currency: zCurrency,
-  expenseDate: z.string().datetime(),
-  paymentMethod: z.enum(["CASH", "CARD", "BANK_TRANSFER", "CHECK", "MOBILE_MONEY"]),
-  branchId: zUuid.optional().nullable(),
-  projectId: zUuid.optional().nullable(),
-  receiptNumber: zString(1, 50).optional().nullable(),
-  notes: zString(0, 500).optional().nullable(),
-});
-
 export const zAiMessageSchema = z.object({
   role: z.enum(["user", "assistant", "system"]),
   content: zString(1, 10000),
@@ -591,6 +653,18 @@ export const PERMISSION_GROUPS = [
   {
     label: "Reports",
     permissions: [{ key: "reports.view", label: "View reports" }],
+  },
+  {
+    // Split into view and manage deliberately. A bookkeeper needs to see what the
+    // business spent in order to reconcile it, and that is a different and much lower
+    // risk than being able to add or void spend.
+    label: "Expenses",
+    permissions: [
+      { key: "expenses.view", label: "View expenses and categories" },
+      { key: "expenses.create", label: "Record expenses" },
+      { key: "expenses.approve", label: "Approve and void expenses" },
+      { key: "expenses.manage", label: "Manage expense categories" },
+    ],
   },
   {
     label: "Organization",
