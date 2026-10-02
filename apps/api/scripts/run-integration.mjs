@@ -113,7 +113,55 @@ function run(command, args, env) {
 }
 
 const prismaEnv = { DATABASE_URL: testUrl };
-console.log(`\nIntegration database: ${new URL(testUrl).pathname.replace(/^\//, "")}\n`);
+const testDbName = new URL(testUrl).pathname.replace(/^\//, "");
+console.log(`\nIntegration database: ${testDbName}\n`);
+
+/**
+ * Creates the test database if it is not there yet.
+ *
+ * `migrate deploy` refuses to run against a database that does not exist, and a CI runner
+ * has exactly that situation: the Postgres service creates only the database named in
+ * POSTGRES_DB, which is `kazios`. Locally the database survives from the last run, so the
+ * gap is invisible until CI goes red on a fresh runner with a misleading "database does
+ * not exist" error that reads like a migration problem.
+ *
+ * Created through the `postgres` maintenance database, because connecting to the target
+ * in order to create it is not possible. CREATE DATABASE cannot run inside a transaction,
+ * so it is issued on its own.
+ */
+async function ensureTestDatabase() {
+  const { PrismaClient } = await import("@prisma/client");
+  const adminUrl = new URL(testUrl);
+  adminUrl.pathname = "/postgres";
+  const admin = new PrismaClient({ datasources: { db: { url: adminUrl.toString() } } });
+
+  try {
+    const rows = await admin.$queryRawUnsafe(
+      "SELECT 1 FROM pg_database WHERE datname = $1",
+      testDbName
+    );
+    if (rows.length) {
+      console.log(`Database ${testDbName} already exists.`);
+      return true;
+    }
+    // Interpolated rather than parameterised because CREATE DATABASE does not accept a
+    // bind parameter. The name is quoted, and it was already checked to look like a test
+    // database by the guard above.
+    await admin.$executeRawUnsafe(`CREATE DATABASE "${testDbName.replace(/"/g, '""')}"`);
+    console.log(`Created database ${testDbName}.`);
+    return true;
+  } catch (err) {
+    console.error(`\nCould not reach Postgres to create ${testDbName}: ${err.message}`);
+    console.error("Is Postgres running, and do these credentials allow creating databases?");
+    return false;
+  } finally {
+    await admin.$disconnect().catch(() => undefined);
+  }
+}
+
+if (!(await ensureTestDatabase())) {
+  process.exit(1);
+}
 
 // The schema has to exist before anything runs. `migrate deploy` applies the real
 // migrations, so the tests exercise the schema production actually ships rather than
