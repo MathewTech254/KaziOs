@@ -9,6 +9,7 @@ import { posRouter } from "../routes/pos";
 import { expenseRouter } from "../routes/expenses";
 import { inventoryRouter } from "../routes/inventory";
 import { reportRouter } from "../routes/reports";
+import { cardPaymentRouter, paystackWebhookRouter } from "../routes/card-payments";
 import { errorHandler } from "../middleware/errorHandler";
 
 /**
@@ -59,7 +60,19 @@ export function assertTestDatabase(): void {
  * under test is authorization and data flow, not transport. The routes themselves are
  * identical, so the permission checks being exercised are the production ones.
  */
-app.use(express.json());
+// The raw body is captured exactly as the server does it, because the Paystack webhook
+// signature covers the bytes Paystack sent. A harness using plain express.json() leaves
+// rawBody undefined, and the route then falls back to re-serializing the parsed body,
+// which never reproduces the original bytes. A test written against that harness would
+// pass while the real server behaved differently, which is the opposite of useful.
+app.use(
+  express.json({
+    limit: "10mb",
+    verify: (req: any, _res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/customers", customerRouter);
 app.use("/api/v1/products", productRouter);
@@ -67,6 +80,10 @@ app.use("/api/v1/pos", posRouter);
 app.use("/api/v1/expenses", expenseRouter);
 app.use("/api/v1/inventory", inventoryRouter);
 app.use("/api/v1/reports", reportRouter);
+app.use("/api/v1/card-payments", cardPaymentRouter);
+// The webhook carries no session by design, so it is mounted on its own unauthenticated
+// path rather than behind the card payment router's requireAuth.
+app.use("/api/v1/webhooks", paystackWebhookRouter);
 
 // The error handler is part of the behaviour under test, not optional decoration. Without
 // it a ZodError falls through to Express's default handler and answers 500, so a test
@@ -119,6 +136,7 @@ export async function cleanupRun(): Promise<void> {
     });
     await tx.journalEntry.deleteMany({ where: { organizationId: { in: orgIds } } });
     await tx.invoiceItem.deleteMany({ where: { invoice: { organizationId: { in: orgIds } } } });
+    await tx.cardPayment.deleteMany({ where: { organizationId: { in: orgIds } } });
     await tx.cardPayment.deleteMany({ where: { organizationId: { in: orgIds } } });
     await tx.payment.deleteMany({ where: { organizationId: { in: orgIds } } });
     await tx.invoice.deleteMany({ where: { organizationId: { in: orgIds } } });

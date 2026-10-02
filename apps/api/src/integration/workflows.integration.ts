@@ -1,4 +1,5 @@
 import request from "supertest";
+import { createHmac } from "crypto";
 import {
   testApp,
   testPrisma,
@@ -585,6 +586,111 @@ describe("the dashboard", () => {
 
   it("is not readable without a token", async () => {
     await request(testApp).get("/api/v1/reports/dashboard").expect(401);
+  });
+});
+
+describe("the Paystack webhook", () => {
+  /**
+   * The one endpoint in this system anyone on the internet can post to, and the one that
+   * marks invoices paid. It carries no session, so its entire trustworthiness rests on
+   * the signature, and it can be tested without a Paystack account: forging a webhook
+   * needs no credentials, and refusing one certainly does not.
+   */
+  const SECRET = "sk_test_integration_webhook_secret";
+  const sign = (body: string) => createHmac("sha512", SECRET).update(body).digest("hex");
+
+  const event = JSON.stringify({
+    event: "charge.success",
+    data: { reference: "INV-NOBODY-abcd1234", amount: 100000, currency: "KES" },
+  });
+
+  const original = process.env.PAYSTACK_SECRET_KEY;
+
+  afterAll(() => {
+    if (original === undefined) delete process.env.PAYSTACK_SECRET_KEY;
+    else process.env.PAYSTACK_SECRET_KEY = original;
+  });
+
+  it("refuses an unsigned webhook", async () => {
+    process.env.PAYSTACK_SECRET_KEY = SECRET;
+    const res = await request(testApp)
+      .post("/api/v1/webhooks/paystack")
+      .set("Content-Type", "application/json")
+      .send(event);
+    expect(res.status).toBe(401);
+  });
+
+  it("refuses a webhook signed with the wrong key", async () => {
+    process.env.PAYSTACK_SECRET_KEY = SECRET;
+    const res = await request(testApp)
+      .post("/api/v1/webhooks/paystack")
+      .set("Content-Type", "application/json")
+      .set("x-paystack-signature", sign(event).replace(/^./, "0"))
+      .send(event);
+    // Without this, anyone who learns a reference could post a fake "paid" for it.
+    expect(res.status).toBe(401);
+  });
+
+  it("refuses a genuine signature over a different body", async () => {
+    process.env.PAYSTACK_SECRET_KEY = SECRET;
+    const tampered = event.replace('"amount":100000', '"amount":1');
+    const res = await request(testApp)
+      .post("/api/v1/webhooks/paystack")
+      .set("Content-Type", "application/json")
+      .set("x-paystack-signature", sign(event))
+      .send(tampered);
+    expect(res.status).toBe(401);
+  });
+
+  it("refuses everything when the server has no key at all", async () => {
+    // A deployment that has lost its secret must not be able to mark an invoice paid on
+    // an unverified claim. This is also the state of every fresh checkout.
+    delete process.env.PAYSTACK_SECRET_KEY;
+    const res = await request(testApp)
+      .post("/api/v1/webhooks/paystack")
+      .set("Content-Type", "application/json")
+      .set("x-paystack-signature", sign(event))
+      .send(event);
+    expect(res.status).toBe(401);
+  });
+
+  it("writes nothing when it refuses", async () => {
+    process.env.PAYSTACK_SECRET_KEY = SECRET;
+    const before = await testPrisma.cardPayment.count();
+    await request(testApp)
+      .post("/api/v1/webhooks/paystack")
+      .set("Content-Type", "application/json")
+      .send(event)
+      .expect(401);
+    const after = await testPrisma.cardPayment.count();
+    // A refused webhook that still created a payment row would be worse than useless.
+    expect(after).toBe(before);
+  });
+
+  it("accepts a correctly signed event for a reference it has never issued", async () => {
+    // The signature check passes, so the event is treated as genuine. The reference is
+    // then not found, which is the safe outcome: nothing is marked paid, and the caller
+    // is told plainly rather than being handed a success it cannot trust.
+    process.env.PAYSTACK_SECRET_KEY = SECRET;
+    const res = await request(testApp)
+      .post("/api/v1/webhooks/paystack")
+      .set("Content-Type", "application/json")
+      .set("x-paystack-signature", sign(event))
+      .send(event);
+    expect(res.status).toBe(404);
+    expect(res.body.message).toMatch(/not found/i);
+  });
+
+  it("carries no session requirement, because Paystack sends none", async () => {
+    process.env.PAYSTACK_SECRET_KEY = SECRET;
+    const res = await request(testApp)
+      .post("/api/v1/webhooks/paystack")
+      .set("Content-Type", "application/json")
+      .set("x-paystack-signature", sign(event))
+      .send(event);
+    // A 401 here would mean the route had been put behind auth and would now reject every
+    // real webhook; a 404 proves the signature gate was passed without a token.
+    expect(res.status).not.toBe(401);
   });
 });
 
