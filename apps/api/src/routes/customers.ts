@@ -34,7 +34,20 @@ customerRouter.get(
       const { page = 1, limit = 50, search } = req.query;
       const { skip, take, page: p, limit: l } = paginate(Number(page), Number(limit));
       const where: any = { organizationId: req.organizationId };
-      if (search) where.name = { contains: String(search), mode: "insensitive" };
+
+      if (search) {
+        // Name, phone and email together, because the three are how a person is actually
+        // looked up. A cashier at a till is usually given a phone number, not a surname,
+        // and searching the name alone meant the commonest lookup of the day returned
+        // nothing. The term is a contains match so a partial number still finds them.
+        const term = String(search).trim();
+        where.OR = [
+          { name: { contains: term, mode: "insensitive" } },
+          { phone: { contains: term, mode: "insensitive" } },
+          { email: { contains: term, mode: "insensitive" } },
+        ];
+      }
+
       const [data, total] = await Promise.all([
         prisma.customer.findMany({ where, skip, take, orderBy: { createdAt: "desc" } }),
         prisma.customer.count({ where }),

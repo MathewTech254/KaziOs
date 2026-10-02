@@ -1,4 +1,45 @@
 import { zExpenseSchema, zExpenseQuerySchema, zExpenseVoidSchema } from "./index";
+import { zCustomerSchema } from "./index";
+
+/**
+ * A customer is looked up at a till by whatever the customer says out loud, which is
+ * usually a phone number rather than a surname. These tests pin the field rules that
+ * decide whether that lookup can succeed at all.
+ */
+describe("customer validation at the till", () => {
+  it("accepts a name and a phone, which is all a walk-in capture needs", () => {
+    // Forcing an email or an address here is what made cashiers avoid registering
+    // anyone, and then the business had no customer history to work with.
+    expect(zCustomerSchema.safeParse({ name: "Wanjiku", phone: "0712345678" }).success).toBe(true);
+  });
+
+  it("requires a name of at least two characters", () => {
+    // A single character is a typo, and a customer row named "A" is unusable in a report.
+    expect(zCustomerSchema.safeParse({ name: "A" }).success).toBe(false);
+    expect(zCustomerSchema.safeParse({ name: "" }).success).toBe(false);
+  });
+
+  it("refuses a blank phone rather than storing an empty string", () => {
+    // An empty string is not a phone number. Storing one would make "has a phone" true
+    // for a customer who was never asked, and a search on it would match everyone.
+    expect(zCustomerSchema.safeParse({ name: "Wanjiku", phone: "" }).success).toBe(false);
+  });
+
+  it("treats an omitted phone as absent, which is the normal case at a till", () => {
+    // The route maps an omitted or blank field to null, so the column stays null rather
+    // than holding "" and every "customer with a phone" report stays truthful.
+    const parsed = zCustomerSchema.parse({ name: "Wanjiku" });
+    expect(parsed.phone).toBeUndefined();
+  });
+
+  it("still refuses a malformed email when one is given", () => {
+    // Optional does not mean unvalidated: a stored bad address cannot be mailed to, so
+    // it is rejected here rather than discovered at receipt time.
+    expect(zCustomerSchema.safeParse({ name: "Wanjiku", email: "not-an-email" }).success).toBe(
+      false
+    );
+  });
+});
 
 /**
  * An expense is a financial record, so the rules that protect one are not cosmetic.
