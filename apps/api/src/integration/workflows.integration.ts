@@ -7,6 +7,7 @@ import {
   cleanupRun,
   closeHarness,
   assertTestDatabase,
+  RUN_ID,
 } from "./testHarness";
 
 /**
@@ -427,6 +428,163 @@ describe("expenses and the ledger", () => {
       .get("/api/v1/expenses?search=Still Counted")
       .set(auth(tenant.token));
     expect(listed.body.data).toHaveLength(1);
+  });
+});
+
+describe("the dashboard", () => {
+  let tenant: Awaited<ReturnType<typeof createTenant>>;
+  let other: Awaited<ReturnType<typeof createTenant>>;
+  let productId: string;
+
+  beforeAll(async () => {
+    tenant = await createTenant("dash");
+    other = await createTenant("dashother");
+
+    // Registration already opens a warehouse on the main branch, so the POS context
+    // supplies one rather than this test inventing a second way to create it.
+    const context = await request(testApp).get("/api/v1/pos/context").set(auth(tenant.token));
+    const branch = context.body.data.branches.find((b: { isMain: boolean }) => b.isMain);
+    const warehouseId = context.body.data.warehouses.find(
+      (w: { branchId: string }) => w.branchId === branch.id
+    ).id;
+
+    const product = await request(testApp)
+      .post("/api/v1/products")
+      .set(auth(tenant.token))
+      .send({
+        name: "Dashboard Widget",
+        sku: `DASH-${RUN_ID}`,
+        costPrice: 400,
+        sellingPrice: 1000,
+        trackStock: true,
+        minStock: 5,
+      })
+      .expect(201);
+    productId = product.body.data.id;
+
+    await request(testApp)
+      .post("/api/v1/inventory/adjustments")
+      .set(auth(tenant.token))
+      .send({
+        productId,
+        warehouseId,
+        quantity: 50,
+        adjustmentType: "INCREASE",
+        reason: "Opening stock",
+      })
+      .expect(201);
+
+    // One sale and one expense, so profit is a subtraction with a non-zero answer.
+    await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send({
+        customerId: null,
+        items: [{ productId, quantity: 2 }],
+        payments: [{ provider: "CASH", methodType: "cash", amount: 2000, tenderedAmount: 2000 }],
+        idempotencyKey: `dashboard-${RUN_ID}`,
+      })
+      .expect(201);
+
+    await request(testApp)
+      .post("/api/v1/expenses")
+      .set(auth(tenant.token))
+      .send({ vendorName: "Dashboard Fuel", amount: 500, expenseDate: new Date().toISOString() })
+      .expect(201);
+  });
+
+  it("counts money that actually changed hands", async () => {
+    const res = await request(testApp)
+      .get("/api/v1/reports/dashboard")
+      .set(auth(tenant.token))
+      .expect(200);
+    const { today, month } = res.body.data;
+
+    // Read from the figures the endpoint computed, then checked against the sale's own
+    // total. An endpoint that reports a plausible-looking but wrong number cannot be
+    // caught by asserting that the number is a number.
+    expect(today.revenue).toBeGreaterThan(0);
+    expect(month.revenue).toBeGreaterThanOrEqual(today.revenue);
+    expect(month.expenses).toBeGreaterThan(0);
+    expect(month.transactions).toBeGreaterThan(0);
+    // 2 units at a 1000 selling price, no tax category applied -> 2000.
+    expect(month.revenue).toBeCloseTo(2000, 2);
+    expect(month.profit).toBeCloseTo(month.revenue - month.expenses, 2);
+  });
+
+  it("agrees with the expense report it sits next to", async () => {
+    const dashboard = await request(testApp)
+      .get("/api/v1/reports/dashboard")
+      .set(auth(tenant.token));
+    const summary = await request(testApp).get("/api/v1/expenses/summary").set(auth(tenant.token));
+    // Two screens showing different "expenses this month" is the exact contradiction
+    // that makes an owner stop trusting both of them.
+    expect(dashboard.body.data.month.expenses).toBeCloseTo(summary.body.data.totalAmount, 2);
+  });
+
+  it("counts a draft sale as neither revenue nor a sale", async () => {
+    await testPrisma.invoice.create({
+      data: {
+        organizationId: tenant.organizationId,
+        invoiceNumber: `DRAFT-${RUN_ID}`,
+        status: "DRAFT",
+        issueDate: new Date(),
+        subtotal: 99999,
+        taxTotal: 0,
+        total: 99999,
+        paidAmount: 0,
+        dueDate: new Date(),
+        currency: "KES",
+      },
+    });
+
+    const res = await request(testApp).get("/api/v1/reports/dashboard").set(auth(tenant.token));
+    // 99999 would be obvious. A draft sale quietly inflating the takings is the failure
+    // that gets noticed a month later, when the bank does not agree.
+    expect(res.body.data.month.revenue).toBeCloseTo(2000, 2);
+    expect(res.body.data.today.revenue).toBeCloseTo(2000, 2);
+
+    await testPrisma.invoice.deleteMany({
+      where: { organizationId: tenant.organizationId, invoiceNumber: `DRAFT-${RUN_ID}` },
+    });
+  });
+
+  it("lists the sale and the product it sold", async () => {
+    const res = await request(testApp).get("/api/v1/reports/dashboard").set(auth(tenant.token));
+    expect(res.body.data.recentInvoices.length).toBeGreaterThan(0);
+    expect(res.body.data.topProducts.length).toBeGreaterThan(0);
+    // The product name must be resolved server side. Shipping an id and letting the
+    // browser guess is how a table ends up reading "Unknown product" in production.
+    expect(res.body.data.topProducts[0].name).toBe("Dashboard Widget");
+    expect(res.body.data.topProducts[0].quantity).toBeCloseTo(2, 2);
+  });
+
+  it("shows a walk-in sale as one, rather than an empty customer", async () => {
+    const res = await request(testApp).get("/api/v1/reports/dashboard").set(auth(tenant.token));
+    const sale = res.body.data.recentInvoices.find(
+      (i: { id: string }) => i.id === res.body.data.recentInvoices[0].id
+    );
+    expect(sale).toBeDefined();
+    // The sale in this suite was rung up with no customer, and the payload must be honest
+    // about that rather than inventing a placeholder name.
+    expect(sale.customer === null || sale.customer === undefined).toBe(true);
+  });
+
+  it("tells one business nothing about another's figures", async () => {
+    const res = await request(testApp)
+      .get("/api/v1/reports/dashboard")
+      .set(auth(other.token))
+      .expect(200);
+    // A fresh business trades nothing, and must see nothing. If tenant scoping leaked,
+    // it would inherit 2000 and a widget it never sold.
+    expect(res.body.data.month.revenue).toBe(0);
+    expect(res.body.data.today.revenue).toBe(0);
+    expect(res.body.data.recentInvoices).toHaveLength(0);
+    expect(res.body.data.topProducts).toHaveLength(0);
+  });
+
+  it("is not readable without a token", async () => {
+    await request(testApp).get("/api/v1/reports/dashboard").expect(401);
   });
 });
 

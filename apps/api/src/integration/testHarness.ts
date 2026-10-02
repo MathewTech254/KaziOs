@@ -8,6 +8,7 @@ import { productRouter } from "../routes/products";
 import { posRouter } from "../routes/pos";
 import { expenseRouter } from "../routes/expenses";
 import { inventoryRouter } from "../routes/inventory";
+import { reportRouter } from "../routes/reports";
 import { errorHandler } from "../middleware/errorHandler";
 
 /**
@@ -65,6 +66,7 @@ app.use("/api/v1/products", productRouter);
 app.use("/api/v1/pos", posRouter);
 app.use("/api/v1/expenses", expenseRouter);
 app.use("/api/v1/inventory", inventoryRouter);
+app.use("/api/v1/reports", reportRouter);
 
 // The error handler is part of the behaviour under test, not optional decoration. Without
 // it a ZodError falls through to Express's default handler and answers 500, so a test
