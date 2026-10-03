@@ -77,8 +77,9 @@ One becomes `SESSION_SECRET`, the other `JWT_SECRET`. The API refuses to start i
    | `BCRYPT_ROUNDS` | `10` (lower than the dev default, friendlier to a small free instance) |
 
 4. Create the service. The first build compiles every workspace and takes several minutes.
-5. When it finishes you get a URL like `https://kazios-api.onrender.com`.
-   Open `https://kazios-api.onrender.com/health` and expect `{"status":"ok"}`.
+5. When it finishes you get a URL. Copy it from the Render dashboard rather than assuming
+   one, because the subdomain comes from the service name you picked.
+   Open `<that url>/health` and expect `{"status":"ok"}`.
    The first request after idle takes 30-50 seconds while the free instance wakes up.
 
 ## 5. Apply database migrations
@@ -125,11 +126,17 @@ That creates `admin@kazios.dev` / `admin123`. Change the password before sharing
    | Key | Value |
    | --- | --- |
    | `NODE_VERSION` | `20` |
-   | `VITE_API_URL` | `https://kazios-api.onrender.com/api/v1` (your API URL + `/api/v1`) |
+   | `VITE_API_URL` | your API URL + `/api/v1`, copied from the Render dashboard. For this project's live deployment that is `https://kazios.onrender.com/api/v1`. |
    | `VITE_API_TIMEOUT_MS` | `90000` (covers a cold start) |
 
    `VITE_API_URL` is compiled into the JavaScript bundle by Vite, so changing it requires a
    **new build**: after editing it, use **Retry deployment** on the latest deployment.
+
+   This is build time only, and there is no runtime fallback. If `VITE_API_URL` is missing
+   the bundle falls back to a same-origin `/api/v1`, which a Pages deployment serves with
+   `index.html` and a **200 status**, so every request fails in a way that looks healthy
+   from the outside. Check `https://<your pages domain>/api/v1/health`: if it returns HTML
+   rather than JSON, the variable was not set when this build ran.
 
    `--include=dev` is deliberate. Render sets `NODE_ENV=production` during the build, which makes npm
    skip dev dependencies; the TypeScript compiler and `@types/node` are needed to build, so they are
@@ -270,6 +277,9 @@ rebuilding: Render -> **Deploys** -> pick an earlier build -> **Rollback**; Clou
 | Prisma `P1001` / `Can't reach database` | `DATABASE_URL` is wrong, or Neon suspended the database. Retry, then verify the URL. |
 | `P2028` transaction timeout | Neon woke up mid request, or the direct URL is being used behind a pooler. Retry; Neon usually resumes on the first call. |
 | Migration workflow fails | Run it locally (option B in step 5) to read the real error, fix, and push again. |
+| A new feature's route 500s on every request, or Prisma says the table does not exist | The code deployed ahead of its schema. Confirm with `node apps/api/scripts/check-prod-migrations.mjs "<PRODUCTION_DATABASE_URL>"`, which is read only and reports both the applied migrations and the tables each feature needs. |
+| Password reset emails never arrive | In Render, set `EMAIL_PROVIDER=resend` and `EMAIL_API_KEY`. Without them the API logs the message instead of sending, and still answers the user as if it had. `EMAIL_FROM` must be a domain you have verified in Resend; on a free account mail can only go to the account's own address until then. Validate with `node apps/api/scripts/check-resend.mjs`. |
+| The card option is missing at the till | `PAYSTACK_SECRET_KEY`, `PAYSTACK_PUBLIC_KEY` and `PAYSTACK_WEBHOOK_SECRET` must all be set. The webhook secret is easy to miss and the till stays on cash only without it. |
 
 ## Moving up later
 
