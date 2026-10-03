@@ -33,7 +33,11 @@ import session from "express-session";
 import rateLimit from "express-rate-limit";
 import { RedisStore } from "connect-redis";
 import { prisma } from "./lib/prisma";
-import { assertProductionEnv, corsOriginWarning } from "./lib/productionEnv";
+import {
+  assertProductionEnv,
+  corsOriginWarning,
+  mailConfigurationWarning,
+} from "./lib/productionEnv";
 import { redisClient, connectRedis } from "./lib/redis";
 import { startRealtimeSubscriber } from "./lib/realtime";
 import { authRouter } from "./routes/auth";
@@ -214,6 +218,8 @@ async function start() {
   assertProductionEnv();
   const corsWarning = corsOriginWarning();
   if (corsWarning) console.warn(`Warning: ${corsWarning}`);
+  const mailWarning = mailConfigurationWarning();
+  if (mailWarning) console.warn(`Warning: ${mailWarning}`);
   await connectRedis();
   // Alerts published by the worker, or by another replica, reach this one through
   // Redis. Started before the server listens so no browser can connect to a process
