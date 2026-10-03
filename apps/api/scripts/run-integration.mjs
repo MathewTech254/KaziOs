@@ -175,6 +175,17 @@ if (migrate !== 0) {
 const status = run(
   "npx jest --testPathPattern=.*\\.integration\\.ts$ --runInBand",
   [],
-  { ...prismaEnv, JWT_SECRET: process.env.JWT_SECRET || "integration-suite-secret-32-characters" }
+  {
+    ...prismaEnv,
+    JWT_SECRET: process.env.JWT_SECRET || "integration-suite-secret-32-characters",
+    // The suite must never reach a real provider. Registering a business sends a welcome
+    // email, so once the root .env carries a working Resend key these tests would quietly
+    // mail an address they invented, on every run, for ever. Console mode keeps the body in
+    // the log where a test can assert on it.
+    EMAIL_PROVIDER: "console",
+    EMAIL_API_KEY: "",
+    // Likewise, no card payment should be possible against a live gateway.
+    PAYSTACK_SECRET_KEY: "",
+  }
 );
 process.exit(status);

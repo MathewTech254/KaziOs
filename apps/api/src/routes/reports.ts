@@ -111,31 +111,77 @@ reportRouter.get(
         select: { currency: true, timezone: true },
       });
       const timeZone = organization?.timezone || "UTC";
+      const now = new Date();
 
-      /** Midnight, in the organization's timezone, for `offsetDays` from now. */
-      const zonedDayStart = (offsetDays = 0) => {
-        // en-CA renders as YYYY-MM-DD, which is exactly the format needed to rebuild a
-        // local calendar day without hand assembling the string.
-        const local = new Intl.DateTimeFormat("en-CA", {
+      /**
+       * The calendar date an instant falls on in the organization's own timezone.
+       *
+       * Returned as parts rather than a formatted string, because the parts are what a
+       * real instant has to be rebuilt from.
+       */
+      const zonedParts = (at: Date) => {
+        const parts = new Intl.DateTimeFormat("en-CA", {
           timeZone,
           year: "numeric",
           month: "2-digit",
           day: "2-digit",
-        }).format(new Date());
-        const start = new Date(`${local}T00:00:00Z`);
-        start.setUTCDate(start.getUTCDate() + offsetDays);
-        return start;
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: false,
+        }).formatToParts(at);
+        const get = (type: string) => Number(parts.find(p => p.type === type)?.value);
+        return {
+          year: get("year"),
+          month: get("month"),
+          day: get("day"),
+          hour: get("hour") % 24,
+          minute: get("minute"),
+          second: get("second"),
+        };
       };
 
-      const now = new Date();
+      /**
+       * The zone's offset from UTC, in milliseconds, at a given instant.
+       *
+       * Formatting the instant as though it were UTC and differencing against the real
+       * instant is the only portable way to get this. Reading a fixed offset would be
+       * wrong twice a year, wherever daylight saving is observed.
+       */
+      const offsetMsAt = (at: Date) => {
+        const p = zonedParts(at);
+        const asIfUtc = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+        return asIfUtc - Math.floor(at.getTime() / 1000) * 1000;
+      };
+
+      /**
+       * Midnight, in the organization's timezone, of the day `offsetDays` from today.
+       *
+       * The subtlety this exists to get right: the calendar date in Nairobi is not the
+       * same as the calendar date in UTC for a third of every day. Reading "2026-10-03" out
+       * of the formatter and building `2026-10-03T00:00:00Z` treats Nairobi midnight as if
+       * it were UTC midnight, which is three hours late and drops every sale made between
+       * 21:00 and 24:00 UTC from the day's takings. A shop opening at 8am would open to a
+       * dashboard claiming it had taken nothing.
+       */
+      const zonedDayStart = (offsetDays = 0) => {
+        const today = zonedParts(now);
+        // Midnight, expressed as if the local calendar date were a UTC one.
+        const naive = Date.UTC(today.year, today.month - 1, today.day + offsetDays);
+        // Then shift by the zone's offset to get the instant that is genuinely local
+        // midnight. The offset is re-read at the result so a day containing a daylight
+        // saving change lands on the right boundary rather than an hour out.
+        let start = naive - offsetMsAt(new Date(naive));
+        start = naive - offsetMsAt(new Date(start));
+        return new Date(start);
+      };
+
       const dayStart = zonedDayStart(0);
       const dayEnd = zonedDayStart(1);
+      const today = zonedParts(now);
       const monthStart = new Date(
-        `${new Intl.DateTimeFormat("en-CA", {
-          timeZone,
-          year: "numeric",
-          month: "2-digit",
-        }).format(now)}-01T00:00:00Z`
+        Date.UTC(today.year, today.month - 1, 1) -
+          offsetMsAt(new Date(Date.UTC(today.year, today.month - 1, 1)))
       );
 
       // A sale counts as revenue once it is not draft or void. A card sale sits in SENT
