@@ -196,3 +196,13 @@ arrive over that open socket.
 - More web pages: POS terminal, purchases, expenses, projects, support tickets
 - Email/SMS notification providers
 - Multi-language (Swahili/English)
+
+## License
+
+KaziOS is proprietary software.
+
+The source code is publicly available for transparency, evaluation, and educational reference, but it is **not open source** and may not be copied, modified, redistributed, commercially used, or deployed without permission.
+
+See the [LICENSE](./LICENSE) file for full terms.
+
+Copyright © 2026 Mathew Kioko. All Rights Reserved.
