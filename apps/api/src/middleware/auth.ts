@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
 import { validateSession } from "../lib/auth";
+import type { EntitlementSnapshot } from "../services/entitlements";
 
 export interface AuthRequest extends Request {
   userId?: string;
@@ -8,6 +9,14 @@ export interface AuthRequest extends Request {
   organizationId?: string;
   user?: any;
   roles?: any[];
+  /**
+   * The business's resolved plan, attached by the entitlement middleware.
+   *
+   * Optional because it is only attached on routes that ask for it: most routes care about
+   * permissions, not about what the business has paid for, and resolving a plan snapshot
+   * on every request would be work most of them throw away.
+   */
+  entitlements?: EntitlementSnapshot;
 }
 
 /**

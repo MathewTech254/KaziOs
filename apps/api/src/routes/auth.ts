@@ -117,6 +117,42 @@ authRouter.post("/register", async (req, res, next) => {
         ],
       });
 
+      // Every business starts on the default plan, so from its very first request there is
+      // a subscription whose limits and features can be read. Created inside the same
+      // transaction as the organization, because a business that exists without one would
+      // have to be repaired before any entitlement check could answer honestly.
+      //
+      // Best effort on purpose. A missing plan catalogue must not stop people signing up to
+      // a perfectly good free product, so this degrades to "no subscription row" and the
+      // entitlement service falls back to Community for those businesses.
+      try {
+        const defaultPlan = await tx.plan.findFirst({
+          where: { isDefault: true },
+          select: { id: true },
+        });
+        if (defaultPlan) {
+          await tx.subscription.create({
+            data: {
+              organizationId: org.id,
+              planId: defaultPlan.id,
+              status: "ACTIVE",
+              billingInterval: "monthly",
+            },
+          });
+          await tx.organization.update({
+            where: { id: org.id },
+            data: { planId: defaultPlan.id },
+          });
+        } else {
+          console.warn(
+            "No default plan is configured. New businesses will use Community entitlements " +
+              "until the plan catalogue is seeded."
+          );
+        }
+      } catch (err) {
+        console.warn("Could not create the subscription for a new organization:", err);
+      }
+
       return { org, user, ownerRole };
     });
 

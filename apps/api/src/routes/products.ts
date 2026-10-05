@@ -5,6 +5,8 @@ import type { AuthRequest } from "../middleware/auth";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { AppError, paginate } from "../lib";
 import { zProductSchema } from "@kazios/validation";
+import { LIMIT_KEYS } from "@kazios/types";
+import { assertWithinLimit, getEntitlements } from "../services/entitlements";
 
 export const productRouter = Router();
 
@@ -62,6 +64,13 @@ productRouter.post(
   async (req: AuthRequest, res, next) => {
     try {
       const data = zProductSchema.parse(req.body);
+
+      // The catalogue is a counted allowance. Checked before the row is written, so a
+      // refused request leaves nothing behind and the count the customer sees in billing
+      // is the count in the table.
+      const entitlements = await getEntitlements(req.organizationId!);
+      await assertWithinLimit(entitlements, LIMIT_KEYS.PRODUCTS);
+
       const product = await prisma.product.create({
         data: {
           name: data.name,

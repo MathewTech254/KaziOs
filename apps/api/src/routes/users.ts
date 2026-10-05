@@ -4,6 +4,8 @@ import { AppError, hashPassword } from "../lib";
 import type { AuthRequest } from "../middleware/auth";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { zUserCreateSchema, zUserRoleAssignSchema } from "@kazios/validation";
+import { LIMIT_KEYS } from "@kazios/types";
+import { assertWithinLimit, getEntitlements } from "../services/entitlements";
 
 export const userRouter = Router();
 
@@ -56,6 +58,11 @@ userRouter.post(
     try {
       const body = zUserCreateSchema.parse(req.body);
       const email = body.email.toLowerCase();
+
+      // Seats are a counted allowance, so the check reads the live number of members and
+      // refuses before the user row is written. Nobody is created and then removed.
+      const entitlements = await getEntitlements(req.organizationId!);
+      await assertWithinLimit(entitlements, LIMIT_KEYS.USERS);
 
       const existing = await prisma.user.findUnique({ where: { email } });
       if (existing) throw new AppError(409, "Email already registered", "EMAIL_EXISTS");

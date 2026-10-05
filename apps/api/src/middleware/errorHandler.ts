@@ -2,10 +2,19 @@ import type { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 
 export class AppError extends Error {
+  /**
+   * Machine readable context for the caller.
+   *
+   * Entitlement refusals carry the feature, the plan and where to upgrade, so the browser
+   * can offer the next step on the page the request came from instead of printing a
+   * sentence and leaving the owner to work out what to do. It is additive and optional:
+   * every existing throw of this class is unaffected.
+   */
   constructor(
     public statusCode: number,
     message: string,
-    public code?: string
+    public code?: string,
+    public details?: Record<string, unknown>
   ) {
     super(message);
     this.name = "AppError";
@@ -45,7 +54,12 @@ export function lastResortGuard(): (err: any, _req: any, res: any, _next: any) =
 export function errorHandler(err: any, _req: Request, res: Response, _next: NextFunction): void {
   console.error("Error:", err);
   if (err instanceof AppError) {
-    res.status(err.statusCode).json({ error: err.message, code: err.code });
+    res.status(err.statusCode).json({
+      error: err.message,
+      code: err.code,
+      // Present only when the error carries it, so existing responses are byte identical.
+      ...(err.details ? { details: err.details } : {}),
+    });
     return;
   }
   if (err instanceof ZodError) {

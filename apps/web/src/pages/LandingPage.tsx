@@ -97,6 +97,12 @@ export function LandingPage() {
               Built for the way African businesses operate
             </span>
             <Link
+              to="/pricing"
+              className="rounded-md px-2 py-2 font-medium text-[var(--kazi-text)] transition-colors hover:text-[var(--kazi-accent-hover)]"
+            >
+              Pricing
+            </Link>
+            <Link
               to="/login"
               className="rounded-md px-2 py-2 font-medium text-[var(--kazi-text)] transition-colors hover:text-[var(--kazi-accent-hover)]"
             >

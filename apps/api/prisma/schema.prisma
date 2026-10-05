@@ -22,6 +22,11 @@ model Organization {
   phone            String?
   email            String?
   status           String   @default("ACTIVE")
+  /// The plan this business is on, kept in step with its Subscription inside the same
+  /// transaction. It exists so "which plan is this business on" is answerable without a
+  /// join on every request; the Subscription row remains the record of truth, and
+  /// nothing is granted from this column on its own.
+  plan             Plan?    @relation(fields: [planId], references: [id])
   planId           String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -49,7 +54,9 @@ model Organization {
   tasks          Task[]
   leads          Lead[]
   tickets        SupportTicket[]
-  subscriptions  Subscription[]
+  /// One business holds at most one subscription, so this is singular rather than a list.
+  /// The uniqueness is enforced by the unique index on Subscription.organizationId.
+  subscription    Subscription?
   auditLogs      AuditLog[]
   notifications  Notification[]
   files          File[]
@@ -60,6 +67,9 @@ model Organization {
   quotations     Quotation[]
   expenses       Expense[]
   expenseCategories ExpenseCategory[]
+  subscriptionPayments SubscriptionPayment[]
+  usageRecords   UsageRecord[]
+  entitlementOverrides EntitlementOverride[]
 }
 
 model User {
@@ -89,6 +99,10 @@ model User {
   // not infer which of the two foreign keys a back reference refers to.
   recordedExpenses Expense[] @relation("ExpenseRecordedBy")
   approvedExpenses Expense[] @relation("ExpenseApprovedBy")
+  // Platform administration is recorded against the user rather than against a business
+  // role, so owning a shop can never imply authority over the platform.
+  subscriptionEvents SubscriptionEvent[]
+  platformAdmin    PlatformAdmin?
 }
 
 model Session {
@@ -728,18 +742,363 @@ model AutomationExecution {
   automationId String
 }
 
+/// One row per business. A business has at most one live subscription at a time, and
+/// this row is the single authority on what it has paid for and until when.
+///
+/// Status is stored as well as derived, because "ACTIVE" is worth recording when a
+/// payment is confirmed, but it is never trusted on its own at read time: dates pass
+/// while the process is not running, so the effective status is recomputed from the
+/// clock on every read. The stored status is the last state this system deliberately
+/// moved to; the effective status is the truth right now.
 model Subscription {
-  id               String    @id @default(uuid())
-  planId           String
-  billingCycle     String    @default("monthly")
-  status           String    @default("TRIALING")
-  currentPeriodEnd DateTime?
-  createdAt        DateTime  @default(now())
+  id             String    @id @default(uuid())
+  organizationId String    @unique
 
-  organization   Organization @relation(fields: [organizationId], references: [id])
+  plan          Plan       @relation("subscriptionPlan", fields: [planId], references: [id])
+  planId        String
+
+  /// The price this subscription is actually billed at. Storing the price rather than
+  /// only the plan means a later price rise does not retroactively charge an existing
+  /// customer the new number part way through a period they have already paid for.
+  planPrice     PlanPrice? @relation(fields: [planPriceId], references: [id])
+  planPriceId   String?
+
+  status           String    @default("ACTIVE")
+  billingInterval  String    @default("monthly")
+
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+
+  /// Set when the plan offers a trial. While it is in the future the business has paid
+  /// nothing and holds the trial plan's entitlements.
+  trialEndsAt DateTime?
+
+  /// How long a business keeps working after a renewal fails. This is the difference
+  /// between a declined card and a business that cannot serve customers, so it is a
+  /// deliberate period rather than a missing field.
+  graceEndsAt DateTime?
+
+  /// Cancellations are normally scheduled rather than immediate.
+  cancelAtPeriodEnd Boolean   @default(false)
+  canceledAt        DateTime?
+  /// When a cancellation actually takes effect. Kept apart from canceledAt because
+  /// "cancel now" and "cancel at the end of the period I already paid for" are
+  /// different promises to the customer.
+  endsAt      DateTime?
+
+  provider                    String?
+  providerCustomerId          String?
+  providerSubscriptionCode    String?
+
+  /// A card is described by a brand and four digits. The full number and any token are
+  /// never stored: they belong to the provider, and keeping them here would turn this
+  /// table into something worth stealing.
+  paymentMethodBrand  String?
+  paymentMethodLast4  String?
+  paymentMethodExpiry String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events   SubscriptionEvent[]
+  payments SubscriptionPayment[]
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  /// A plan change requested for the end of the current period. A downgrade waits for
+  /// the period to end rather than taking effect at once and refunding the difference,
+  /// because a business that paid for a year keeps that year's limits until it ends.
+  pendingPlan         Plan?     @relation("pendingPlan", fields: [pendingPlanId], references: [id])
+  pendingPlanId       String?
+  pendingPlanChangeAt DateTime?
+
+  @@index([status])
+  @@index([planId])
+}
+
+/// A capability that can be switched on for a business.
+///
+/// `available` is the honesty guard for the pricing page. A feature can exist in the
+/// catalog, be granted by a plan and be enforced by the API before it has a user
+/// facing screen; advertising it before then would be selling something nobody can
+/// reach. The public catalogue only lists available features, and turning this on is
+/// the deliberate step that makes a feature sellable.
+model Feature {
+  key         String  @id
+  name        String
+  description String
+  category    String
+  available   Boolean @default(false)
+  sortOrder   Int     @default(0)
+
+  plans PlanFeature[]
+
+  @@index([category, sortOrder])
+}
+
+/// What one plan gives one business.
+///
+/// A plan is the sellable unit: a name, a price, the features it turns on and the
+/// limits it sets. Plans are rows rather than constants so an administrator can
+/// re-price or retire one without a deployment, and so Enterprise is an ordinary
+/// private plan rather than a special case in the code.
+model Plan {
+  id          String  @id @default(uuid())
+  /// Stable, human readable identifier, used in URLs, metadata and plan overrides.
+  key         String  @unique
+  name        String
+  description String
+  /// DRAFT plans are not offered. ARCHIVED plans keep working for existing customers
+  /// but stop being sold.
+  status      String  @default("ACTIVE")
+  visibility  String  @default("PUBLIC")
+  /// Exactly one plan carries this, and it is where every new business starts. The
+  /// service falls back to it, so retiring the default cannot leave a business with
+  /// nothing at all.
+  isDefault   Boolean @default(false)
+  sortOrder   Int     @default(0)
+  /// Free of charge for the whole period, e.g. Community. Distinct from a zero priced
+  /// trial, because it is the price rather than the introduction.
+  isFree      Boolean @default(false)
+  trialDays   Int     @default(0)
+  /// A yearly price quoted per month, e.g. 1658 for "two months free". Presentation
+  /// only: the amount charged is always the PlanPrice for the interval bought.
+  yearlyPerMonthCents Int?
+  highlight   String?
+
+  prices   PlanPrice[]
+  features PlanFeature[]
+  limits   PlanLimit[]
+
+  subscriptions         Subscription[]         @relation("subscriptionPlan")
+  scheduledSubscriptions Subscription[]        @relation("pendingPlan")
+  payments              SubscriptionPayment[]
+  organizations         Organization[]
+
+  @@index([status, visibility, sortOrder])
+}
+
+/// One price for one billing interval.
+///
+/// Split from Plan so monthly and yearly are two rows rather than a flag, which is what
+/// makes a future discount, a promotional price or a third interval a data change
+/// rather than a migration. A `CUSTOM` interval carries no amount at all: Enterprise is
+/// quoted, not sold from a page.
+model PlanPrice {
+  id          String @id @default(uuid())
+  planId      String
+  interval    String
+  /// Integer minor units. Money is never held as a float here, for the same reason it
+  /// is not held as a float on an invoice.
+  amountCents Int
+  currency    String @default("USD")
+  /// Whether a business can check out on this interval now. A yearly price can be
+  /// withdrawn from sale while monthly continues.
+  isActive    Boolean @default(true)
+
+  /// The Paystack plan this price charges through. Created lazily on the first checkout
+  /// that needs it, then stored here: recurring billing runs on the provider's own
+  /// billing engine (plan -> customer -> subscription -> webhook), not on a local
+  /// imitation of it. Unique because two servers racing to create the same plan must
+  /// end up sharing one code rather than leaving an orphan at Paystack.
+  paystackPlanCode String? @unique
+
+  plan          Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  subscriptions Subscription[]
+
+  @@unique([planId, interval, currency])
+  @@index([planId, isActive])
+}
+
+/// A capability a plan turns on.
+///
+/// A join rather than a string array on Plan, because a capability is a row with its own
+/// name and description that several plans share. The pricing page can then render one
+/// description consistently instead of repeating the same sentence per plan and letting
+/// the copies drift apart.
+model PlanFeature {
+  id     String @id @default(uuid())
+  planId String
+  /// References Feature.key rather than a surrogate id: a feature is named by its key
+  /// everywhere else in the system, and matching that here means a migration seeds the
+  /// catalogue without having to look ids up first.
+  featureKey String
+
+  plan    Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  feature Feature @relation(fields: [featureKey], references: [key], onDelete: Cascade)
+
+  @@unique([planId, featureKey])
+  @@index([featureKey])
+}
+
+/// An allowance a plan sets.
+///
+/// `source` decides how it is measured, and getting this right is the difference
+/// between a limit that is true and one that is merely stored: COUNTED limits are read
+/// from live rows, METERED limits from accumulated counters.
+model PlanLimit {
+  id     String @id @default(uuid())
+  planId String
+  key    String
+  value  Int
+  source String
+  unit   String @default("count")
+  /// Whether the allowance resets each billing period. An annual allowance must not
+  /// silently become monthly, and a seat count must not reset at all.
+  period String @default("never")
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, key])
+  @@index([key])
+}
+
+/// The subscription ledger: append only, and never updated in place.
+///
+/// A business asking "what happened to my plan" is answered from here. The current
+/// Subscription row can only ever describe the present, which is exactly the question a
+/// customer who was downgraded, charged twice or left in grace is asking.
+model SubscriptionEvent {
+  id             String   @id @default(uuid())
+  subscriptionId String
+  type           String
+  fromStatus     String?
+  toStatus       String?
+  fromPlanId     String?
+  toPlanId       String?
+  /// Why it happened, in words a support agent can read: "Paystack reported failed".
+  reason         String?
+  metadata       Json?
+  /// Set when a person caused this, as opposed to a webhook or the nightly sweep.
+  actorUserId    String?
+  createdAt      DateTime @default(now())
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  actor        User?        @relation(fields: [actorUserId], references: [id])
+
+  @@index([subscriptionId, createdAt])
+  @@index([type])
+}
+
+/// One row per payment attempt for a subscription, which is also the invoice history a
+/// business sees in Settings.
+///
+/// The row is written when checkout opens and only becomes SUCCESS once the provider has
+/// confirmed the money, either by a signed webhook or by the server asking the provider
+/// directly. No path exists that marks it paid from a browser's word.
+model SubscriptionPayment {
+  id             String   @id @default(uuid())
+  subscriptionId String
   organizationId String
+  planId         String
 
-  @@unique([organizationId])
+  /// Provider facing. Unique, so a retried checkout cannot create a second charge and a
+  /// replayed webhook always resolves to the same row.
+  reference      String   @unique
+  /// A caller supplied key, unique per organization, so a double tap on "Upgrade" cannot
+  /// open two checkouts for one intent.
+  idempotencyKey String?  @unique
+
+  amountCents     Int
+  currency        String
+  kind            String  @default("INITIAL")
+  status          String  @default("PENDING")
+  /// The interval this payment was opened for. Recorded on the payment rather than read
+  /// back off the subscription, because a payment must state what it is paying for even
+  /// when the subscription it settles has already moved on.
+  billingInterval String  @default("monthly")
+
+  provider         String  @default("PAYSTACK")
+  providerRef      String?
+  authorizationUrl String?
+
+  periodStart DateTime?
+  periodEnd   DateTime?
+  paidAt      DateTime?
+  failureReason String?
+
+  refundedAt   DateTime?
+  refundReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscription Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id])
+  plan         Plan         @relation(fields: [planId], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([subscriptionId, status])
+  @@index([status, createdAt])
+}
+
+/// Accumulated usage for one metered limit in one period.
+///
+/// Only METERED limits (AI requests, API calls, storage, transactions) live here.
+/// COUNTED limits (users, branches, products) are counted from live rows instead,
+/// because a stored counter that drifts from reality is worse than no counter: it would
+/// refuse a customer who is within their allowance, or promise one who is not.
+model UsageRecord {
+  id             String   @id @default(uuid())
+  organizationId String
+  /// One of LIMIT_KEYS. Not a foreign key to a catalog table: the set of metered limits
+  /// is code, and adding one should not need a migration.
+  key            String
+  quantity       Int      @default(0)
+  /// The period this quantity belongs to, as an inclusive start. The end is derived from
+  /// the limit's period rather than stored, so a change to how long a period lasts cannot
+  /// leave two rows disagreeing about when it ends.
+  periodStart    DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, key, periodStart])
+  @@index([organizationId, key])
+}
+
+/// A deliberate exception to a plan, granted by a platform administrator.
+///
+/// This is how enterprise contracts, sales exceptions and goodwill grants are expressed
+/// without inventing a plan per customer: one row grants a feature or raises a limit for
+/// one business, with a reason and an optional expiry. It is the only way to exceed a
+/// plan, and it is always attributable to somebody.
+model EntitlementOverride {
+  id             String   @id @default(uuid())
+  organizationId String
+  /// A feature key when kind is FEATURE, empty for a limit row.
+  featureKey     String?
+  /// A limit key when kind is LIMIT, empty for a feature row.
+  limitKey       String?
+  kind           String
+  /// For a feature, true grants it. For a limit, the allowance that replaces the plan's.
+  value          Json?
+  reason         String
+  expiresAt      DateTime?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+}
+
+/// A person who administers the platform rather than a business on it.
+///
+/// Deliberately a separate table from Role. A business Owner holds `*` inside their own
+/// organization, and that must never mean anything here: platform authority is granted
+/// deliberately, by scope, and is revocable without touching a business's own roles.
+model PlatformAdmin {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  scopes    String[]
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
 }
 
 model AuditLog {
@@ -856,4 +1215,39 @@ model CardPayment {
 
   @@index([organizationId, status])
   @@index([invoiceId])
+}
+
+/// One row per Paystack webhook event this installation has ever seen.
+///
+/// The unique provider event id is the idempotency guarantee the whole webhook path
+/// needs: Paystack retries deliveries, and a replay must be acknowledged without being
+/// applied a second time. A retried event collides on `providerEventId`, is recognised
+/// as already processed, and answers 200 without touching a subscription.
+///
+/// The payload is stored as received so a failed event can be re-driven from the table
+/// itself rather than depending on the provider still being able to resend it.
+model PaymentWebhookEvent {
+  id                String   @id @default(uuid())
+  /// Paystack's own event id. When a payload somehow lacks one, a hash of the raw body
+  /// stands in, which still dedupes byte-identical redeliveries.
+  providerEventId   String   @unique
+  /// The event name as Paystack sent it, e.g. "charge.success".
+  event             String
+  /// The transaction reference when the event carries one, for looking a charge up.
+  reference         String?
+  /// The business this event was ultimately applied to, when one could be found.
+  organizationId    String?
+  /// The full payload, for re-driving a failure and for support answering "what did
+  /// Paystack actually send us at 03:12".
+  payload           Json
+  /// RECEIVED -> PROCESSED / IGNORED / FAILED. A row left in RECEIVED means a process
+  /// died mid-handling, and the next delivery of the same event is safe to retry.
+  status            String   @default("RECEIVED")
+  error             String?
+  createdAt         DateTime @default(now())
+  processedAt       DateTime?
+
+  @@index([event, createdAt])
+  @@index([status, createdAt])
+  @@index([reference])
 }

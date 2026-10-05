@@ -16,6 +16,7 @@ import { SettingsPage } from "../pages/SettingsPage";
 import { InventoryPage } from "../pages/InventoryPage";
 import { PurchasingPage } from "../pages/PurchasingPage";
 import { ExpensesPage } from "../pages/ExpensesPage";
+import { PricingPage } from "../pages/PricingPage";
 import { AuthGuard } from "../components/Guard";
 
 /**
@@ -59,6 +60,13 @@ export const router = createBrowserRouter([
   {
     path: "/login",
     element: <LoginPage />,
+  },
+  {
+    // Public on purpose: somebody deciding whether to sign up has to be able to read the
+    // prices without creating an account first. The page works signed out, and shows the
+    // signed in business their current plan when there is one.
+    path: "/pricing",
+    element: <PricingPage />,
   },
   {
     path: "/register",

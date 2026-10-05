@@ -10,6 +10,9 @@ import { generateId, generateInvoiceNumber, paginate } from "../lib/utils";
 import { getOrganizationId, getScopedValues, getUserId, isAllowed } from "../lib/scope";
 import { notifyPermissionHolders } from "../services/notifications";
 import { alertOnLowStock } from "../services/stockAlerts";
+import { LIMIT_KEYS } from "@kazios/types";
+import { assertWithinLimit, getEntitlements } from "../services/entitlements";
+import { recordTransaction } from "../services/usage";
 
 export const posRouter = Router();
 
@@ -255,6 +258,22 @@ posRouter.post(
       const input = parsed.data;
       const organization = await prisma.organization.findUnique({ where: { id: organizationId } });
       if (!organization) throw new AppError(404, "Organization not found");
+
+      // Counted against the plan before anything is written, so a business that has reached
+      // its monthly allowance is told why and offered the upgrade rather than having a
+      // till fail mid market with a generic error.
+      //
+      // Best effort in the sense of the check itself, not of the outcome: if this cannot be
+      // answered we still take the sale. Refusing a customer's purchase because a plan row
+      // was slow to load would cost a real business real money.
+      await assertWithinLimit(
+        await getEntitlements(organizationId),
+        LIMIT_KEYS.MONTHLY_TRANSACTIONS,
+        { adding: 1 }
+      ).catch(err => {
+        if (err instanceof AppError && err.code === "LIMIT_REACHED") throw err;
+        console.warn("Could not check the transaction allowance before a sale:", err);
+      });
 
       if (input.idempotencyKey) {
         const existing = await prisma.invoice.findFirst({
@@ -658,6 +677,12 @@ posRouter.post(
         lines.map(line => line.product.id),
         warehouse.id
       ).catch(() => 0);
+
+      // Counted after the sale is committed, never before. The sale is the thing that
+      // happened; if this write fails the customer still paid and still has their goods.
+      // Best effort for the same reason, and it means a busy month is under-counted by
+      // whatever a counter write lost, which is the correct direction to be wrong in.
+      await recordTransaction(organizationId).catch(() => 0);
 
       res.status(201).json({
         data: {

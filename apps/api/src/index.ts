@@ -25,6 +25,55 @@ export {
   toFloat,
 } from "./lib/utils";
 
+// Subscriptions and entitlements.
+//
+// Exported for the worker, which reconciles subscriptions in a separate process, and so
+// that a future platform admin surface has one way to ask "what is this business allowed
+// to do" rather than reaching into the tables.
+export {
+  getEntitlements,
+  hasFeature,
+  readLimits,
+  currentUsageFor,
+  resolveStatus,
+  statusAllowsUse,
+  assertFeature,
+  assertWithinLimit,
+  invalidateEntitlements,
+  loadCoreFeatureKeys,
+  type EntitlementSnapshot,
+  type LimitReading,
+} from "./services/entitlements";
+export {
+  activateSubscription,
+  renewSubscription,
+  cancelSubscription,
+  resumeSubscription,
+  schedulePlanChange,
+  cancelScheduledPlanChange,
+  reconcileSubscriptions,
+  applyDuePlanChanges,
+  recordPaymentFailure,
+  expireSubscription,
+  ensureSubscription,
+  recordEvent,
+  isUpgrade,
+  addInterval,
+} from "./services/subscriptions";
+export {
+  openCheckout,
+  confirmCheckout,
+  handleSubscriptionWebhook,
+  subscriptionPaymentsReady,
+  type ConfirmResult,
+} from "./services/billing";
+export {
+  recordUsage,
+  recordTransaction,
+  recordAiRequest,
+  recordApiRequest,
+} from "./services/usage";
+
 import express from "express";
 import helmet from "helmet";
 import cors from "cors";
@@ -53,6 +102,9 @@ import { userRouter } from "./routes/users";
 import { roleRouter } from "./routes/roles";
 import { posRouter } from "./routes/pos";
 import { cardPaymentRouter, paystackWebhookRouter } from "./routes/card-payments";
+import { planRouter } from "./routes/plans";
+import { billingRouter } from "./routes/billing";
+import { platformRouter } from "./routes/platform";
 import { notificationRouter } from "./routes/notifications";
 import { inventoryRouter } from "./routes/inventory";
 import { supplierRouter } from "./routes/suppliers";
@@ -60,6 +112,7 @@ import { purchaseOrderRouter } from "./routes/purchase-orders";
 import { expenseRouter } from "./routes/expenses";
 import { auditMiddleware } from "./middleware/audit";
 import { errorHandler, lastResortGuard } from "./middleware/errorHandler";
+import { loadCoreFeatureKeys } from "./services/entitlements";
 
 /** CORS_ORIGIN may list several origins, e.g. a Pages URL plus a custom domain. */
 function getCorsOrigins(): string[] {
@@ -173,6 +226,8 @@ export function createApp() {
         "roles",
         "pos",
         "inventory",
+        "plans",
+        "billing",
       ],
     })
   );
@@ -195,6 +250,19 @@ export function createApp() {
   app.use("/api/v1/suppliers", supplierRouter);
   app.use("/api/v1/purchase-orders", purchaseOrderRouter);
   app.use("/api/v1/expenses", expenseRouter);
+
+  // The plan catalogue is public, because the pricing page has to be readable by somebody
+  // who has not signed up yet. It exposes only the catalogue: never a subscription, never a
+  // price negotiated privately, never anybody's usage.
+  app.use("/api/v1/plans", planRouter);
+
+  // A business managing its own plan. Mounted behind the same rate limiter as everything
+  // else under /api/v1.
+  app.use("/api/v1/billing", billingRouter);
+
+  // Platform administration. Separate from business administration and guarded by a
+  // PlatformAdmin record, so holding `*` inside a business grants nothing here.
+  app.use("/api/v1/platform", platformRouter);
 
   app.use(errorHandler);
   // Anything that somehow escapes the error handler, including a rejection thrown from
@@ -226,6 +294,13 @@ async function start() {
   // that is not yet listening for cross process events.
   startRealtimeSubscriber();
   await prisma.$connect();
+
+  // The features every plan grants, loaded once. Entitlement checks read this on every
+  // gated request, and it is part of this codebase's contract rather than a setting, so it
+  // is not re-read per request. A failure here is logged by the loader itself and degrades
+  // to an empty set rather than stopping the server from booting.
+  await loadCoreFeatureKeys();
+
   const app = createApp();
   // PaaS hosts (Render, Railway, Fly, Koyeb) inject PORT; API_PORT stays for local use.
   const port = parseInt(process.env.PORT || process.env.API_PORT || "4000", 10);

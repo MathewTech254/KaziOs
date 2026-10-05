@@ -93,6 +93,33 @@ async function main() {
     ],
   });
 
+  // The demo business needs a subscription like any other, or every entitlement check
+  // against it falls back to Community with no limits and the demo quietly stops
+  // demonstrating the limit refusals that make the Billing tab worth looking at.
+  const defaultPlan = await prisma.plan.findFirst({
+    where: { isDefault: true },
+    select: { id: true },
+  });
+  if (defaultPlan) {
+    await prisma.subscription.create({
+      data: {
+        organizationId: org.id,
+        planId: defaultPlan.id,
+        status: "ACTIVE",
+        billingInterval: "monthly",
+      },
+    });
+    await prisma.organization.update({
+      where: { id: org.id },
+      data: { planId: defaultPlan.id },
+    });
+  } else {
+    console.warn(
+      "No default plan found. The demo organization will fall back to Community " +
+        "entitlements until the plan catalogue is migrated in."
+    );
+  }
+
   console.log("Seed complete: admin@kazios.dev / admin123");
   return org.id;
 }

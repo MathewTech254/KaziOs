@@ -10,6 +10,8 @@ import {
   zWarehouseSchema,
   zWarehouseUpdateSchema,
 } from "@kazios/validation";
+import { FEATURE_KEYS, LIMIT_KEYS } from "@kazios/types";
+import { assertFeature, assertWithinLimit, getEntitlements } from "../services/entitlements";
 
 export const organizationRouter = Router();
 
@@ -63,6 +65,23 @@ organizationRouter.post(
   async (req: AuthRequest, res, next) => {
     try {
       const data = zBranchSchema.parse(req.body);
+      const entitlements = await getEntitlements(req.organizationId!);
+
+      // Two checks, in this order, and both before anything is written.
+      //
+      // The feature check asks whether a second location is part of the plan at all; the
+      // limit check asks how many this plan allows. They answer different questions and a
+      // business on a plan with three branches must not be refused a fourth with a message
+      // about not having the capability at all.
+      //
+      // Neither check is in the browser. Hiding the button stops an honest user; this stops
+      // everybody else.
+      await assertFeature(entitlements, FEATURE_KEYS.MULTI_BRANCH, {
+        featureName: "Multiple branches",
+      });
+      await assertWithinLimit(entitlements, LIMIT_KEYS.BRANCHES, {
+        featureKey: FEATURE_KEYS.MULTI_BRANCH,
+      });
 
       const branch = await prisma.$transaction(async (tx: any) => {
         if (data.isMain) {

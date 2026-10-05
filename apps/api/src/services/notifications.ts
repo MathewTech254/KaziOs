@@ -159,3 +159,45 @@ export async function notifyPermissionHolders(options: {
 export async function unreadCount(organizationId: string, userId: string): Promise<number> {
   return prisma.notification.count({ where: { organizationId, userId, readAt: null } });
 }
+
+/**
+ * The people who hold a permission, with their addresses.
+ *
+ * Kept apart from `notifyPermissionHolders` because some announcements need the people
+ * themselves — to put a real address on a billing email as well as a row in the
+ * notification list — without duplicating the role and wildcard-owner logic twice.
+ */
+export async function resolvePermissionHolders(options: {
+  organizationId: string;
+  permission: string;
+  excludeUserIds?: string[];
+}): Promise<{ id: string; email: string; name: string }[]> {
+  const excluded = new Set(options.excludeUserIds ?? []);
+  const scope = {
+    organizationId: options.organizationId,
+    status: "ACTIVE",
+    ...(excluded.size ? { id: { notIn: [...excluded] } } : {}),
+  };
+
+  const [assignments, owners] = await Promise.all([
+    prisma.userRole.findMany({
+      where: { user: scope, role: { permissions: { has: options.permission } } },
+      select: { user: { select: { id: true, email: true, name: true } } },
+    }),
+    // A wildcard owner holds every permission without listing it, so an organization
+    // whose owner has permissions ["*"] would otherwise never hear anything.
+    prisma.userRole.findMany({
+      where: { user: scope, role: { permissions: { has: "*" } } },
+      select: { user: { select: { id: true, email: true, name: true } } },
+    }),
+  ]);
+
+  const seen = new Set<string>();
+  const holders: { id: string; email: string; name: string }[] = [];
+  for (const row of [...assignments, ...owners]) {
+    if (seen.has(row.user.id)) continue;
+    seen.add(row.user.id);
+    holders.push(row.user);
+  }
+  return holders;
+}

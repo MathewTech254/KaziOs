@@ -144,3 +144,159 @@ const MINIMUM_CENTS: Record<string, number> = {
 export function minimumChargeCents(currency: string): number {
   return MINIMUM_CENTS[currency.toUpperCase()] ?? 100;
 }
+
+// ============================================================================
+// Plans, customers and subscriptions
+//
+// Recurring billing runs on Paystack's own engine rather than a local imitation of
+// it: a KaziOS price becomes a Paystack plan, a verified first payment creates a
+// customer and a subscription against that plan, and renewals arrive as signed
+// webhook events that the server still confirms with Paystack before applying.
+// Every call here is server-side; the secret key never leaves this process.
+// ============================================================================
+
+async function callGet<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { Authorization: `Bearer ${secretKey()}` },
+  });
+  const text = await res.text();
+  let json: any;
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch {
+    throw new PaystackError("The payment provider returned an unreadable response", 502);
+  }
+  if (!res.ok || json.status === false) {
+    throw new PaystackError(json.message || `Payment provider error (${res.status})`, res.status);
+  }
+  return json.data as T;
+}
+
+/** The intervals Paystack will build a recurring plan for. */
+const PAYSTACK_PLAN_INTERVALS = new Set(["daily", "weekly", "monthly", "yearly"]);
+
+export interface PaystackPlan {
+  plan_code: string;
+  name: string;
+  interval: string;
+  amount: number;
+  currency: string;
+}
+
+export interface PaystackCustomer {
+  id?: number;
+  customer_code: string;
+  email: string;
+}
+
+export interface PaystackSubscription {
+  subscription_code: string;
+  status: string;
+  email_token?: string;
+  customer: { customer_code?: string; email?: string };
+  plan: { plan_code?: string; name?: string };
+  next_payment_date?: string | null;
+}
+
+/**
+ * Creates the Paystack plan behind one of our price rows.
+ *
+ * Amounts are in the currency's subunit exactly as our rows hold them, so the plan the
+ * provider charges is defined by the same number the pricing page displays. A interval
+ * Paystack does not model (our "custom") has no plan here by design: Enterprise is
+ * quoted, not subscribed to.
+ */
+export async function createPlan(input: {
+  name: string;
+  interval: string;
+  amountInCents: number;
+  currency: string;
+}): Promise<PaystackPlan> {
+  if (!isPaystackEnabled()) {
+    throw new PaystackError("Card payments are not configured on this server", 503);
+  }
+  if (!PAYSTACK_PLAN_INTERVALS.has(input.interval)) {
+    throw new PaystackError(`Paystack does not offer a ${input.interval} plan interval`, 400);
+  }
+  return call<PaystackPlan>("/plan", {
+    name: input.name,
+    interval: input.interval,
+    amount: input.amountInCents,
+    currency: input.currency.toUpperCase(),
+  });
+}
+
+/** Reads a plan back. Returns null when the provider has never heard of it. */
+export async function fetchPlan(planCode: string): Promise<PaystackPlan | null> {
+  if (!isPaystackEnabled()) return null;
+  try {
+    return await callGet<PaystackPlan>(`/plan/${encodeURIComponent(planCode)}`);
+  } catch (err) {
+    if (err instanceof PaystackError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+/** Finds a customer by email, or null. Used so retries reuse one customer per business. */
+export async function findCustomerByEmail(email: string): Promise<PaystackCustomer | null> {
+  if (!isPaystackEnabled()) return null;
+  try {
+    return await callGet<PaystackCustomer>(`/customer/${encodeURIComponent(email)}`);
+  } catch (err) {
+    if (err instanceof PaystackError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+export async function createCustomer(input: {
+  email: string;
+  firstName?: string;
+}): Promise<PaystackCustomer> {
+  if (!isPaystackEnabled()) {
+    throw new PaystackError("Card payments are not configured on this server", 503);
+  }
+  return call<PaystackCustomer>("/customer", {
+    email: input.email,
+    ...(input.firstName ? { first_name: input.firstName } : {}),
+  });
+}
+
+/**
+ * Subscribes a customer to a plan, which is what makes the provider charge them again
+ * when the period ends. The card token behind that charge was collected by the checkout
+ * the customer just completed; nothing here ever sees a card number.
+ */
+export async function createSubscription(input: {
+  customerCode: string;
+  planCode: string;
+}): Promise<PaystackSubscription> {
+  if (!isPaystackEnabled()) {
+    throw new PaystackError("Card payments are not configured on this server", 503);
+  }
+  return call<PaystackSubscription>("/subscription", {
+    customer: input.customerCode,
+    plan: input.planCode,
+  });
+}
+
+export async function fetchSubscription(subscriptionCode: string): Promise<PaystackSubscription | null> {
+  if (!isPaystackEnabled()) return null;
+  try {
+    return await callGet<PaystackSubscription>(`/subscription/${encodeURIComponent(subscriptionCode)}`);
+  } catch (err) {
+    if (err instanceof PaystackError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+/** Stops future renewals. The customer keeps the period they already paid for. */
+export async function disableSubscription(subscriptionCode: string): Promise<void> {
+  if (!isPaystackEnabled()) return;
+  await call(`/subscription/enable/${encodeURIComponent(subscriptionCode)}/disable`, {});
+}
+
+/** Turns renewals back on after a cancellation was withdrawn. */
+export async function enableSubscription(subscriptionCode: string): Promise<void> {
+  if (!isPaystackEnabled()) return;
+  await call(`/subscription/enable/${encodeURIComponent(subscriptionCode)}/enable`, {});
+}

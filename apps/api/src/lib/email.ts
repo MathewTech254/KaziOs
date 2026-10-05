@@ -230,3 +230,26 @@ export function welcomeEmail(to: string, name: string, organizationName: string)
     text: `Hello ${name},\n\nYour ${organizationName} workspace is ready on KaziOS: ${appUrl}`,
   };
 }
+
+/**
+ * One billing announcement as an email: a payment that failed, a plan that activated,
+ * a subscription that expired. The same words as the in-app notification, because a
+ * customer who is not looking at the app still needs to know their card was declined.
+ */
+export function billingNoticeEmail(input: {
+  to: string;
+  name: string;
+  subject: string;
+  paragraph: string;
+  /** Where "Open billing" should go, as an app path such as "/settings?tab=billing". */
+  link?: string;
+}): Mail {
+  const url = `${settings().appUrl}${input.link ?? "/settings?tab=billing"}`;
+  const body = `<p>Hello ${input.name},</p><p>${input.paragraph}</p>`;
+  return {
+    to: input.to,
+    subject: input.subject,
+    html: shell(input.subject, body, { label: "Open billing", url }),
+    text: `Hello ${input.name},\n\n${input.paragraph}\n\n${url}`,
+  };
+}

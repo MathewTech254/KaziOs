@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, CheckCircle, Eye, EyeOff } from "lucide-react";
 import { AuthBrandPanel } from "../components/AuthBrandPanel";
 import { BrandLogo } from "../components/BrandLogo";
@@ -32,6 +32,7 @@ export function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const passwordRequirements = [
     { met: form.password.length >= 8, label: "At least 8 characters" },
@@ -49,7 +50,15 @@ export function RegisterPage() {
     setLoading(true);
     try {
       await register(form);
-      navigate("/dashboard");
+      // The plan picked on the pricing page travels this far (?plan=). A paid plan goes
+      // straight to Billing so checkout is the very next step; anything else lands in
+      // the dashboard as before.
+      const requestedPlan = searchParams.get("plan");
+      navigate(
+        requestedPlan && requestedPlan !== "community"
+          ? `/settings?tab=billing&plan=${encodeURIComponent(requestedPlan)}`
+          : "/dashboard"
+      );
     } catch (err: any) {
       setError(err.response?.data?.error || "Registration failed");
     } finally {

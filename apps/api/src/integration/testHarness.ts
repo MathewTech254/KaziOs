@@ -9,7 +9,13 @@ import { posRouter } from "../routes/pos";
 import { expenseRouter } from "../routes/expenses";
 import { inventoryRouter } from "../routes/inventory";
 import { reportRouter } from "../routes/reports";
+import { organizationRouter } from "../routes/organization";
+import { userRouter } from "../routes/users";
+import { roleRouter } from "../routes/roles";
 import { cardPaymentRouter, paystackWebhookRouter } from "../routes/card-payments";
+import { billingRouter } from "../routes/billing";
+import { planRouter } from "../routes/plans";
+import { platformRouter } from "../routes/platform";
 import { errorHandler } from "../middleware/errorHandler";
 
 /**
@@ -84,6 +90,14 @@ app.use("/api/v1/card-payments", cardPaymentRouter);
 // The webhook carries no session by design, so it is mounted on its own unauthenticated
 // path rather than behind the card payment router's requireAuth.
 app.use("/api/v1/webhooks", paystackWebhookRouter);
+app.use("/api/v1/org", organizationRouter);
+app.use("/api/v1/users", userRouter);
+app.use("/api/v1/roles", roleRouter);
+// The subscription surface is mounted here too, so entitlement enforcement is exercised over
+// real HTTP rather than only against a mocked service.
+app.use("/api/v1/billing", billingRouter);
+app.use("/api/v1/plans", planRouter);
+app.use("/api/v1/platform", platformRouter);
 
 // The error handler is part of the behaviour under test, not optional decoration. Without
 // it a ZodError falls through to Express's default handler and answers 500, so a test
@@ -151,6 +165,16 @@ export async function cleanupRun(): Promise<void> {
     await tx.warehouse.deleteMany({ where: { organizationId: { in: orgIds } } });
     await tx.branch.deleteMany({ where: { organizationId: { in: orgIds } } });
     await tx.setting.deleteMany({ where: { organizationId: { in: orgIds } } });
+    // The subscription tables, in dependency order. Without these a leftover
+    // EntitlementOverride or SubscriptionEvent would be found by a later run and quietly
+    // change what that run is asserting.
+    await tx.usageRecord.deleteMany({ where: { organizationId: { in: orgIds } } });
+    await tx.entitlementOverride.deleteMany({ where: { organizationId: { in: orgIds } } });
+    await tx.subscriptionPayment.deleteMany({ where: { organizationId: { in: orgIds } } });
+    await tx.subscriptionEvent.deleteMany({
+      where: { subscription: { organizationId: { in: orgIds } } },
+    });
+    await tx.subscription.deleteMany({ where: { organizationId: { in: orgIds } } });
     await tx.userRole.deleteMany({ where: { user: { organizationId: { in: orgIds } } } });
     await tx.session.deleteMany({ where: { user: { organizationId: { in: orgIds } } } });
     await tx.auditLog.deleteMany({ where: { organizationId: { in: orgIds } } });

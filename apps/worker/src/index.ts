@@ -1,6 +1,6 @@
 import { Worker, Queue } from "bullmq";
 import Redis from "ioredis";
-import { prisma } from "@kazios/api";
+import { prisma, reconcileSubscriptions } from "@kazios/api";
 import { QUEUE_NAMES } from "@kazios/types";
 
 const connection = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
@@ -13,6 +13,7 @@ export const queues = {
   reports: new Queue(QUEUE_NAMES.REPORTS, { connection }),
   invoiceOverdue: new Queue(QUEUE_NAMES.INVOICE_OVERDUE, { connection }),
   stockCheck: new Queue(QUEUE_NAMES.STOCK_CHECK, { connection }),
+  subscriptions: new Queue(QUEUE_NAMES.SUBSCRIPTIONS, { connection }),
 };
 
 /**
@@ -25,6 +26,18 @@ export const queues = {
  */
 const OVERDUE_EVERY_MS = Number(process.env.OVERDUE_SWEEP_MS || 60 * 60 * 1000);
 const STOCK_EVERY_MS = Number(process.env.STOCK_SWEEP_MS || 15 * 60 * 1000);
+
+/**
+ * How often subscriptions are reconciled.
+ *
+ * Hourly, alongside the invoice sweep. This is not what makes the product behave correctly:
+ * the API derives each subscription's real status from the clock on every request, so a
+ * business whose card failed is treated correctly the moment it happens whether or not this
+ * has run. What the sweep is for is writing those transitions down, so the admin area and
+ * the ledger tell the same story as the checks the product runs, and so a long outage of
+ * this worker cannot leave a stale "ACTIVE" sitting in a support conversation.
+ */
+const SUBSCRIPTION_EVERY_MS = Number(process.env.SUBSCRIPTION_SWEEP_MS || 60 * 60 * 1000);
 
 async function sendNotification(job: any) {
   const { organizationId, userId, channel, type, title, body } = job.data;
@@ -188,6 +201,24 @@ async function checkStock() {
   }
 }
 
+/**
+ * The subscription sweep, as a BullMQ job.
+ *
+ * A thin wrapper rather than passing `reconcileSubscriptions` straight in, because that
+ * function takes a clock and BullMQ passes a job. The two are both called `now`-ish and
+ * swapping them by accident would reconcile against a job object, which reads as a date
+ * only in the sense that it does not throw immediately.
+ */
+async function reconcileSubscriptionJobs() {
+  const summary = await reconcileSubscriptions(new Date());
+  if (summary.expired || summary.pastDue || summary.planChanges) {
+    console.log(
+      `Subscription sweep: ${summary.expired} expired, ${summary.pastDue} entered grace, ${summary.planChanges} plan changes applied`
+    );
+  }
+  return summary;
+}
+
 async function main() {
   new Worker(QUEUE_NAMES.NOTIFICATIONS, sendNotification, { connection });
   new Worker(QUEUE_NAMES.AUTOMATIONS, executeAutomation, { connection });
@@ -197,6 +228,7 @@ async function main() {
   // any real number of customers.
   new Worker(QUEUE_NAMES.INVOICE_OVERDUE, checkOverdueInvoices, { connection });
   new Worker(QUEUE_NAMES.STOCK_CHECK, checkStock, { connection });
+  new Worker(QUEUE_NAMES.SUBSCRIPTIONS, reconcileSubscriptionJobs, { connection });
 
   // Registering the repeat is what makes these queues run at all. Without it the
   // workers above sit waiting on a queue nothing ever writes to.
@@ -206,9 +238,14 @@ async function main() {
     { repeat: { every: OVERDUE_EVERY_MS }, jobId: "sweep" }
   );
   await queues.stockCheck.add("sweep", {}, { repeat: { every: STOCK_EVERY_MS }, jobId: "sweep" });
+  await queues.subscriptions.add(
+    "sweep",
+    {},
+    { repeat: { every: SUBSCRIPTION_EVERY_MS }, jobId: "sweep" }
+  );
 
   console.log(
-    `KaziOS worker started (overdue every ${OVERDUE_EVERY_MS}ms, stock every ${STOCK_EVERY_MS}ms)`
+    `KaziOS worker started (overdue every ${OVERDUE_EVERY_MS}ms, stock every ${STOCK_EVERY_MS}ms, subscriptions every ${SUBSCRIPTION_EVERY_MS}ms)`
   );
 }
 

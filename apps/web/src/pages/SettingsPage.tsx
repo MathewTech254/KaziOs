@@ -1,5 +1,13 @@
-import { useState } from "react";
-import { Building2, Percent, ShieldCheck, SlidersHorizontal, Warehouse } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import {
+  Building2,
+  CreditCard,
+  Percent,
+  ShieldCheck,
+  SlidersHorizontal,
+  Warehouse,
+} from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { SettingsOrganizationPanel } from "../components/SettingsOrganizationPanel";
 import { SettingsLocationsPanel } from "../components/SettingsLocationsPanel";
@@ -7,6 +15,7 @@ import { SettingsTaxPanel } from "../components/SettingsTaxPanel";
 import { SettingsPreferencesPanel } from "../components/SettingsPreferencesPanel";
 import { SettingsRolesPanel } from "../components/SettingsRolesPanel";
 import { SettingsUsersPanel } from "../components/SettingsUsersPanel";
+import { SettingsBillingPanel } from "../components/SettingsBillingPanel";
 
 const TABS = [
   { id: "organization", label: "Organization", icon: Building2 },
@@ -14,23 +23,40 @@ const TABS = [
   { id: "tax", label: "Tax", icon: Percent },
   { id: "preferences", label: "Preferences", icon: SlidersHorizontal },
   { id: "roles", label: "Roles & permissions", icon: ShieldCheck },
+  { id: "billing", label: "Billing", icon: CreditCard },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
 
+function isTabId(value: string | null): value is TabId {
+  return TABS.some(tab => tab.id === value);
+}
+
 export function SettingsPage() {
   const { hasPermission } = useAuth();
-  const [tab, setTab] = useState<TabId>("organization");
+  // The tab is in the URL because the pricing page links straight here: "Change plan" and
+  // "Reactivate" both land on Billing rather than making the owner hunt for the tab.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requested = searchParams.get("tab");
+  const [tab, setTab] = useState<TabId>(isTabId(requested) ? requested : "organization");
 
   const canManage = hasPermission("settings.manage");
   const canViewUsers = canManage || hasPermission("users.view");
+
+  // Keeps the URL in step so a reload, or a browser back, returns to the tab that was open.
+  useEffect(() => {
+    if (requested === tab) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("tab", tab);
+    setSearchParams(next, { replace: true });
+  }, [tab, requested, searchParams, setSearchParams]);
 
   return (
     <div>
       <div className="mb-6">
         <h1 className="kazi-page-title">Settings</h1>
         <p className="kazi-page-subtitle">
-          Organization profile, locations, tax, preferences and access control
+          Organization profile, locations, tax, preferences, access control and billing
         </p>
       </div>
 
@@ -74,6 +100,7 @@ export function SettingsPage() {
           <SettingsUsersPanel canManage={canManage} />
         </div>
       )}
+      {tab === "billing" && <SettingsBillingPanel canManage={canManage} />}
     </div>
   );
 }
