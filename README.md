@@ -1,208 +1,826 @@
+Absolutely. Here is the **plain copy-paste version**. No extra commentary, no icons, no emojis, and no citations inside the README.
+
+````markdown
 # KaziOS
 
-An ERP/POS platform for East Africa — built with a monorepo (npm workspaces), Prisma + PostgreSQL, BullMQ worker, and a React + Vite + Tailwind frontend.
- 
-## Status: Running locally
+## The AI-native operating system for African businesses
 
-All three services start via `npm run dev`:
-- **API**: http://localhost:4000
-- **Web**: http://localhost:3000
-- **Worker**: BullMQ queues (background)
+KaziOS is a business management platform designed to bring sales, point of sale, inventory, customers, purchasing, invoicing, payments, reporting and AI-powered business intelligence into one connected system.
 
-## Quick start
+Built in Kenya for African businesses, KaziOS is designed around real business operations including multiple branches, inventory management, digital payments, financial tracking, business reporting and the challenges of operating in markets where connectivity and infrastructure can vary.
 
-```powershell
-# 1. Start database + Redis (Docker — no local install needed)
-cd C:\Users\ZBOOK\Documents\KaziOS
-docker compose up -d postgres redis
-# 2. Create database schema
-cd apps\api
-npx prisma migrate dev --name init
-npx prisma generate
+The long-term goal is to build a complete operating platform that allows African businesses to run their day-to-day operations from one system.
 
-# 3. Run everything
-cd C:\Users\ZBOOK\Documents\KaziOS
-npm run dev
+---
+
+## Overview
+
+Many businesses depend on multiple disconnected systems for:
+
+- Point of sale
+- Inventory
+- Customers
+- Purchasing
+- Invoicing
+- Payments
+- Expenses
+- Accounting
+- Reporting
+- Business intelligence
+
+KaziOS brings these workflows into a unified platform.
+
+The core idea is simple:
+
+```text
+Sale
+ |
+ +-- Payment
+ |
+ +-- Inventory
+ |
+ +-- Customer
+ |
+ +-- Accounting
+ |
+ +-- Reporting
+ |
+ +-- AI Insights
+````
+
+A business transaction should not exist in isolation.
+
+When a sale happens, the corresponding inventory, payment, customer history, financial records and reporting should remain connected.
+
+---
+
+## Core Platform
+
+### Point of Sale
+
+KaziOS is being developed around a complete business POS experience.
+
+Capabilities include:
+
+* Product search
+* SKU support
+* Barcode support
+* Shopping cart
+* Quantity management
+* Customer selection
+* Walk-in customers
+* Discounts
+* Tax handling
+* Payment processing
+* Sales records
+* Receipts
+* Returns and refunds
+* Cashier workflows
+
+The POS is designed to connect directly with inventory, customers, payments and financial records.
+
+### Products and Inventory
+
+KaziOS provides the foundation for managing products and stock.
+
+Capabilities include:
+
+* Products
+* SKUs
+* Barcodes
+* Categories
+* Brands
+* Units
+* Selling prices
+* Cost prices
+* Tax categories
+* Reorder levels
+* Warehouses
+* Branches
+* Stock movements
+* Stock adjustments
+* Inventory reporting
+
+The inventory architecture is designed around traceable stock movements rather than simply storing a current quantity.
+
+### Customers
+
+Customer management includes:
+
+* Individual customers
+* Business customers
+* Customer profiles
+* Customer history
+* Customer invoices
+* Customer payments
+* Outstanding balances
+* Returns
+* Business information
+
+The POS is designed to support both existing customers and walk-in transactions.
+
+### Sales and Invoicing
+
+KaziOS connects sales with the rest of the business system.
+
+Capabilities include:
+
+* Sales
+* Invoices
+* Invoice line items
+* Payments
+* Partial payments
+* Invoice status
+* Invoice lifecycle
+* Customer balances
+* Payment tracking
+
+### Purchasing
+
+The purchasing system is designed around the complete supplier workflow:
+
+```text
+Supplier
+   |
+Purchase Order
+   |
+Receiving
+   |
+Inventory
+   |
+Supplier Balance
+   |
+Payment
 ```
 
-Open http://localhost:3000, register an organization, sign in.
+The architecture is intended to support supplier management, purchase orders, receiving, inventory updates and supplier financial tracking.
+
+### Branches and Warehouses
+
+KaziOS supports organization-level business locations including:
+
+* Branches
+* Warehouses
+* Branch-specific operations
+* Branch users
+* Warehouse management
+* Stock allocation
+
+The architecture is designed to support businesses operating from multiple locations.
+
+### Roles and Permissions
+
+KaziOS includes role-based access control.
+
+Permissions are designed to control access to business operations such as:
+
+* Sales
+* Reports
+* Inventory
+* Settings
+* Users
+* Financial operations
+* Organization management
+
+Authorization is enforced at the application level rather than relying only on frontend visibility.
+
+### Audit Logging
+
+Important business mutations are recorded through an audit system.
+
+This provides a foundation for tracking:
+
+* Who performed an action
+* What was changed
+* When it happened
+* Which organization was affected
+
+---
+
+## Payments
+
+KaziOS uses Paystack as its primary payment integration.
+
+The payment architecture is designed around:
+
+* Server-side payment initialization
+* Payment verification
+* Transaction references
+* Webhooks
+* Idempotency
+* Payment states
+* Subscription billing
+* Billing history
+
+Payment credentials are never intended to be exposed to the frontend.
+
+Payment status is determined by verified backend information rather than by client-side success messages.
+
+---
+
+## SaaS and Subscription Model
+
+KaziOS is being developed with a SaaS business model.
+
+The platform is intended to support:
+
+* Free and community usage
+* Paid plans
+* Monthly billing
+* Annual billing
+* Feature entitlements
+* Usage limits
+* AI usage limits
+* Subscription lifecycle management
+* Billing history
+* Plan upgrades
+* Plan downgrades
+* Subscription cancellation
+* Payment recovery
+
+The planned commercial model separates the core KaziOS platform from additional managed services, higher limits and advanced capabilities.
+
+Planned plan structure:
+
+```text
+Community
+    |
+Starter
+    |
+Business
+    |
+Enterprise
+```
+
+Exact pricing and plan capabilities will evolve as the product moves through development and market validation.
+
+---
+
+## AI Business Intelligence
+
+AI is intended to be one of KaziOS's major differentiators.
+
+Rather than functioning only as a conversational chatbot, the AI layer is designed to work with authorized business data and tools.
+
+Examples of business questions include:
+
+```text
+How much did we sell today?
+
+Which products are running low?
+
+Which products are selling fastest?
+
+Why did profit decrease this month?
+
+Who currently owes the business money?
+
+Which customers have not purchased recently?
+
+What should we reorder?
+
+Which branch is performing best?
+
+Summarize today's business.
+```
+
+The architecture is designed around controlled AI operations:
+
+```text
+User
+  |
+AI
+  |
+Intent
+  |
+Authorized Tool
+  |
+Business Data
+  |
+Validation
+  |
+Response
+```
+
+Sensitive operations should require appropriate authorization and confirmation.
+
+The AI layer should never receive unrestricted database access.
+
+---
+
+## Designed for African Businesses
+
+KaziOS is being designed with African business environments in mind.
+
+The platform architecture considers:
+
+* Kenyan businesses
+* Kenyan Shillings
+* Paystack
+* M-PESA-compatible payment architecture
+* eTIMS and KRA integration
+* WhatsApp
+* SMS
+* Email
+* Multi-branch operations
+* Unreliable internet connectivity
+* Small and medium businesses
+* Local tax requirements
+
+The payment and communication architecture is intended to remain extensible so additional providers can be integrated without rewriting the core business domain.
+
+---
 
 ## Architecture
 
+KaziOS is structured as an npm workspaces monorepo.
+
+```text
+KaziOS/
+|
++-- apps/
+|   |
+|   +-- api/
+|   |   +-- Express API
+|   |
+|   +-- web/
+|   |   +-- React + Vite frontend
+|   |
+|   +-- worker/
+|       +-- BullMQ background worker
+|
++-- packages/
+|   |
+|   +-- types/
+|   +-- validation/
+|   +-- config/
+|   +-- integrations/
+|   +-- ai/
+|   +-- ui/
+|
++-- prisma/
++-- docker-compose.yml
++-- package.json
 ```
-packages/
-  types/        — Shared constants (QUEUE_NAMES)
-  validation/   — Zod schemas for all entities
-  config/       — Config loader
-  integrations/ — Payment/email/whatsapp/SMS stubs
-  ai/           — OpenAI client wrapper
-  ui/           — Shared UI tokens + button variant
 
-apps/
-  api/          — Express server (auth, CRUD, reports, settings)
-  worker/       — BullMQ job processor
-  web/          — Vite + React 18 + Tailwind frontend
+### Technology Stack
+
+| Layer           | Technology                 |
+| --------------- | -------------------------- |
+| Frontend        | React, Vite                |
+| Styling         | Tailwind CSS               |
+| Backend         | Node.js, Express           |
+| Database        | PostgreSQL                 |
+| ORM             | Prisma                     |
+| Background Jobs | BullMQ                     |
+| Queue           | Redis                      |
+| Validation      | Zod                        |
+| Authentication  | JWT and Redis              |
+| Payments        | Paystack                   |
+| AI              | OpenAI-compatible AI layer |
+| Architecture    | npm workspaces monorepo    |
+
+---
+
+## Current Status
+
+KaziOS is actively under development.
+
+The project currently contains working foundations for:
+
+* Authentication
+* Organization management
+* Role-based permissions
+* Tenant isolation
+* Products
+* Customers
+* Invoices
+* Payments
+* Branches
+* Warehouses
+* Tax categories
+* Settings
+* Reports
+* Audit logging
+* Background workers
+* Notifications
+* Demo business data
+* POS transaction infrastructure
+* Paystack integration architecture
+
+The remaining product work is focused on connecting and hardening these foundations into complete end-to-end business workflows.
+
+Features listed in the roadmap are not necessarily production-ready.
+
+---
+
+## Demo Business
+
+KaziOS includes a realistic demo organization for development and testing.
+
+```text
+Highlands Provisions
+KaziOS Demo Organization
 ```
 
-## Key commands
+The demo environment contains:
 
-| Command | Purpose |
-|---|---|
-| `npm run dev` | Start API + worker + web together |
-| `npm run typecheck` | Typecheck every workspace, tests included |
-| `npm test` | Run every workspace's tests |
-| `npm run build` | Build all packages and apps |
-| `npm run verify` | Typecheck + build in one command |
-| `npm run lint` | Lint every workspace |
-| `docker compose up --build` | Full Docker build |
+* Multiple branches
+* Warehouses
+* Products
+* SKUs
+* Barcodes
+* Tax categories
+* Customers
+* Suppliers
+* Staff
+* Roles
+* Invoices
+* Payments
+* Purchase orders
+* Stock transfers
+* POS sales
+* Low-stock scenarios
+* Out-of-stock scenarios
 
-### Testing
+The data is designed to represent connected business activity.
 
-Every workspace has its own Jest config, and the suite runs in layers:
+For example:
 
-| Suite | Command | What it covers |
-|---|---|---|
-| Unit | `npm run test:unit` | Money arithmetic, validation schemas, audit redaction, stock rules |
-| Integration | `npm run test:integration` | Real HTTP against a real database: tenant isolation, permissions, a full sale, the ledger |
-| UI | `npm test --workspace=@kazios/web` | React components under jsdom |
+```text
+Purchase
+   |
+Receiving
+   |
+Inventory Increase
+   |
+Customer Sale
+   |
+Payment
+   |
+Inventory Decrease
+   |
+Customer History
+   |
+Financial Records
+   |
+Reports
+```
 
-`npm test` in `apps/api` runs the unit and integration layers in sequence.
+### Seed Demo Data
 
-The integration layer is the one that catches the failures that cost money. The unit
-suites mock Prisma, so they cannot see a route that was never wired, a permission that
-was never applied, or one business reading another's data — all of which shipped here
-with a green build before being found by hand. It creates its own businesses, exercises
-them, and deletes them again.
-
-It runs against a **separate database whose name must contain "test"**, derived from
-your `DATABASE_URL`, and refuses to start otherwise. Set `TEST_DATABASE_URL` to point
-somewhere else:
+Preview the seed operation:
 
 ```powershell
-# Uses DATABASE_URL from apps/api/.env, so the database must be reachable.
-npm run test:integration --workspace=@kazios/api
-
-# Or name a different scratch database.
-$env:TEST_DATABASE_URL="postgresql://postgres:postgres@localhost:5432/kazios_test"
-npm run test:integration --workspace=@kazios/api
+node apps/api/scripts/seed-demo-org.mjs
 ```
 
-Tests are **typechecked but not compiled into the build** (`tsconfig.build.json`), so a
-test can never drift from the signature it asserts against, and no test code is ever
-shipped inside the deployed package.
-
-Two browser-level checks cover the things a typecheck cannot see:
+Apply the demo data:
 
 ```powershell
-node apps/web/scripts/check-overlay.mjs                            # layering, clipping, leaked source comments
-powershell -File apps/api/scripts/smoke-notifications.ps1          # live SSE, end to end
+node apps/api/scripts/seed-demo-org.mjs --apply
 ```
 
-`check-overlay.mjs` drives a real Chrome. It fails if the notification menu is painted
-underneath the sidebar, or if a `//` comment inside JSX leaks into the page as text.
+Demo credentials should only be used in an isolated development or demo environment.
 
-## Environment
+---
 
-- `apps/api/.env` — API config (DATABASE_URL, JWT_SECRET, etc.)
-- `apps/web/` — Vite reads `VITE_API_URL` from env
-- Root `.env` — shared vars
+## Real-Time Notifications
 
-## What's implemented
+KaziOS uses Server-Sent Events and Redis pub/sub for real-time browser notifications.
 
-- **Auth**: register (creates org + owner role + default accounts + VAT + branch + warehouse), login, logout, session management (JWT + Redis sessions)
-- **Products**: CRUD with SKU, barcode, cost/sell price, min stock, tax category, brand, unit
-- **Customers**: CRUD with type (individual/business)
-- **Invoices**: create with line items, send, void, status tracking
-- **Payments**: create, auto-update invoice status (PAID/PARTIALLY_PAID)
-- **Organization**: profile, branches and warehouses (full CRUD, one main branch, in-use guards)
-- **Reports**: sales summary (gated by `reports.view`)
-- **Settings**: typed per-org key/value store (`invoicing`, `pos`, `notifications`, `accounting`) with validation, defaults and reset-to-defaults
-- **Taxes**: tax category CRUD (`/tax-categories`) with rate/mode and in-use protection
-- **Users & roles**: member list/invite, role CRUD with a shared permission catalogue (`GET /roles/permissions`), role assignment per branch/warehouse, last-owner protection
-- **Web settings page**: `/settings` — organization profile, locations, tax, preferences and roles & permissions
-- **Audit log**: automatic on all mutations
-- **Worker**: notifications, automations, overdue invoices, stock checks (BullMQ)
+```text
+Business Event
+      |
+Notification Service
+      |
+PostgreSQL
+      |
+Redis Pub/Sub
+      |
+SSE
+      |
+Browser
+```
 
-## Demo organization
+The notification system is designed to support events such as:
 
-A complete, realistic Kenyan trading business so every screen has something true to
-show and every flow can be exercised without inventing data by hand.
+* Completed sales
+* Settled payments
+* Low-stock conditions
+* Overdue invoices
+
+Notifications are stored and delivered through the application notification service.
+
+---
+
+## Development
+
+### Requirements
+
+* Node.js
+* npm
+* Docker Desktop
+* PostgreSQL
+* Redis
+
+Docker is recommended for local PostgreSQL and Redis.
+
+### Clone the Repository
 
 ```powershell
-node apps/api/scripts/seed-demo-org.mjs            # dry run, prints the plan
-node apps/api/scripts/seed-demo-org.mjs --apply    # build it
+git clone <REPOSITORY_URL>
+cd KaziOS
 ```
 
-It talks to the running API as a normal signed in user, so it can never write something
-the application would refuse, and it matches on stable keys so running it twice is safe.
-
-What it builds — **kazios-demo-org Highlands Provisions**:
-
-- **3 branches** (Ngong Road, Westlands, Mombasa Road), each with its own warehouse.
-  Stock differs per branch on purpose, so branch scoped stock and transfers are real.
-- **21 products** across staples, proteins, dairy, household, services and extras,
-  with SKU, barcode, VAT categories and reorder levels. Mombasa Road is deliberately
-  lean so it has genuine low stock, and two products sit at zero for the out of stock path.
-- **10 customers** (6 individual, 4 business with tax numbers) and **5 suppliers**.
-- **4 staff on 4 roles** with genuinely different permissions, so the cashier really
-  cannot see reports and the accountant really cannot touch stock.
-- **Invoices in every status** — draft, sent, part paid, paid, void — including ones
-  past their due date for the overdue sweep to find.
-- **Purchase orders** as draft, sent and received, plus a completed and a pending transfer.
-- **Till sales** spread over four weeks, rung through the POS endpoint so stock moves
-  exactly as it does at a real till.
-
-Any seeded staff member signs in with the password `KaziOS!Demo2026`.
-
-## Real time notifications
-
-Alerts are pushed to the browser over an open connection rather than polled, so the
-badge reflects what has actually happened at the moment it happens.
-
-```
-POST /pos/sale        ─┐
-POST /payments        ─┤
-POST /inventory/...   ─┼─> notify() ─> Postgres row ─> Redis pub/sub ─> SSE ─> browser
-worker sweeps         ─┘                (the record)   (across replicas)  (the push)
-```
-
-- `GET /api/v1/notifications/stream` — the live feed. Server Sent Events, so it works
-  through the proxies and CDNs an API is deployed behind, and the browser reconnects
-  on its own. The stream is authenticated like every other route.
-- `apps/api/src/services/notifications.ts` — the single write path. Storing the alert and
-  announcing it are one operation, so an alert cannot be stored but not delivered.
-- Deduped by `dedupeKey`, so a condition that is detected repeatedly (a stock sweep runs
-  every fifteen minutes) raises one alert, not one per sweep.
-- Raised when: a sale completes, a payment settles an invoice, stock falls to its reorder
-  level, an invoice goes overdue.
-- Addressed to people who hold the relevant permission, and never to the person who just
-  did the thing — the cashier already knows about their own sale.
-
-Run the end to end check with the dev API listening:
+### Start Infrastructure
 
 ```powershell
-powershell -File apps/api/scripts/smoke-notifications.ps1
+docker compose up -d postgres redis
 ```
 
-It opens a real stream, rings real sales through the public API, and asserts the alerts
-arrive over that open socket.
+### Configure Environment
 
-## What's next
+Create the required environment files using the project's environment examples.
 
-- Seed data script (`apps/api/src/utils/seed.ts`)
-- Payment gateway integration (M-Pesa, Flutterwave) via `packages/integrations`
-- Invoice PDF generation (pdfkit)
-- File upload/storage (multer + `packages/integrations/src/storage.ts`)
-- More web pages: POS terminal, purchases, expenses, projects, support tickets
-- Email/SMS notification providers
-- Multi-language (Swahili/English)
+Never commit real credentials or secrets.
+
+### Prepare the Database
+
+```powershell
+cd apps/api
+
+npx prisma migrate dev
+npx prisma generate
+```
+
+### Start KaziOS
+
+From the repository root:
+
+```powershell
+npm run dev
+```
+
+Development services:
+
+```text
+Web       http://localhost:3000
+API       http://localhost:4000
+Worker    BullMQ background processing
+```
+
+---
+
+## Development Commands
+
+| Command                     | Purpose                                   |
+| --------------------------- | ----------------------------------------- |
+| `npm run dev`               | Start the web application, API and worker |
+| `npm run typecheck`         | Typecheck the workspaces                  |
+| `npm test`                  | Run the test suite                        |
+| `npm run build`             | Build the project                         |
+| `npm run verify`            | Typecheck and build                       |
+| `npm run lint`              | Lint the workspaces                       |
+| `docker compose up --build` | Build and start the containers            |
+
+---
+
+## Testing
+
+KaziOS includes multiple levels of testing.
+
+### Unit Tests
+
+Unit tests cover areas such as:
+
+* Money calculations
+* Validation
+* Stock rules
+* Audit redaction
+
+### Integration Tests
+
+Integration tests exercise real HTTP and database workflows, including:
+
+* Tenant isolation
+* Permissions
+* Sales
+* Ledger behavior
+* Database operations
+
+### UI Tests
+
+The web workspace contains tests for React components.
+
+### Browser Checks
+
+Additional browser-level checks are available for functionality that cannot be detected through typechecking alone.
+
+Run:
+
+```powershell
+npm test
+```
+
+or:
+
+```powershell
+npm run verify
+```
+
+---
+
+## Security
+
+KaziOS is designed to handle business and financial information.
+
+Security considerations include:
+
+* Tenant isolation
+* Server-side authorization
+* Role-based permissions
+* Input validation
+* Payment verification
+* Webhook verification
+* Audit logging
+* Rate limiting
+* Database constraints
+* Transactional business operations
+* Secret management
+
+Never commit:
+
+* API keys
+* Database credentials
+* Payment secrets
+* Authentication secrets
+* Private business data
+
+---
+
+## Roadmap
+
+### Core Platform
+
+* [x] Authentication
+* [x] Organizations
+* [x] Products
+* [x] Customers
+* [x] Invoices
+* [x] Payments
+* [x] Branches
+* [x] Warehouses
+* [x] Roles and permissions
+* [x] Audit logging
+* [x] Settings
+* [x] Notifications
+
+### Point of Sale
+
+* [x] POS transaction foundation
+* [ ] Complete cashier workflow
+* [ ] Barcode scanning
+* [ ] Hold and resume orders
+* [ ] Returns and refunds
+* [ ] Split payments
+* [ ] Cashier shifts
+* [ ] End-of-day reconciliation
+* [ ] Offline POS
+
+### Inventory
+
+* [x] Product management
+* [x] Stock foundations
+* [ ] Complete inventory ledger
+* [ ] Stock transfers
+* [ ] Stocktaking
+* [ ] Batch and lot tracking
+* [ ] Automated replenishment
+* [ ] Inventory forecasting
+
+### Finance
+
+* [ ] Complete accounting workflows
+* [ ] General ledger
+* [ ] Accounts receivable
+* [ ] Accounts payable
+* [ ] Profit and loss
+* [ ] Balance sheet
+* [ ] Cash flow
+* [ ] Reconciliation
+
+### Procurement
+
+* [ ] Complete purchasing lifecycle
+* [ ] Supplier management
+* [ ] Receiving
+* [ ] Supplier bills
+* [ ] Purchase analytics
+* [ ] Automated replenishment
+
+### AI
+
+* [ ] AI business copilot
+* [ ] Finance intelligence
+* [ ] Sales intelligence
+* [ ] Inventory intelligence
+* [ ] Procurement intelligence
+* [ ] Executive insights
+* [ ] Controlled AI actions
+
+### SaaS
+
+* [ ] Pricing system
+* [ ] Free plan
+* [ ] Paid plans
+* [ ] Paystack subscription billing
+* [ ] Usage limits
+* [ ] Feature entitlements
+* [ ] Billing portal
+* [ ] Subscription lifecycle
+* [ ] Platform administration
+
+### African Integrations
+
+* [x] Paystack architecture
+* [ ] M-PESA integration
+* [ ] eTIMS and KRA integration
+* [ ] WhatsApp
+* [ ] SMS
+* [ ] Email providers
+
+---
+
+## Product Direction
+
+The long-term goal of KaziOS is to provide one platform through which a business can:
+
+```text
+Sell
+Buy
+Track
+Manage
+Pay
+Account
+Analyze
+Automate
+Grow
+```
+
+The platform is being developed toward a model where operational data, financial information and AI-powered intelligence work together rather than existing as separate systems.
+
+---
+
+## Documentation
+
+Additional documentation will cover:
+
+* Architecture
+* Database
+* API
+* Authentication
+* Payments
+* AI
+* Integrations
+* Deployment
+* Self-hosting
+* Contribution guidelines
+
+Detailed technical documentation should live in the `docs/` directory rather than making the README unnecessarily large.
+
+---
+
+## Contributing
+
+KaziOS is currently under active development.
+
+Contribution policies and development guidelines will be documented as the project expands its contribution model.
+
+Before submitting changes:
+
+```powershell
+npm run verify
+npm test
+```
+
+Do not commit secrets, credentials or private business data.
+
+---
 
 ## License
 
-KaziOS is proprietary software.
+KaziOS is currently distributed under a proprietary source-available license.
 
-The source code is publicly available for transparency, evaluation, and educational reference, but it is **not open source** and may not be copied, modified, redistributed, commercially used, or deployed without permission.
+The repository is publicly visible for development, transparency, evaluation and collaboration under the terms of the project's license.
 
-See the [LICENSE](./LICENSE) file for full terms.
+Public visibility does not automatically make a project open source.
 
-Copyright © 2026 Mathew Kioko. All Rights Reserved.
+See [LICENSE](./LICENSE) for the applicable terms.
+
+Copyright © 2026 Mathew Kioko. All rights reserved.
+
+```
+
+This structure follows GitHub's current guidance: the README should explain **what the project does, why it is useful, how to get started, and how people can understand/contribute to it**, while detailed documentation can live elsewhere. :contentReference[oaicite:0]{index=0}
+```
