@@ -1,6 +1,3 @@
-Absolutely. Here is the **plain copy-paste version**. No extra commentary, no icons, no emojis, and no citations inside the README.
-
-````markdown
 # KaziOS
 
 ## The AI-native operating system for African businesses
@@ -819,8 +816,3 @@ Public visibility does not automatically make a project open source.
 See [LICENSE](./LICENSE) for the applicable terms.
 
 Copyright © 2026 Mathew Kioko. All rights reserved.
-
-```
-
-This structure follows GitHub's current guidance: the README should explain **what the project does, why it is useful, how to get started, and how people can understand/contribute to it**, while detailed documentation can live elsewhere. :contentReference[oaicite:0]{index=0}
-```
