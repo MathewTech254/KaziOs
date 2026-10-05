@@ -14,7 +14,10 @@ if (!url) {
 const prisma = new PrismaClient({ datasources: { db: { url } } });
 
 // Tables added by the features in this repository. A route can be deployed and still
-// fail on every request if the table behind it was never created.
+// fail on every request if the table behind it was never created. The billing
+// tables are listed explicitly because that exact outage happened: the API was
+// live on Render while Neon had never received the subscription migrations, so
+// GET /api/v1/plans failed on every request with P2021 on public.Plan.
 const REQUIRED = [
   { table: '"Expense"', why: "expenses" },
   { table: '"ExpenseCategory"', why: "expenses" },
@@ -22,6 +25,17 @@ const REQUIRED = [
   { table: '"PasswordResetToken"', why: "password reset" },
   { table: '"AuditLog"', why: "audit trail" },
   { table: '"Inventory"', why: "stock ledger" },
+  { table: '"Plan"', why: "subscriptions (GET /api/v1/plans)" },
+  { table: '"PlanPrice"', why: "subscriptions" },
+  { table: '"Feature"', why: "subscriptions" },
+  { table: '"PlanFeature"', why: "subscriptions" },
+  { table: '"PlanLimit"', why: "subscriptions" },
+  { table: '"Subscription"', why: "subscriptions" },
+  { table: '"SubscriptionEvent"', why: "subscriptions" },
+  { table: '"SubscriptionPayment"', why: "subscriptions" },
+  { table: '"UsageRecord"', why: "usage metering" },
+  { table: '"EntitlementOverride"', why: "subscriptions" },
+  { table: '"PlatformAdmin"', why: "platform billing admin" },
 ];
 
 let missing = 0;

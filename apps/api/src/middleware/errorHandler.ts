@@ -83,6 +83,18 @@ export function errorHandler(err: any, _req: Request, res: Response, _next: Next
       res.status(404).json({ error: "Record not found" });
       return;
     }
+    // The code deployed ahead of its schema: the table behind a feature was never
+    // migrated in. Seen in production as P2021 on public.Plan when the billing
+    // migrations had not been applied to Neon yet. A 503 names the real problem
+    // (and is retryable); a bare 500 hides it behind "Internal server error".
+    if (err.code === "P2021") {
+      res.status(503).json({
+        error: "Service temporarily unavailable",
+        code: "SCHEMA_NOT_READY",
+        details: { table: err.meta?.table ?? null },
+      });
+      return;
+    }
   }
   res.status(500).json({ error: "Internal server error" });
 }

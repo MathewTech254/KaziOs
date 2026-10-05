@@ -126,6 +126,13 @@ export function createApp() {
   const app = express();
   const allowedOrigins = getCorsOrigins();
 
+  // Render (and Railway/Fly/Koyeb) terminate TLS at a proxy and forward the real
+  // client IP in X-Forwarded-For. Without this, express-rate-limit cannot tell
+  // clients apart behind the proxy and logs ERR_ERL_UNEXPECTED_X_FORWARDED_FOR
+  // on every request. `1` trusts exactly one hop (the platform proxy), not an
+  // arbitrary chain, so a client cannot spoof its IP with a forged header.
+  app.set("trust proxy", 1);
+
   app.use(helmet());
 
   // Sign in is the one place worth being strict about: a password can be guessed, so a
