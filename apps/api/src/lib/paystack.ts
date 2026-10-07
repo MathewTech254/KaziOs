@@ -172,8 +172,20 @@ async function callGet<T>(path: string): Promise<T> {
   return json.data as T;
 }
 
-/** The intervals Paystack will build a recurring plan for. */
-const PAYSTACK_PLAN_INTERVALS = new Set(["daily", "weekly", "monthly", "yearly"]);
+/**
+ * Paystack's vocabulary differs from ours: it asks for "annually" where the rest of
+ * KaziOS says "yearly". Sending our word straight through makes Paystack answer
+ * "Invalid interval selected", so the translation happens here, at the boundary,
+ * and every caller keeps using KaziOS's own words.
+ */
+const PAYSTACK_INTERVAL: Record<string, string> = {
+  daily: "daily",
+  weekly: "weekly",
+  monthly: "monthly",
+  quarterly: "quarterly",
+  yearly: "annually",
+  annually: "annually",
+};
 
 export interface PaystackPlan {
   plan_code: string;
@@ -215,12 +227,13 @@ export async function createPlan(input: {
   if (!isPaystackEnabled()) {
     throw new PaystackError("Card payments are not configured on this server", 503);
   }
-  if (!PAYSTACK_PLAN_INTERVALS.has(input.interval)) {
-    throw new PaystackError(`Paystack does not offer a ${input.interval} plan interval`, 400);
+  const interval = PAYSTACK_INTERVAL[input.interval];
+  if (!interval) {
+    throw new PaystackError(`KaziOS does not offer a ${input.interval} plan interval`, 400);
   }
   return call<PaystackPlan>("/plan", {
     name: input.name,
-    interval: input.interval,
+    interval,
     amount: input.amountInCents,
     currency: input.currency.toUpperCase(),
   });

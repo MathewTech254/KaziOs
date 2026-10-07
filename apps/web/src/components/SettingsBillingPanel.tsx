@@ -12,6 +12,26 @@ type PlanChangeOutcome =
   | { action: "SAME"; planKey: string };
 
 /**
+ * A sellable plan from the public catalogue, read from `GET /plans` the same way the
+ * pricing page reads it. Only paid plans with a live price are offered here; the free
+ * tier needs no purchase and prices always come from the server, never this file.
+ */
+interface CataloguePlan {
+  key: string;
+  name: string;
+  description: string;
+  highlight: string | null;
+  isFree: boolean;
+  trialDays: number;
+  prices: { interval: string; amountCents: number; currency: string }[];
+  features: { key: string; name: string; description: string }[];
+}
+
+function priceFor(plan: CataloguePlan, billingInterval: string) {
+  return plan.prices.find(p => p.interval === billingInterval) ?? null;
+}
+
+/**
  * The Billing tab in Settings.
  *
  * Reads one summary endpoint rather than assembling the screen from five calls, so it
@@ -98,11 +118,25 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
   const [outcome, setOutcome] = useState<PlanChangeOutcome | null>(null);
   const [outcomeError, setOutcomeError] = useState("");
 
+  // The paid plans a free business can buy without leaving this page. Read from the
+  // public catalogue, shown only when the current plan is free, so a customer who
+  // entered for free can pay the moment they need more — no pricing-page detour.
+  const [catalogue, setCatalogue] = useState<CataloguePlan[]>([]);
+  const [catalogueError, setCatalogueError] = useState("");
+
+  // Which paid plan the upgrade section is pointed at. Defaults to the plan the pricing
+  // page asked for, or the first paid plan when the customer just opened Billing.
+  const [selectedPlanKey, setSelectedPlanKey] = useState<string | null>(null);
+
+  // The plan the change-plan card below works on: the pricing page's request wins, and
+  // otherwise it is whatever the customer picked in the upgrade section on this page.
+  const activePlanKey = requestedPlan ?? selectedPlanKey;
+
   useEffect(() => {
-    if (!requestedPlan || !canManage) return;
+    if (!activePlanKey || !canManage) return;
     let cancelled = false;
     api
-      .get(`/billing/change-plan/${encodeURIComponent(requestedPlan)}`)
+      .get(`/billing/change-plan/${encodeURIComponent(activePlanKey)}`)
       .then(res => {
         if (!cancelled) {
           setOutcome(res.data.data);
@@ -115,7 +149,41 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [requestedPlan, canManage]);
+  }, [activePlanKey, canManage]);
+
+  // The paid plans themselves, fetched only for a free business signed in with
+  // billing rights. Public endpoint, sellable rows only; a failure here hides the
+  // upgrade section rather than breaking the rest of the page.
+  useEffect(() => {
+    if (!canManage || !summary || !summary.plan.isFree) return;
+    let cancelled = false;
+    api
+      .get("/plans")
+      .then(res => {
+        if (cancelled) return;
+        const sellable = (res.data.data.plans as CataloguePlan[]).filter(
+          plan => !plan.isFree && priceFor(plan, interval)
+        );
+        setCatalogue(sellable);
+        setCatalogueError("");
+        setSelectedPlanKey(current => {
+          if (current && sellable.some(plan => plan.key === current)) return current;
+          if (requestedPlan && sellable.some(plan => plan.key === requestedPlan)) {
+            return requestedPlan;
+          }
+          return sellable[0]?.key ?? null;
+        });
+      })
+      .catch(err => {
+        if (!cancelled) setCatalogueError(getApiError(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Re-read when the billing interval flips, because a plan sold monthly-only is not
+    // the same offer as the same plan sold yearly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canManage, summary?.plan.isFree, interval]);
 
   // Coming back from Paystack with ?reference=... The webhook and this confirmation race
   // each other and either may land first; the server answers identically either way and
@@ -167,14 +235,14 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
 
   const startCheckout = () =>
     run(async () => {
-      if (!requestedPlan) return;
+      if (!activePlanKey) return;
       // The server decides what this costs and whether it is allowed; the browser only says
       // which plan was clicked.
       const res = await api.post("/billing/checkout", {
-        planKey: requestedPlan,
+        planKey: activePlanKey,
         interval,
         email: user?.email,
-        idempotencyKey: `${requestedPlan}-${interval}-${new Date().toISOString().slice(0, 10)}`,
+        idempotencyKey: `${activePlanKey}-${interval}-${new Date().toISOString().slice(0, 10)}`,
       });
       window.location.href = res.data.data.authorizationUrl;
     });
@@ -203,7 +271,7 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
 
   const scheduleDowngrade = () =>
     run(async () => {
-      const res = await api.post("/billing/downgrade", { planKey: requestedPlan });
+      const res = await api.post("/billing/downgrade", { planKey: activePlanKey });
       setNotice(res.data.data.message);
     });
 
@@ -409,7 +477,7 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
         )}
       </div>
 
-      {requestedPlan && canManage && requestedPlan !== summary.plan.key && (
+      {activePlanKey && canManage && activePlanKey !== summary.plan.key && (
         <div className="kazi-card p-6">
           <h2 className="kazi-section-title text-foreground">Change plan</h2>
 
@@ -423,8 +491,7 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
 
           {outcome?.action === "SAME" && (
             <p className="mt-1 text-sm text-muted-foreground">
-              You are already on this plan. Pick a different one from the pricing page if you want
-              to change.
+              You are already on this plan. Pick a different one below if you want to change.
             </p>
           )}
 
@@ -449,7 +516,7 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
           {outcome?.action === "UPGRADE_NOW" && (
             <>
               <p className="mt-1 text-sm text-muted-foreground">
-                You are moving to the {requestedPlan} plan. It is active the moment payment is
+                You are moving to the {activePlanKey} plan. It is active the moment payment is
                 confirmed
                 {outcome.trialDays > 0 ? `, with ${outcome.trialDays} days free first` : ""}.
                 Choose how often to be billed.
@@ -492,6 +559,95 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
           )}
         </div>
       )}
+
+      {/* A free business buys here, without leaving Billing. Paid plans come from the
+          public catalogue, the price shown is the row the server will charge, and the
+          checkout opened below is the same server-priced one the pricing page uses. */}
+      {canManage && summary.plan.isFree && (
+        <div className="kazi-card p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="kazi-section-title text-foreground">Upgrade your plan</h2>
+              <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+                Need more room or more locations? Pick a plan and pay right here — it is
+                active the moment Paystack confirms, and nothing you have is touched.
+              </p>
+            </div>
+            <Link to="/pricing" className="text-sm text-muted-foreground hover:text-foreground">
+              Compare all plans
+            </Link>
+          </div>
+
+          {catalogueError && <p className="mt-4 text-sm text-destructive">{catalogueError}</p>}
+
+          {!catalogueError && catalogue.length === 0 && (
+            <p className="mt-4 text-sm text-muted-foreground">Loading the plans you can buy...</p>
+          )}
+
+          {catalogue.length > 0 && (
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              {catalogue.map(plan => {
+                const price = priceFor(plan, interval);
+                const selected = plan.key === selectedPlanKey;
+                return (
+                  <button
+                    key={plan.key}
+                    type="button"
+                    onClick={() => setSelectedPlanKey(plan.key)}
+                    aria-pressed={selected}
+                    className={`rounded-xl border p-5 text-left transition-colors ${
+                      selected
+                        ? "border-accent ring-1 ring-accent"
+                        : "border-border hover:border-accent/60"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-base font-semibold text-foreground">{plan.name}</p>
+                      {selected && (
+                        <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-medium text-accent">
+                          Selected
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">{plan.description}</p>
+                    {price && (
+                      <p className="mt-3 text-xl font-semibold text-foreground">
+                        {formatMoney(price.amountCents, price.currency)}{" "}
+                        <span className="text-xs font-normal text-muted-foreground">
+                          {interval === "yearly" ? "per year" : "per month"}
+                          {plan.trialDays > 0 ? `, ${plan.trialDays} days free` : ""}
+                        </span>
+                      </p>
+                    )}
+                    {plan.highlight && (
+                      <p className="mt-1 text-xs font-medium text-accent">{plan.highlight}</p>
+                    )}
+                    <ul className="mt-3 space-y-1.5 text-sm">
+                      {plan.features.slice(0, 4).map(feature => (
+                        <li key={feature.key} className="flex items-start gap-2">
+                          <Check
+                            className="mt-0.5 h-4 w-4 shrink-0 text-success"
+                            aria-hidden="true"
+                          />
+                          <span className="text-muted-foreground">{feature.name}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {catalogue.length > 0 && (
+            <p className="mt-4 text-xs text-muted-foreground">
+              The amount above is exactly what the card is asked for. Paystack collects the
+              card on its own page; no card number ever touches KaziOS.
+            </p>
+          )}
+        </div>
+      )}
+
 
       <div className="kazi-card overflow-hidden">
         <div className="p-6">
