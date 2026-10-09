@@ -251,8 +251,11 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
     if (mpesaPollingRef.current) return;
     mpesaPollingRef.current = true;
     try {
-      for (let attempt = 0; attempt < 20; attempt++) {
-        await new Promise(resolve => setTimeout(resolve, 3000));
+      // Five seconds apart: Daraja's sandbox rate-limits the status query
+      // (HTTP 429) for anything faster, and a rate-limited question can
+      // never carry the verdict.
+      for (let attempt = 0; attempt < 36; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
         let result: { status: string; settled: boolean; message: string } | undefined;
         try {
           const res = await api.post("/billing/checkout/mpesa/confirm", { reference });
@@ -276,8 +279,9 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
           return;
         }
       }
-      // Still undecided after a minute: the prompt has usually expired by now. The
-      // manual check below asks again whenever the customer is ready.
+      // Still undecided after three minutes: the prompt has usually expired
+      // by now. The manual check below asks again whenever the customer is
+      // ready.
       setNotice(
         'M-PESA has not confirmed this payment yet. If you entered your PIN, press "Check M-PESA status" below; otherwise start the checkout again.'
       );

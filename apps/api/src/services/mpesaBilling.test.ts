@@ -1,5 +1,5 @@
 import { prisma } from "../lib/prisma";
-import { confirmMpesaCheckout, openMpesaCheckout } from "./mpesaBilling";
+import { confirmMpesaCheckout, openMpesaCheckout, resetMpesaQueryThrottle } from "./mpesaBilling";
 import { isMpesaEnabled, MpesaError, stkPush, stkQuery } from "../lib/mpesa";
 
 /**
@@ -119,6 +119,9 @@ function pendingPayment(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // The query spacing window is wall-clock state that would otherwise leak
+  // from one case into the next; tests run back-to-back in milliseconds.
+  resetMpesaQueryThrottle();
   // The push needs an HTTPS callback (Daraja's rule), so tests state one
   // explicitly rather than depending on whatever the machine has set.
   process.env.MPESA_CALLBACK_URL = "https://kazios.test/api/v1/webhooks/mpesa";
@@ -467,17 +470,49 @@ describe("confirming an M-PESA payment", () => {
 
   it("leaves the business where it was when the provider cannot be reached", async () => {
     // Nobody has been proven to have paid, so nobody has been proven to have
-    // upgraded. The row stays pending and the answer is an error, not a "no".
+    // upgraded. The row stays pending, and the customer gets a pending they
+    // can keep waiting with — an error here would read like a rejection of
+    // the payment rather than a failure to ask.
     gateway.stkQuery.mockRejectedValue(new MpesaError("M-PESA could not be reached", 502));
 
-    await expect(confirmMpesaCheckout(REFERENCE)).rejects.toMatchObject({
-      code: "MPESA_UNAVAILABLE",
-    });
+    const result = await confirmMpesaCheckout(REFERENCE);
+
+    expect(result).toMatchObject({ status: "PENDING", settled: false, retryable: true });
+    expect(result.message).toMatch(/nothing has been charged/i);
     expect(db.subscriptionPayment.update).not.toHaveBeenCalled();
     const subscriptionUpdates = db.subscription.update.mock.calls.filter(
       (call: any[]) => call[0].data?.planId
     );
     expect(subscriptionUpdates).toHaveLength(0);
+  });
+
+  it("keeps Daraja's rate limit out of the customer's inbox", async () => {
+    // The poll, the callback and a returning customer all ask at once, and
+    // Daraja answers a burst with a 429 that decides nothing. The second
+    // question inside the spacing window is answered from the window, never
+    // from the wire — and as a pending, not an error.
+    gateway.stkQuery.mockResolvedValue({ state: "PENDING" });
+
+    const first = await confirmMpesaCheckout(REFERENCE);
+    const second = await confirmMpesaCheckout(REFERENCE);
+
+    expect(gateway.stkQuery).toHaveBeenCalledTimes(1);
+    expect(first.settled).toBe(false);
+    expect(second).toMatchObject({ status: "PENDING", settled: false, retryable: true });
+    expect(db.subscriptionPayment.update).not.toHaveBeenCalled();
+  });
+
+  it("still surfaces a server that has lost its M-PESA configuration", async () => {
+    // Reachability problems are a pending the customer waits through; a
+    // missing configuration is a fact about this server and must be shown.
+    gateway.stkQuery.mockRejectedValue(
+      new MpesaError("M-PESA is not configured on this server", 503)
+    );
+
+    await expect(confirmMpesaCheckout(REFERENCE)).rejects.toMatchObject({
+      code: "MPESA_NOT_CONFIGURED",
+    });
+    expect(db.subscriptionPayment.update).not.toHaveBeenCalled();
   });
 
   it("reports a row whose prompt never reached Safaricom without querying", async () => {

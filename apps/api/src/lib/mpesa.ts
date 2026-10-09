@@ -143,7 +143,11 @@ async function call<T>(path: string, body: Record<string, unknown>): Promise<T> 
   if (!res.ok) {
     throw new MpesaError(
       json.errorMessage || json.error_description || `M-PESA error (${res.status})`,
-      res.status >= 500 ? 502 : 400
+      // 429 is the provider being busy — bursts arrive from the poll and the
+      // callback together — and grouping it with the 5xx codes keeps it out
+      // of the "rejected" bucket, which is reserved for Daraja's own answer
+      // to a well-formed request.
+      res.status >= 500 || res.status === 429 ? 502 : 400
     );
   }
   return json as T;

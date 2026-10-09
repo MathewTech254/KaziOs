@@ -56,6 +56,29 @@ import { invalidateEntitlements } from "./entitlements";
 const API_URL = (process.env.API_URL || "http://localhost:4000").replace(/\/+$/, "");
 
 /**
+ * Spacing between two questions about the same checkout.
+ *
+ * The browser's poll, Safaricom's callback and a returning customer all ask
+ * about one checkout at the same moment, and Daraja's sandbox answers a burst
+ * with HTTP 429 — a response that contains no verdict at all. A question
+ * asked a few seconds too early is therefore a question wasted; this window
+ * makes the early ones cost nothing. It can only ever delay a verdict, never
+ * produce one: everything skipped is answered exactly like an unasked
+ * question — PENDING.
+ */
+const QUERY_SPACING_MS = 4_000;
+const lastQueryAt = new Map<string, number>();
+
+/**
+ * Clears the spacing window. Only tests need this: they run back-to-back in
+ * milliseconds, where a wall-clock window would leak from one case into the
+ * next, while real sessions are minutes apart.
+ */
+export function resetMpesaQueryThrottle(): void {
+  lastQueryAt.clear();
+}
+
+/**
  * Where Safaricom posts the STK result.
  *
  * Daraja refuses anything that is not HTTPS, so `MPESA_CALLBACK_URL` is the
@@ -288,6 +311,14 @@ export interface MpesaConfirmResult {
   status: string;
   settled: boolean;
   planKey?: string;
+  /**
+   * Set when no verdict was obtained because Safaricom could not be asked —
+   * busy, rate-limited, unreachable, or asked moments ago. The callback
+   * answers with a retryable status for these so Safaricom delivers again,
+   * and the browser simply asks again; a plain PENDING means Safaricom was
+   * asked and has not decided.
+   */
+  retryable?: boolean;
   message: string;
 }
 
@@ -346,14 +377,40 @@ export async function confirmMpesaCheckout(reference: string): Promise<MpesaConf
     };
   }
 
+  // The poll, the callback and a returning customer arrive together; only one
+  // of them earns a trip to Daraja per spacing window. The others are answered
+  // from the window — PENDING, because nothing has been learned either way.
+  const lastAsk = lastQueryAt.get(checkoutRequestId);
+  if (lastAsk !== undefined && Date.now() - lastAsk < QUERY_SPACING_MS) {
+    return {
+      status: "PENDING",
+      settled: false,
+      retryable: true,
+      message:
+        "M-PESA is still being asked about this payment. Nothing has been charged; the check continues in a moment.",
+    };
+  }
+
   let result;
   try {
+    lastQueryAt.set(checkoutRequestId, Date.now());
     result = await stkQuery(checkoutRequestId);
   } catch (err) {
-    // The provider could not be reached. The row stays PENDING and the business
-    // keeps whatever it had, which is the safe answer: nobody has been proven
-    // to have paid.
-    throw mpesaAppError(err, "The payment has not been confirmed yet");
+    // A missing configuration is a real fact about this server and stays an
+    // error the customer can act on. Everything else — rate-limited, busy,
+    // unreachable — means no verdict exists: the row stays PENDING and the
+    // business keeps whatever it had. The answer says so plainly instead of
+    // being dressed up as a rejection, which it is not.
+    if (err instanceof MpesaError && err.status === 503) {
+      throw mpesaAppError(err, "The payment has not been confirmed yet");
+    }
+    return {
+      status: "PENDING",
+      settled: false,
+      retryable: true,
+      message:
+        "M-PESA has not answered yet (Safaricom is busy or unreachable). Nothing has been charged; we will ask again in a moment.",
+    };
   }
 
   if (result.state === "PENDING") {
@@ -364,6 +421,10 @@ export async function confirmMpesaCheckout(reference: string): Promise<MpesaConf
         "M-PESA has not decided this payment yet. Enter the PIN on your phone if the prompt is still showing, then check again in a moment.",
     };
   }
+
+  // A verdict, whichever way it went, ends the spacing: the next confirm has
+  // nothing left to ask about except the row's own state.
+  lastQueryAt.delete(checkoutRequestId);
 
   if (result.state === "FAILED") {
     const reason = describeStkFailure(result.resultCode, result.resultDesc);

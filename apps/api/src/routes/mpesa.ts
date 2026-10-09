@@ -112,6 +112,16 @@ mpesaWebhookRouter.post("/mpesa", async (req: Request, res: Response) => {
     const result = await confirmMpesaCheckout(payment.reference);
 
     if (result.status === "PENDING") {
+      // No verdict — either Safaricom has not decided, or it could not be
+      // asked (busy, rate-limited, or asked moments ago by the browser's
+      // poll). The second kind is answered with a retryable status so
+      // Safaricom delivers this callback again once the window has passed;
+      // the first kind is acknowledged, because asking again right now
+      // would learn nothing new.
+      if (result.retryable) {
+        await finish("FAILED", { error: result.message });
+        return res.status(502).json({ received: true, handled: false, status: result.status });
+      }
       await finish("IGNORED", { error: "Safaricom has not decided this checkout yet" });
       return res.json({ received: true, handled: false, status: result.status });
     }
