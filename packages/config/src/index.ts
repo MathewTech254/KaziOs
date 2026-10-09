@@ -25,6 +25,16 @@ export interface EnvironmentConfig {
     publicKey?: string;
     webhookSecret?: string;
   };
+  mpesa: {
+    consumerKey?: string;
+    consumerSecret?: string;
+    shortcode?: string;
+    passkey?: string;
+    /** "sandbox" or "production". Defaults to sandbox, so a half-configured server never touches real money. */
+    environment: string;
+    /** Where Safaricom posts STK results. Defaults to `${apiUrl}/api/v1/webhooks/mpesa`. */
+    callbackUrl?: string;
+  };
   etims: {
     apiUrl?: string;
     clientId?: string;
@@ -129,6 +139,14 @@ export function loadConfig(): EnvironmentConfig {
       secretKey: getEnvOptional("PAYSTACK_SECRET_KEY"),
       publicKey: getEnvOptional("PAYSTACK_PUBLIC_KEY"),
       webhookSecret: getEnvOptional("PAYSTACK_WEBHOOK_SECRET"),
+    },
+    mpesa: {
+      consumerKey: getEnvOptional("MPESA_CONSUMER_KEY"),
+      consumerSecret: getEnvOptional("MPESA_CONSUMER_SECRET"),
+      shortcode: getEnvOptional("MPESA_SHORTCODE"),
+      passkey: getEnvOptional("MPESA_PASSKEY"),
+      environment: getEnv("MPESA_ENVIRONMENT", "sandbox"),
+      callbackUrl: getEnvOptional("MPESA_CALLBACK_URL"),
     },
     etims: {
       apiUrl: getEnvOptional("ETIMS_API_URL"),

@@ -6,6 +6,8 @@ import { AppError } from "../lib";
 import { withEntitlements } from "../middleware/entitlements";
 import { getEntitlements, readLimits } from "../services/entitlements";
 import { confirmCheckout, openCheckout, subscriptionPaymentsReady } from "../services/billing";
+import { confirmMpesaCheckout, openMpesaCheckout } from "../services/mpesaBilling";
+import { isMpesaEnabled } from "../lib/mpesa";
 import {
   cancelScheduledPlanChange,
   cancelSubscription,
@@ -137,6 +139,9 @@ billingRouter.get("/summary", async (req: AuthRequest, res, next) => {
           })),
 
         paymentsEnabled: subscriptionPaymentsReady(),
+        // The M-PESA option is offered only when the Daraja credentials are
+        // actually set, the same way the card option depends on Paystack's.
+        mpesaEnabled: isMpesaEnabled(),
         recentPayments: payments.map(payment => ({
           id: payment.id,
           reference: payment.reference,
@@ -330,6 +335,89 @@ billingRouter.post(
       if (!owned) throw new AppError(404, "Payment not found");
 
       const result = await confirmCheckout(reference);
+      res.json({ data: result });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * Starts an M-PESA checkout for a plan: an STK Push, not a redirect.
+ *
+ * The phone is the only thing the browser adds; the price still comes from
+ * the plan's own KES price row, and nothing has changed by the time this
+ * answers. The prompt appears on the customer's phone, and the plan changes
+ * only when `confirmMpesaCheckout` has asked Safaricom what really happened.
+ *
+ * Separate from `/checkout` on purpose: references must never be able to
+ * cross payment rails, and a card row pressed against the M-PESA confirm
+ * route (or the reverse) is refused by name.
+ */
+billingRouter.post(
+  "/checkout/mpesa",
+  requirePermission("settings.manage"),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const planKey = String(req.body?.planKey ?? "").trim();
+      const interval = String(req.body?.interval ?? "monthly").trim();
+      const phone = String(req.body?.phone ?? "").trim();
+      const idempotencyKey =
+        typeof req.body?.idempotencyKey === "string" ? req.body.idempotencyKey : undefined;
+
+      if (!planKey) throw new AppError(400, "A plan is required");
+      if (!phone) throw new AppError(400, "A phone number is required for the M-PESA prompt");
+
+      const result = await openMpesaCheckout({
+        organizationId: req.organizationId!,
+        planKey,
+        interval,
+        phone,
+        idempotencyKey,
+        actorUserId: req.userId,
+      });
+
+      res.json({
+        data: {
+          ...result,
+          // Said plainly, so a customer watching their phone knows the prompt
+          // is real and that nothing has changed until it is answered.
+          message:
+            "Check your phone for the M-PESA prompt and enter your PIN to approve. Nothing has changed yet.",
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * The customer has answered (or failed to answer) the prompt and asks what
+ * happened.
+ *
+ * The browser only says "check this reference". The server asks Safaricom, so
+ * a button in the console cannot mark a plan as paid. The Daraja callback
+ * usually gets there first, in which case this finds the payment already
+ * settled and does nothing.
+ */
+billingRouter.post(
+  "/checkout/mpesa/confirm",
+  requirePermission("settings.manage"),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const reference = String(req.body?.reference ?? "").trim();
+      if (!reference) throw new AppError(400, "A payment reference is required");
+
+      // Scoped to the caller's own business before anything is confirmed, so a
+      // reference belonging to another customer is not found, let alone settled.
+      const owned = await prisma.subscriptionPayment.findFirst({
+        where: { reference, organizationId: req.organizationId! },
+        select: { id: true },
+      });
+      if (!owned) throw new AppError(404, "Payment not found");
+
+      const result = await confirmMpesaCheckout(reference);
       res.json({ data: result });
     } catch (err) {
       next(err);

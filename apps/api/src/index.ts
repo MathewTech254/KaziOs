@@ -102,6 +102,7 @@ import { userRouter } from "./routes/users";
 import { roleRouter } from "./routes/roles";
 import { posRouter } from "./routes/pos";
 import { cardPaymentRouter, paystackWebhookRouter } from "./routes/card-payments";
+import { mpesaWebhookRouter } from "./routes/mpesa";
 import { planRouter } from "./routes/plans";
 import { billingRouter } from "./routes/billing";
 import { platformRouter } from "./routes/platform";
@@ -207,6 +208,11 @@ export function createApp() {
   // Paystack posts here with no session. It sits above the rate limiters so a burst of
   // provider retries is never mistaken for an attack, and is trusted only by signature.
   app.use("/api/v1/webhooks", paystackWebhookRouter);
+
+  // M-PESA posts here with no session either. Daraja cannot sign a payload, so
+  // this endpoint is built to be incapable of settling anything on its own: a
+  // delivery may only cause a re-query against Safaricom (routes/mpesa.ts).
+  app.use("/api/v1/webhooks", mpesaWebhookRouter);
 
   app.use("/api/v1/auth", authLimiter);
   app.use("/api/v1", apiLimiter);

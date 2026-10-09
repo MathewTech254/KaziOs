@@ -51,6 +51,8 @@ export interface BillingSummary {
   usage: UsageReading[];
   warnings: { key: string; label: string; message: string; atLimit: boolean }[];
   paymentsEnabled: boolean;
+  /** Daraja credentials are set, so the M-PESA option may be offered at checkout. */
+  mpesaEnabled: boolean;
   recentPayments: PaymentRecord[];
 }
 

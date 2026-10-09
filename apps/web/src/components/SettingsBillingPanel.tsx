@@ -103,6 +103,16 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
   const [actionError, setActionError] = useState("");
   const [interval, setInterval] = useState<"monthly" | "yearly">("monthly");
 
+  // Which rail the next checkout uses. The selector itself only renders when the
+  // server reports M-PESA configured, so a server without Daraja credentials
+  // shows exactly the card-only interface it has always shown.
+  const [method, setMethod] = useState<"card" | "mpesa">("card");
+  const [mpesaPhone, setMpesaPhone] = useState("");
+  // Set once an STK Push has been sent: Safaricom's prompt lives on the phone,
+  // and this page only ever asks the server what Safaricom said about it.
+  const [mpesaReference, setMpesaReference] = useState<string | null>(null);
+  const mpesaPollingRef = useRef(false);
+
   // Landed here from "Change plan" on the pricing page. The checkout is not started
   // automatically on load: opening a payment window the moment a page renders is how
   // somebody is surprised by a charge.
@@ -233,9 +243,90 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
     }
   };
 
+  // Waits with the customer while the prompt is on their phone, asking the server
+  // every few seconds what Safaricom answered. Every answer comes from the server's
+  // own query to Safaricom; this loop never assumes the PIN was entered, and a
+  // failure to reach the server is simply asked again rather than believed.
+  const pollMpesa = async (reference: string) => {
+    if (mpesaPollingRef.current) return;
+    mpesaPollingRef.current = true;
+    try {
+      for (let attempt = 0; attempt < 20; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        let result: { status: string; settled: boolean; message: string } | undefined;
+        try {
+          const res = await api.post("/billing/checkout/mpesa/confirm", { reference });
+          result = res.data.data;
+        } catch {
+          // The server could not reach Safaricom this time. Nothing is assumed;
+          // the next attempt asks again.
+        }
+        if (!result) continue;
+        if (result.settled) {
+          setNotice(result.message);
+          setMpesaReference(null);
+          await reload();
+          return;
+        }
+        if (result.status === "FAILED") {
+          setActionError(result.message);
+          setNotice("");
+          setMpesaReference(null);
+          await reload();
+          return;
+        }
+      }
+      // Still undecided after a minute: the prompt has usually expired by now. The
+      // manual check below asks again whenever the customer is ready.
+      setNotice(
+        'M-PESA has not confirmed this payment yet. If you entered your PIN, press "Check M-PESA status" below; otherwise start the checkout again.'
+      );
+    } finally {
+      mpesaPollingRef.current = false;
+    }
+  };
+
+  /** One more question to the server, which asks Safaricom. Used by the button below. */
+  const checkMpesa = () =>
+    run(async () => {
+      if (!mpesaReference) return;
+      const res = await api.post("/billing/checkout/mpesa/confirm", {
+        reference: mpesaReference,
+      });
+      const result = res.data.data;
+      if (result.settled) {
+        setNotice(result.message);
+        setMpesaReference(null);
+      } else if (result.status === "FAILED") {
+        setActionError(result.message);
+        setNotice("");
+        setMpesaReference(null);
+      } else {
+        setNotice(result.message);
+      }
+    });
+
   const startCheckout = () =>
     run(async () => {
       if (!activePlanKey) return;
+
+      // M-PESA does not redirect anywhere: the prompt appears on the phone and this
+      // page stays put. The server still prices it; the browser only says which plan
+      // was clicked and which number to prompt, never an amount.
+      if (method === "mpesa" && summary?.mpesaEnabled) {
+        const res = await api.post("/billing/checkout/mpesa", {
+          planKey: activePlanKey,
+          interval,
+          phone: mpesaPhone,
+          idempotencyKey: `mpesa-${activePlanKey}-${interval}-${new Date().toISOString().slice(0, 10)}`,
+        });
+        const reference = res.data.data.reference as string;
+        setMpesaReference(reference);
+        setNotice(res.data.data.message);
+        void pollMpesa(reference);
+        return;
+      }
+
       // The server decides what this costs and whether it is allowed; the browser only says
       // which plan was clicked.
       const res = await api.post("/billing/checkout", {
@@ -539,20 +630,84 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
                     </button>
                   ))}
                 </div>
+                {summary.mpesaEnabled && (
+                  <div className="inline-flex rounded-full border border-border p-1">
+                    {(["card", "mpesa"] as const).map(option => (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setMethod(option)}
+                        aria-pressed={method === option}
+                        className={`rounded-full px-4 py-1.5 text-sm ${
+                          method === option
+                            ? "bg-accent text-accent-foreground"
+                            : "text-muted-foreground"
+                        }`}
+                      >
+                        {option === "card" ? "Card" : "M-PESA"}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={startCheckout}
-                  disabled={busy || !summary.paymentsEnabled}
+                  disabled={
+                    busy ||
+                    (method === "mpesa" && summary.mpesaEnabled
+                      ? mpesaPhone.trim().length < 9
+                      : !summary.paymentsEnabled)
+                  }
                   className="kazi-button-primary px-4 py-2 text-sm disabled:opacity-50"
                 >
-                  Continue to payment
+                  {method === "mpesa" && summary.mpesaEnabled
+                    ? "Send M-PESA prompt"
+                    : "Continue to payment"}
                   <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
-              {!summary.paymentsEnabled && (
+              {summary.mpesaEnabled && method === "mpesa" && (
+                <label className="mt-3 block max-w-xs">
+                  <span className="mb-1 block text-sm text-muted-foreground">
+                    Phone number for the M-PESA prompt
+                  </span>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    value={mpesaPhone}
+                    onChange={e => setMpesaPhone(e.target.value)}
+                    placeholder="0712 345 678"
+                    className="kazi-input"
+                  />
+                </label>
+              )}
+              {summary.mpesaEnabled && method === "mpesa" && mpesaReference && (
+                <div className="kazi-alert-card mt-4 p-4 text-sm">
+                  <p className="text-foreground" aria-live="polite">
+                    Check your phone for the M-PESA prompt and enter your PIN. This page asks
+                    Safaricom what happened every few seconds; nothing changes until the payment
+                    is confirmed.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={checkMpesa}
+                    disabled={busy}
+                    className="kazi-button-secondary mt-3 px-4 py-2 text-sm disabled:opacity-50"
+                  >
+                    Check M-PESA status
+                  </button>
+                </div>
+              )}
+              {!summary.paymentsEnabled && !summary.mpesaEnabled && (
                 <p className="mt-3 text-xs text-muted-foreground">
                   Card payments are not configured on this server, so plan changes are unavailable
                   here. Community remains fully usable.
+                </p>
+              )}
+              {!summary.paymentsEnabled && summary.mpesaEnabled && method === "card" && (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Card payments are not configured on this server. Choose M-PESA above to pay
+                  with your phone.
                 </p>
               )}
             </>
@@ -570,7 +725,11 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
               <h2 className="kazi-section-title text-foreground">Upgrade your plan</h2>
               <p className="mt-1 max-w-xl text-sm text-muted-foreground">
                 Need more room or more locations? Pick a plan and pay right here — it is
-                active the moment Paystack confirms, and nothing you have is touched.
+                active the moment{" "}
+                {summary.mpesaEnabled && method === "mpesa"
+                  ? "Safaricom confirms"
+                  : "Paystack confirms"}
+                , and nothing you have is touched.
               </p>
             </div>
             <Link to="/pricing" className="text-sm text-muted-foreground hover:text-foreground">
@@ -641,8 +800,9 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
 
           {catalogue.length > 0 && (
             <p className="mt-4 text-xs text-muted-foreground">
-              The amount above is exactly what the card is asked for. Paystack collects the
-              card on its own page; no card number ever touches KaziOS.
+              {summary.mpesaEnabled && method === "mpesa"
+                ? "The amount above is exactly what M-PESA charges, in shillings. Safaricom asks for your PIN on your phone; no PIN ever touches KaziOS."
+                : "The amount above is exactly what the card is asked for. Paystack collects the card on its own page; no card number ever touches KaziOS."}
             </p>
           )}
         </div>

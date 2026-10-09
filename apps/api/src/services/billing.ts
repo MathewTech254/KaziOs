@@ -210,7 +210,7 @@ export async function openCheckout(input: {
 }
 
 /** Whether this payment is a first purchase, a renewal, or a change of plan. */
-async function currentPaymentKind(organizationId: string, targetPlanId: string): Promise<string> {
+export async function currentPaymentKind(organizationId: string, targetPlanId: string): Promise<string> {
   const subscription = await prisma.subscription.findUnique({
     where: { organizationId },
     select: {
