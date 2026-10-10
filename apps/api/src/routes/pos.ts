@@ -95,51 +95,55 @@ posRouter.get(
   "/context",
   requireAuth,
   requirePermission("pos.sale"),
-  async (req: Request, res: Response) => {
-    const organizationId = getOrganizationId(req);
-    if (!organizationId) throw new AppError(401, "Authentication required");
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const organizationId = getOrganizationId(req);
+      if (!organizationId) throw new AppError(401, "Authentication required");
 
-    const scopedBranches = getScopedValues(req, "branchId");
-    const scopedWarehouses = getScopedValues(req, "warehouseId");
-    const organization = await prisma.organization.findUnique({
-      where: { id: organizationId },
-      include: {
-        branches: scopedBranches.length ? { where: { id: { in: scopedBranches } } } : true,
-        warehouses: scopedWarehouses.length ? { where: { id: { in: scopedWarehouses } } } : true,
-      },
-    });
-
-    if (!organization) throw new AppError(404, "Organization not found");
-
-    const categories = await prisma.category.findMany({
-      where: { organizationId },
-      include: { _count: { select: { products: true } } },
-      orderBy: { name: "asc" },
-    });
-
-    res.json({
-      data: {
-        organization: {
-          id: organization.id,
-          name: organization.name,
-          currency: organization.currency,
-          timezone: organization.timezone,
+      const scopedBranches = getScopedValues(req, "branchId");
+      const scopedWarehouses = getScopedValues(req, "warehouseId");
+      const organization = await prisma.organization.findUnique({
+        where: { id: organizationId },
+        include: {
+          branches: scopedBranches.length ? { where: { id: { in: scopedBranches } } } : true,
+          warehouses: scopedWarehouses.length ? { where: { id: { in: scopedWarehouses } } } : true,
         },
-        branches: organization.branches,
-        warehouses: organization.warehouses,
-        categories,
-        paymentMethods: getPaymentMethods(),
-        // The public key is safe to hand to the browser; the secret key never leaves the server.
-        cardPublicKey: (() => {
-          try {
-            const config = loadConfig();
-            return isPaystackConfigured(config) ? config.paystack.publicKey || null : null;
-          } catch {
-            return null;
-          }
-        })(),
-      },
-    });
+      });
+
+      if (!organization) throw new AppError(404, "Organization not found");
+
+      const categories = await prisma.category.findMany({
+        where: { organizationId },
+        include: { _count: { select: { products: true } } },
+        orderBy: { name: "asc" },
+      });
+
+      res.json({
+        data: {
+          organization: {
+            id: organization.id,
+            name: organization.name,
+            currency: organization.currency,
+            timezone: organization.timezone,
+          },
+          branches: organization.branches,
+          warehouses: organization.warehouses,
+          categories,
+          paymentMethods: getPaymentMethods(),
+          // The public key is safe to hand to the browser; the secret key never leaves the server.
+          cardPublicKey: (() => {
+            try {
+              const config = loadConfig();
+              return isPaystackConfigured(config) ? config.paystack.publicKey || null : null;
+            } catch {
+              return null;
+            }
+          })(),
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
   }
 );
 
@@ -147,92 +151,103 @@ posRouter.get(
   "/products",
   requireAuth,
   requirePermission("pos.sale"),
-  async (req: Request, res: Response) => {
-    const organizationId = getOrganizationId(req);
-    if (!organizationId) throw new AppError(401, "Authentication required");
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const organizationId = getOrganizationId(req);
+      if (!organizationId) throw new AppError(401, "Authentication required");
 
-    const search = String(req.query.search || "").trim();
-    const barcode = String(req.query.barcode || "").trim();
-    const categoryId = typeof req.query.categoryId === "string" ? req.query.categoryId : undefined;
-    const branchId = typeof req.query.branchId === "string" ? req.query.branchId : undefined;
-    const warehouseId =
-      typeof req.query.warehouseId === "string" ? req.query.warehouseId : undefined;
-    const page = Number(req.query.page || 1);
-    const limit = Number(req.query.limit || 60);
-    const pagination = paginate(page, limit);
-    const scopedBranches = getScopedValues(req, "branchId");
-    const scopedWarehouses = getScopedValues(req, "warehouseId");
+      const search = String(req.query.search || "").trim();
+      const barcode = String(req.query.barcode || "").trim();
+      const categoryId =
+        typeof req.query.categoryId === "string" ? req.query.categoryId : undefined;
+      const branchId = typeof req.query.branchId === "string" ? req.query.branchId : undefined;
+      const warehouseId =
+        typeof req.query.warehouseId === "string" ? req.query.warehouseId : undefined;
+      const page = Number(req.query.page || 1);
+      const limit = Number(req.query.limit || 60);
+      const pagination = paginate(page, limit);
+      const scopedBranches = getScopedValues(req, "branchId");
+      const scopedWarehouses = getScopedValues(req, "warehouseId");
 
-    if (branchId) {
-      const branch = await prisma.branch.findFirst({ where: { id: branchId, organizationId } });
-      if (!branch || !isAllowed(branchId, scopedBranches))
-        throw new AppError(403, "This branch is not available for your role");
-    }
+      if (branchId) {
+        const branch = await prisma.branch.findFirst({ where: { id: branchId, organizationId } });
+        if (!branch || !isAllowed(branchId, scopedBranches))
+          throw new AppError(403, "This branch is not available for your role");
+      }
 
-    if (warehouseId) {
-      const warehouse = await prisma.warehouse.findFirst({
-        where: { id: warehouseId, organizationId },
-      });
-      if (!warehouse || !isAllowed(warehouseId, scopedWarehouses))
-        throw new AppError(403, "This warehouse is not available for your role");
-      if (branchId && warehouse.branchId !== branchId)
-        throw new AppError(400, "Warehouse does not belong to the selected branch");
-    }
+      if (warehouseId) {
+        const warehouse = await prisma.warehouse.findFirst({
+          where: { id: warehouseId, organizationId },
+        });
+        if (!warehouse || !isAllowed(warehouseId, scopedWarehouses))
+          throw new AppError(403, "This warehouse is not available for your role");
+        // branchId null marks an org-wide warehouse, which serves every branch — the same
+        // rule /sale already enforces (`warehouse.branchId && ...`). Without the null guard
+        // the pairing the POS itself builds (Main Branch + the org-wide Main Warehouse)
+        // threw here, and because this handler had no try/catch the rejection was swallowed
+        // by the process-level handler: no response was ever sent and the till sat on
+        // "Loading products..." forever.
+        if (branchId && warehouse.branchId && warehouse.branchId !== branchId)
+          throw new AppError(400, "Warehouse does not belong to the selected branch");
+      }
 
-    const where: Prisma.ProductWhereInput = {
-      organizationId,
-      isActive: true,
-      ...(search
-        ? {
-            OR: [
-              { name: { contains: search, mode: "insensitive" } },
-              { sku: { contains: search, mode: "insensitive" } },
-              { barcode: { contains: search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-      ...(barcode ? { barcode: { equals: barcode, mode: "insensitive" } } : {}),
-      ...(categoryId ? { productCategories: { some: { categoryId } } } : {}),
-    };
-
-    const [products, total] = await Promise.all([
-      prisma.product.findMany({
-        where,
-        include: {
-          taxCategory: true,
-          brand: true,
-          unit: true,
-          productCategories: { include: { category: true } },
-          inventories: warehouseId ? { where: { warehouseId } } : true,
-        },
-        orderBy: { name: "asc" },
-        skip: pagination.skip,
-        take: pagination.limit,
-      }),
-      prisma.product.count({ where }),
-    ]);
-
-    const rows = products.map(product => {
-      const inventory = warehouseId
-        ? product.inventories.find(item => item.warehouseId === warehouseId)
-        : product.inventories[0];
-      const quantity = inventory ? inventory.quantity - inventory.reserved : 0;
-      const minStock = product.minStock;
-      return {
-        ...product,
-        stockQuantity: quantity,
-        stockStatus:
-          quantity <= 0 ? "OUT_OF_STOCK" : quantity <= minStock ? "LOW_STOCK" : "IN_STOCK",
-        categoryNames: product.productCategories.map(relation => relation.category.name),
-        taxRate: product.taxCategory?.rate || 0,
-        taxMode: product.taxCategory?.mode || "EXCLUSIVE",
+      const where: Prisma.ProductWhereInput = {
+        organizationId,
+        isActive: true,
+        ...(search
+          ? {
+              OR: [
+                { name: { contains: search, mode: "insensitive" } },
+                { sku: { contains: search, mode: "insensitive" } },
+                { barcode: { contains: search, mode: "insensitive" } },
+              ],
+            }
+          : {}),
+        ...(barcode ? { barcode: { equals: barcode, mode: "insensitive" } } : {}),
+        ...(categoryId ? { productCategories: { some: { categoryId } } } : {}),
       };
-    });
 
-    res.json({
-      data: rows,
-      meta: { page: pagination.page, limit: pagination.limit, total },
-    });
+      const [products, total] = await Promise.all([
+        prisma.product.findMany({
+          where,
+          include: {
+            taxCategory: true,
+            brand: true,
+            unit: true,
+            productCategories: { include: { category: true } },
+            inventories: warehouseId ? { where: { warehouseId } } : true,
+          },
+          orderBy: { name: "asc" },
+          skip: pagination.skip,
+          take: pagination.limit,
+        }),
+        prisma.product.count({ where }),
+      ]);
+
+      const rows = products.map(product => {
+        const inventory = warehouseId
+          ? product.inventories.find(item => item.warehouseId === warehouseId)
+          : product.inventories[0];
+        const quantity = inventory ? inventory.quantity - inventory.reserved : 0;
+        const minStock = product.minStock;
+        return {
+          ...product,
+          stockQuantity: quantity,
+          stockStatus:
+            quantity <= 0 ? "OUT_OF_STOCK" : quantity <= minStock ? "LOW_STOCK" : "IN_STOCK",
+          categoryNames: product.productCategories.map(relation => relation.category.name),
+          taxRate: product.taxCategory?.rate || 0,
+          taxMode: product.taxCategory?.mode || "EXCLUSIVE",
+        };
+      });
+
+      res.json({
+        data: rows,
+        meta: { page: pagination.page, limit: pagination.limit, total },
+      });
+    } catch (err) {
+      next(err);
+    }
   }
 );
 

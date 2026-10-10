@@ -613,7 +613,12 @@ export function PosPage() {
                 className="kazi-input"
               >
                 {context.warehouses
-                  .filter(warehouse => !branchId || warehouse.branchId === branchId)
+                  // branchId null = an org-wide warehouse that serves every branch, so it
+                  // stays in the list. Filtering it out left the <select> holding a value
+                  // with no matching option, which renders as a blank dropdown.
+                  .filter(
+                    warehouse => !branchId || !warehouse.branchId || warehouse.branchId === branchId
+                  )
                   .map(warehouse => (
                     <option key={warehouse.id} value={warehouse.id}>
                       {warehouse.name} {warehouse.branchId === branchId ? "" : "(Default)"}
