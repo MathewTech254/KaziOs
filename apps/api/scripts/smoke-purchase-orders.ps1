@@ -73,7 +73,7 @@ $createBody = @{
 }
 $po = (Pj "$base/purchase-orders" $createBody $H).data
 Check 'create returns a purchase order' ($null -ne $po.id) "id=$($po.id)"
-Check 'poNumber matches PO-YYMM-XXXX' ($po.poNumber -match '^PO-\d{4}-[A-F0-9]{4}$') "poNumber=$($po.poNumber)"
+Check 'poNumber matches PO-YYMM-XXXXXXXX' ($po.poNumber -match '^PO-\d{4}-[A-F0-9]{8}$') "poNumber=$($po.poNumber)"
 Check 'new order starts as DRAFT' ($po.status -eq 'DRAFT') "status=$($po.status)"
 Check 'line total is computed server side' ($po.items[0].lineTotal -eq 300) "lineTotal=$($po.items[0].lineTotal)"
 Check 'subtotal ignores the client value' ($po.subtotal -eq 300) "subtotal=$($po.subtotal)"

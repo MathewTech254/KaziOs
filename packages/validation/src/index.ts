@@ -732,6 +732,16 @@ export const SETTING_DEFINITIONS = {
     fiscalYearStartMonth: z.number().int().min(1).max(12).default(1),
     defaultCashAccountCode: zString(1, 20).default("1000"),
   }),
+  // Paystack split payments (subaccounts). Stored per organisation because each shop
+  // settles to its own subaccount; nothing here changes money routing until a shop
+  // actually enters a subaccount code, so the pilot keeps working with no split.
+  payments: z.object({
+    subaccountCode: zString(0, 64).default(""),
+    // The platform's cut of a card charge. Percent is easier to reason about and is
+    // converted to kobo at charge time; a flat cent amount overrides the percent.
+    platformFeePercent: z.number().min(0).max(100).default(0),
+    platformFeeCents: z.number().int().min(0).default(0),
+  }),
 } as const;
 
 export type SettingKey = keyof typeof SETTING_DEFINITIONS;

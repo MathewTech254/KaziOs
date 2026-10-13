@@ -68,6 +68,15 @@ const SECTIONS: SectionSpec[] = [
       { key: "defaultCashAccountCode", label: "Default cash account code", type: "text" },
     ],
   },
+  {
+    key: "payments",
+    title: "Card payouts (split payments)",
+    description:
+      "Where card sales settle. Paste your Paystack subaccount code (it starts with ACCT_) to have card payments paid straight to your own bank account. Leave it blank to settle to the platform account.",
+    fields: [
+      { key: "subaccountCode", label: "Paystack subaccount code (ACCT_...)", type: "text" },
+    ],
+  },
 ];
 
 export function SettingsPreferencesPanel({ canManage }: { canManage: boolean }) {

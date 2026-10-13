@@ -8,6 +8,9 @@ import {
   PaystackError,
   verifyTransaction,
 } from "./paystack";
+import type { InitializeSplit } from "./paystack";
+import { computeSplitCharge } from "./cardSplit";
+import { settingDefaults } from "@kazios/validation";
 
 const APP_URL = (process.env.APP_URL || "http://localhost:3000").replace(/\/+$/, "");
 
@@ -18,6 +21,51 @@ function newReference(invoiceNumber: string): string {
 
 export function paystackIsReady(): boolean {
   return isPaystackEnabled();
+}
+
+/**
+ * Reads this organisation's split-payment configuration from the Setting key-value store
+ * and, for the given charge amount, returns the server-side split to send to Paystack —
+ * or null when the shop has not configured a subaccount (the default), so the charge
+ * settles to the platform account exactly as it does today. The subaccount code and fee
+ * are never read from the client; they are decided here on the server only.
+ */
+async function loadSplitForOrg(organizationId: string, totalCents: number): Promise<InitializeSplit | null> {
+  const row = await prisma.setting.findUnique({
+    where: { organizationId_key: { organizationId, key: "payments" } },
+    select: { value: true },
+  });
+  const stored =
+    row && row.value && typeof row.value === "object" && !Array.isArray(row.value)
+      ? (row.value as Record<string, unknown>)
+      : {};
+  const cfg = { ...settingDefaults("payments"), ...stored } as {
+    subaccountCode?: unknown;
+    platformFeePercent?: unknown;
+    platformFeeCents?: unknown;
+  };
+
+  const charge = computeSplitCharge(totalCents, {
+    subaccountCode: typeof cfg.subaccountCode === "string" ? cfg.subaccountCode : null,
+    platformFeePercent: typeof cfg.platformFeePercent === "number" ? cfg.platformFeePercent : null,
+    platformFeeCents: typeof cfg.platformFeeCents === "number" ? cfg.platformFeeCents : null,
+  });
+
+  // No usable subaccount code -> keep today's single-recipient behaviour (no split).
+  if (!charge.applySplit) return null;
+
+  // Flat split: the shop's subaccount receives its portion; the platform keeps the fee.
+  // share is in the currency subunit (cents), matching `amount` on the initialize call.
+  return {
+    type: "flat",
+    bearer_type: "account",
+    subaccounts: [
+      {
+        subaccount: (cfg.subaccountCode as string).trim(),
+        share: charge.subaccountReceivesCents,
+      },
+    ],
+  };
 }
 
 /**
@@ -73,6 +121,10 @@ export async function startCardPayment(input: {
 
   const reference = newReference(invoice.invoiceNumber);
 
+  // Decide, server-side, whether this charge should be split to the shop's subaccount.
+  // With no subaccount configured this is null and behaviour is unchanged.
+  const split = await loadSplitForOrg(input.organizationId, amountCents);
+
   try {
     const initialized = await initializeTransaction({
       email: input.email,
@@ -80,6 +132,7 @@ export async function startCardPayment(input: {
       currency,
       reference,
       callbackUrl: `${APP_URL}/pos`,
+      ...(split ? { split } : {}),
       metadata: {
         invoiceId: invoice.id,
         invoiceNumber: invoice.invoiceNumber,

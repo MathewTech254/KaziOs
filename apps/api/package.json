@@ -19,6 +19,7 @@
     "prisma:studio": "prisma studio",
     "db:push": "prisma db push",
     "db:seed": "ts-node src/utils/seed.ts",
+    "create-subaccount": "node -r dotenv/config scripts/create-subaccount.mjs",
     "db:reset": "prisma migrate reset --force"
   },
   "dependencies": {

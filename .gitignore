@@ -18,3 +18,9 @@ coverage
 # Local database dumps taken before a migration. A committed dump is both a data leak
 # and a source of noise; take one with pg_dump when a migration is risky.
 .kazios-backup-*.sql
+
+# Local audit / probe scratch created while wiring payments. Never commit: these logs
+# and probe scripts can contain provider responses and must not enter history.
+.audit/
+check_user.sql
+apps/web/scripts/probe-pos.mjs

@@ -58,6 +58,26 @@ export interface InitializeResult {
   reference: string;
 }
 
+/**
+ * A Paystack split, in the exact shape the provider expects on /transaction/initialize.
+ * The customer still pays the full invoice total; the money is then divided so the
+ * shop's subaccount receives `share` and the platform keeps the remainder. Every amount
+ * is an integer number of minor units (cents) and is decided server-side by
+ * computeSplitCharge (cardSplit.ts), so a browser can never redirect where money lands.
+ *
+ * We use a flat split with a single subaccount whose share is the shop's portion of the
+ * sale. bearer_type "account" means the platform absorbs Paystack's own processing fee,
+ * so the shop receives exactly `share` — the cleanest arrangement for a pilot shop.
+ * (Verified against Paystack "Multi-split Payments → Dynamic splits": for flat splits,
+ * share is in the subunit of the currency; bearer_type may be account/all/all-proportional/
+ * subaccount, and only "subaccount" needs a bearer_subaccount.)
+ */
+export interface InitializeSplit {
+  type: "flat";
+  bearer_type: "account";
+  subaccounts: Array<{ subaccount: string; share: number }>;
+}
+
 export interface VerifiedTransaction {
   status: string;
   reference: string;
@@ -76,6 +96,8 @@ export async function initializeTransaction(input: {
   reference: string;
   callbackUrl?: string;
   metadata?: Record<string, unknown>;
+  /** Optional server-computed split so the shop's subaccount is paid directly. */
+  split?: InitializeSplit;
 }): Promise<InitializeResult> {
   if (!isPaystackEnabled()) {
     throw new PaystackError("Card payments are not configured on this server", 503);
@@ -88,6 +110,7 @@ export async function initializeTransaction(input: {
     reference: input.reference,
     ...(input.callbackUrl ? { callback_url: input.callbackUrl } : {}),
     ...(input.metadata ? { metadata: input.metadata } : {}),
+    ...(input.split ? { split: input.split } : {}),
   });
 }
 
@@ -292,10 +315,14 @@ export async function createSubscription(input: {
   });
 }
 
-export async function fetchSubscription(subscriptionCode: string): Promise<PaystackSubscription | null> {
+export async function fetchSubscription(
+  subscriptionCode: string
+): Promise<PaystackSubscription | null> {
   if (!isPaystackEnabled()) return null;
   try {
-    return await callGet<PaystackSubscription>(`/subscription/${encodeURIComponent(subscriptionCode)}`);
+    return await callGet<PaystackSubscription>(
+      `/subscription/${encodeURIComponent(subscriptionCode)}`
+    );
   } catch (err) {
     if (err instanceof PaystackError && err.status === 404) return null;
     throw err;

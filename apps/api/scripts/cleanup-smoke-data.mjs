@@ -61,6 +61,10 @@ const smokeUsers = await prisma.user.findMany({
       { email: { contains: "smoke" } },
       { email: { startsWith: "viewer." } },
       { email: { startsWith: "poviewer." } },
+      // smoke-notifications creates a second OWNER per run to prove cross-user delivery.
+      // Without this pattern those accounts accumulate and eventually trip the plan's
+      // seat limit, which then breaks every suite that creates a user.
+      { email: { startsWith: "watcher." } },
       // users the tenant checks registered inside a throwaway organization
       { organizationId: { in: smokeOrgs.map((o) => o.id) } },
     ],
@@ -160,16 +164,41 @@ if (!apply) {
 
     // Orphans: a suite that failed part way through leaves an invoice whose customer row
     // was already cleaned away, so it can never be reached through a customer lookup.
-    const orphanLines = await tx.invoiceItem.findMany({ where: { invoice: { customerId: null } }, select: { id: true } });
+    //
+    // Scoped to INV- prefixed numbers on purpose. A walk-in POS sale legitimately has no
+    // customer and is numbered POS-…; sweeping every null-customer invoice would delete
+    // every walk-in sale in the database, which is real data rather than a fixture.
+    const orphanLines = await tx.invoiceItem.findMany({
+      where: { invoice: { customerId: null, invoiceNumber: { startsWith: "INV-" } } },
+      select: { id: true },
+    });
     await tx.invoiceItem.deleteMany({ where: { id: { in: orphanLines.map((l) => l.id) } } });
-    removed.orphanInvoices = (await tx.invoice.deleteMany({ where: { customerId: null } })).count;
+    removed.orphanInvoices = (
+      await tx.invoice.deleteMany({ where: { customerId: null, invoiceNumber: { startsWith: "INV-" } } })
+    ).count;
 
     removed.customers = (
       await tx.customer.deleteMany({ where: { id: { in: smokeCustomers.map((c) => c.id) } } })
     ).count;
-    // Users hold sessions, role assignments and audit rows, so clear those first.
+    // Users hold sessions, role assignments, notifications and audit rows, so clear those
+    // first. Notification has a foreign key to User, so it must go before the user delete
+    // or the whole transaction trips the constraint.
     const userIds = smokeUsers.map((u) => u.id);
     removed.sessions = (await tx.session.deleteMany({ where: { userId: { in: userIds } } })).count;
+    removed.notifications = (await tx.notification.deleteMany({ where: { userId: { in: userIds } } })).count;
+    removed.passwordResetTokens = (
+      await tx.passwordResetToken.deleteMany({ where: { userId: { in: userIds } } })
+    ).count;
+    // Scalar references on rows that are real business data, not fixtures: the row stays
+    // and only the "who" pointer is cleared. Deleting a transfer or an expense because a
+    // smoke account once touched it would be data loss.
+    await tx.stockTransfer.updateMany({ where: { createdById: { in: userIds } }, data: { createdById: null } });
+    await tx.purchaseOrder.updateMany({ where: { createdById: { in: userIds } }, data: { createdById: null } });
+    await tx.expense.updateMany({ where: { recordedById: { in: userIds } }, data: { recordedById: null } });
+    await tx.expense.updateMany({ where: { approvedById: { in: userIds } }, data: { approvedById: null } });
+    await tx.task.updateMany({ where: { assigneeId: { in: userIds } }, data: { assigneeId: null } });
+    await tx.subscriptionEvent.updateMany({ where: { actorUserId: { in: userIds } }, data: { actorUserId: null } });
+    removed.apiKeys = (await tx.apiKey.deleteMany({ where: { userId: { in: userIds } } })).count;
     // UserRole has no organizationId of its own; it is reached through the user.
     removed.roleAssignments = (
       await tx.userRole.deleteMany({ where: { OR: [{ userId: { in: userIds } }, { roleId: { in: smokeRoles.map((r) => r.id) } }] } })
@@ -197,7 +226,7 @@ if (!apply) {
   console.log(
     `\ndeleted -> orders ${removed.orders}, suppliers ${removed.suppliers}, products ${removed.products}, ` +
       `stock movements ${removed.stockMovements}, transfers ${removed.stockTransfers}, inventory rows ${removed.inventories}, ` +
-      `sessions ${removed.sessions}, role assignments ${removed.roleAssignments}, audit logs ${removed.auditLogs}, ` +
+      `sessions ${removed.sessions}, notifications ${removed.notifications}, role assignments ${removed.roleAssignments}, audit logs ${removed.auditLogs}, ` +
       `users ${removed.users}, roles ${removed.roles}, org child rows ${removed.orgRows}, orgs ${removed.orgs}`
   );
 }

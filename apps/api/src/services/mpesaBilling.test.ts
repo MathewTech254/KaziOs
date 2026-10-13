@@ -80,7 +80,12 @@ const gateway = {
 };
 
 const db = prisma as unknown as {
-  subscription: { findUnique: jest.Mock; create: jest.Mock; update: jest.Mock; findMany: jest.Mock };
+  subscription: {
+    findUnique: jest.Mock;
+    create: jest.Mock;
+    update: jest.Mock;
+    findMany: jest.Mock;
+  };
   subscriptionPayment: {
     findUnique: jest.Mock;
     findFirst: jest.Mock;
@@ -457,9 +462,7 @@ describe("confirming an M-PESA payment", () => {
   it("refuses to settle a card checkout pressed against this route", async () => {
     // The two rails never settle each other's rows, however the reference got
     // here.
-    db.subscriptionPayment.findUnique.mockResolvedValue(
-      pendingPayment({ provider: "PAYSTACK" })
-    );
+    db.subscriptionPayment.findUnique.mockResolvedValue(pendingPayment({ provider: "PAYSTACK" }));
 
     await expect(confirmMpesaCheckout(REFERENCE)).rejects.toMatchObject({
       code: "WRONG_PAYMENT_RAIL",
@@ -529,7 +532,3 @@ describe("confirming an M-PESA payment", () => {
     expect(gateway.stkQuery).not.toHaveBeenCalled();
   });
 });
-
-
-
-

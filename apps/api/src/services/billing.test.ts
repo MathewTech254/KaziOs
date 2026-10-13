@@ -1,6 +1,12 @@
 import { prisma } from "../lib/prisma";
 import { confirmCheckout, openCheckout } from "./billing";
-import { initializeTransaction, isPaystackEnabled, verifyTransaction } from "../lib/paystack";
+import {
+  createPlan,
+  fetchPlan,
+  initializeTransaction,
+  isPaystackEnabled,
+  verifyTransaction,
+} from "../lib/paystack";
 
 /**
  * The money half of subscription billing, tested without a Paystack account.
@@ -29,7 +35,12 @@ jest.mock("../lib/prisma", () => ({
     subscriptionEvent: { create: jest.fn() },
     organization: { update: jest.fn() },
     plan: { findFirst: jest.fn(), findUnique: jest.fn() },
-    planPrice: { findFirst: jest.fn() },
+    planPrice: {
+      findFirst: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+    },
     entitlementOverride: { findMany: jest.fn() },
     feature: { findMany: jest.fn() },
     user: { count: jest.fn() },
@@ -44,6 +55,17 @@ jest.mock("../lib/paystack", () => ({
   isPaystackEnabled: jest.fn(() => true),
   initializeTransaction: jest.fn(),
   verifyTransaction: jest.fn(),
+  // Recurring billing on Paystack's own engine: `openCheckout` ensures a Paystack plan
+  // exists before sending the customer to pay. These must be mocked too, or the real
+  // functions (which reach for an HTTP client the test never sets up) throw.
+  createPlan: jest.fn(),
+  fetchPlan: jest.fn(),
+  createCustomer: jest.fn(),
+  findCustomerByEmail: jest.fn(),
+  createSubscription: jest.fn(),
+  fetchSubscription: jest.fn(),
+  disableSubscription: jest.fn(),
+  enableSubscription: jest.fn(),
   PaystackError: class PaystackError extends Error {
     status: number;
     constructor(message: string, status: number) {
@@ -57,6 +79,8 @@ const gateway = {
   isPaystackEnabled: isPaystackEnabled as unknown as jest.Mock,
   initializeTransaction: initializeTransaction as unknown as jest.Mock,
   verifyTransaction: verifyTransaction as unknown as jest.Mock,
+  createPlan: createPlan as unknown as jest.Mock,
+  fetchPlan: fetchPlan as unknown as jest.Mock,
 };
 
 const db = prisma as unknown as {
@@ -75,7 +99,12 @@ const db = prisma as unknown as {
   subscriptionEvent: { create: jest.Mock };
   organization: { update: jest.Mock };
   plan: { findFirst: jest.Mock; findUnique: jest.Mock };
-  planPrice: { findFirst: jest.Mock };
+  planPrice: {
+    findFirst: jest.Mock;
+    findUnique: jest.Mock;
+    update: jest.Mock;
+    updateMany: jest.Mock;
+  };
   entitlementOverride: { findMany: jest.Mock };
   $transaction: jest.Mock;
 };
@@ -159,6 +188,14 @@ beforeEach(() => {
       : { id: "plan_business", key: "business", status: "ACTIVE", sortOrder: 3 }
   );
   db.planPrice.findFirst.mockResolvedValue({ id: "price_1", amountCents: 1900, currency: "USD" });
+  // `ensurePaystackPlan` asks the provider for an existing plan code and, when there is
+  // none, creates one. Both are mocked: no code stored means one is "created", and the
+  // claim (updateMany where the code is still null) succeeds.
+  gateway.fetchPlan.mockResolvedValue(null);
+  gateway.createPlan.mockResolvedValue({ plan_code: "PLN_test_starter_monthly" });
+  db.planPrice.updateMany.mockResolvedValue({ count: 1 });
+  db.planPrice.update.mockResolvedValue({});
+  db.planPrice.findUnique.mockResolvedValue({ paystackPlanCode: "PLN_test_starter_monthly" });
   db.entitlementOverride.findMany.mockResolvedValue([]);
   db.$transaction.mockImplementation(async (fn: any) => fn(db));
 });

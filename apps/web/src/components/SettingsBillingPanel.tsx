@@ -165,7 +165,7 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
   // billing rights. Public endpoint, sellable rows only; a failure here hides the
   // upgrade section rather than breaking the rest of the page.
   useEffect(() => {
-    if (!canManage || !summary || !summary.plan.isFree) return;
+    if (!canManage || !summary?.plan.isFree) return;
     let cancelled = false;
     api
       .get("/plans")
@@ -192,7 +192,6 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
     };
     // Re-read when the billing interval flips, because a plan sold monthly-only is not
     // the same offer as the same plan sold yearly.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canManage, summary?.plan.isFree, interval]);
 
   // Coming back from Paystack with ?reference=... The webhook and this confirmation race
@@ -214,7 +213,6 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
         void reload();
       });
     // Only ever once per page load; the button below is the retry.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [returnedReference, loading, error]);
 
   if (loading) {
@@ -613,8 +611,8 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
               <p className="mt-1 text-sm text-muted-foreground">
                 You are moving to the {activePlanKey} plan. It is active the moment payment is
                 confirmed
-                {outcome.trialDays > 0 ? `, with ${outcome.trialDays} days free first` : ""}.
-                Choose how often to be billed.
+                {outcome.trialDays > 0 ? `, with ${outcome.trialDays} days free first` : ""}. Choose
+                how often to be billed.
               </p>
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <div className="inline-flex rounded-full border border-border p-1">
@@ -689,8 +687,8 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
                 <div className="kazi-alert-card mt-4 p-4 text-sm">
                   <p className="text-foreground" aria-live="polite">
                     Check your phone for the M-PESA prompt and enter your PIN. This page asks
-                    Safaricom what happened every few seconds; nothing changes until the payment
-                    is confirmed.
+                    Safaricom what happened every few seconds; nothing changes until the payment is
+                    confirmed.
                   </p>
                   <button
                     type="button"
@@ -710,8 +708,8 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
               )}
               {!summary.paymentsEnabled && summary.mpesaEnabled && method === "card" && (
                 <p className="mt-3 text-xs text-muted-foreground">
-                  Card payments are not configured on this server. Choose M-PESA above to pay
-                  with your phone.
+                  Card payments are not configured on this server. Choose M-PESA above to pay with
+                  your phone.
                 </p>
               )}
             </>
@@ -728,8 +726,8 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
             <div>
               <h2 className="kazi-section-title text-foreground">Upgrade your plan</h2>
               <p className="mt-1 max-w-xl text-sm text-muted-foreground">
-                Need more room or more locations? Pick a plan and pay right here — it is
-                active the moment{" "}
+                Need more room or more locations? Pick a plan and pay right here — it is active the
+                moment{" "}
                 {summary.mpesaEnabled && method === "mpesa"
                   ? "Safaricom confirms"
                   : "Paystack confirms"}
@@ -811,7 +809,6 @@ export function SettingsBillingPanel({ canManage }: { canManage: boolean }) {
           )}
         </div>
       )}
-
 
       <div className="kazi-card overflow-hidden">
         <div className="p-6">

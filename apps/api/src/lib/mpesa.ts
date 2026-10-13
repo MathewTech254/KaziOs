@@ -354,7 +354,7 @@ export async function stkQuery(checkoutRequestId: string): Promise<StkQueryResul
   }
 
   const stk = json?.Body?.stkCallback;
-  if (!stk || stk.ResultCode === undefined || stk.ResultCode === null) {
+  if (stk?.ResultCode === undefined || stk.ResultCode === null) {
     // A 200 without a verdict: treat the same as "not decided yet".
     return { state: "PENDING" };
   }

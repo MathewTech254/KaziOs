@@ -35,6 +35,7 @@ jest.mock("./prisma", () => ({
       update: jest.fn(),
     },
     payment: { create: jest.fn() },
+    setting: { findUnique: jest.fn() },
     $transaction: jest.fn(),
   },
 }));
@@ -76,6 +77,7 @@ const db = prisma as unknown as {
     update: jest.Mock;
   };
   payment: { create: jest.Mock };
+  setting: { findUnique: jest.Mock };
   $transaction: jest.Mock;
 };
 
@@ -119,6 +121,8 @@ beforeEach(() => {
   db.invoice.update.mockResolvedValue({});
   db.cardPayment.update.mockResolvedValue({});
   db.cardPayment.create.mockResolvedValue({});
+  // By default an organisation has no split configuration, so a charge is not split.
+  db.setting.findUnique.mockResolvedValue(null);
 });
 
 describe("opening a card payment", () => {
@@ -137,6 +141,51 @@ describe("opening a card payment", () => {
 
     expect(paystack.initializeTransaction).toHaveBeenCalledWith(
       expect.objectContaining({ amountInCents: 100000, currency: "KES" })
+    );
+  });
+
+  it("does not split when the shop has configured no subaccount", async () => {
+    // The default: money settles to the platform account exactly as before, and no
+    // split block is added to the request.
+    db.invoice.findFirst.mockResolvedValue(unpaidInvoice());
+    db.cardPayment.findFirst.mockResolvedValue(null);
+    db.setting.findUnique.mockResolvedValue(null);
+    paystack.initializeTransaction.mockResolvedValue({
+      authorization_url: "https://checkout.paystack.com/xyz",
+      access_code: "code",
+      reference: REFERENCE,
+    });
+
+    await startCardPayment({ invoiceId: "inv_1", organizationId: "org_1", email: "a@b.test" });
+
+    const call = paystack.initializeTransaction.mock.calls[0][0];
+    expect(call.split).toBeUndefined();
+  });
+
+  it("routes the shop's share to its subaccount when one is configured", async () => {
+    // The split is decided on the server from the shop's stored settings, never from the
+    // request. A KES 1,000 sale with a 2% platform fee sends 98,000 pesewas to the shop.
+    db.invoice.findFirst.mockResolvedValue(unpaidInvoice());
+    db.cardPayment.findFirst.mockResolvedValue(null);
+    db.setting.findUnique.mockResolvedValue({
+      value: { subaccountCode: "ACCT_shop123", platformFeePercent: 2, platformFeeCents: null },
+    });
+    paystack.initializeTransaction.mockResolvedValue({
+      authorization_url: "https://checkout.paystack.com/xyz",
+      access_code: "code",
+      reference: REFERENCE,
+    });
+
+    await startCardPayment({ invoiceId: "inv_1", organizationId: "org_1", email: "a@b.test" });
+
+    expect(paystack.initializeTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        split: {
+          type: "flat",
+          bearer_type: "account",
+          subaccounts: [{ subaccount: "ACCT_shop123", share: 98000 }],
+        },
+      })
     );
   });
 

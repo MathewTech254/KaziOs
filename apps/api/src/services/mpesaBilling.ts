@@ -106,11 +106,7 @@ function mpesaAppError(err: unknown, context: string): AppError {
         : status === 503
           ? "MPESA_NOT_CONFIGURED"
           : "MPESA_UNAVAILABLE";
-    return new AppError(
-      status,
-      status === 400 ? err.message : `${context}: ${err.message}`,
-      code
-    );
+    return new AppError(status, status === 400 ? err.message : `${context}: ${err.message}`, code);
   }
   return new AppError(502, `${context}: M-PESA could not be reached`, "MPESA_UNAVAILABLE");
 }
@@ -534,4 +530,3 @@ export async function confirmMpesaCheckout(reference: string): Promise<MpesaConf
       : `Payment received. You are now on the ${record.plan.name} plan.`,
   };
 }
-

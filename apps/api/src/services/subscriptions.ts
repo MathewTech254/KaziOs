@@ -10,10 +10,7 @@ import {
 } from "@kazios/types";
 import { invalidateEntitlements, getEntitlements, readLimits } from "./entitlements";
 import { announceBilling, announceUsageWarning } from "./billingNotifications";
-import {
-  disableSubscription,
-  enableSubscription,
-} from "../lib/paystack";
+import { disableSubscription, enableSubscription } from "../lib/paystack";
 
 /**
  * Everything that changes a subscription's state.

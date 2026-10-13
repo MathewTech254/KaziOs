@@ -53,10 +53,16 @@ Check 'customer fixture created' ($null -ne $customer.id)
 
 $context = Gj "$base/pos/context" $H
 $branch = $context.data.branches | Where-Object { $_.isMain } | Select-Object -First 1
+# Mirror the real POS page (PosPage.tsx): prefer a branch-linked warehouse, but fall
+# back to the first org warehouse when none is linked, which is a valid configuration.
 $warehouse = $context.data.warehouses | Where-Object { $_.branchId -eq $branch.id } | Select-Object -First 1
-$products = Gj "$base/pos/products?page=1&limit=5&branchId=$($branch.id)" $H
+if ($null -eq $warehouse) { $warehouse = $context.data.warehouses | Select-Object -First 1 }
+Check 'warehouse resolved' ($null -ne $warehouse) 'organization has no warehouse to sell from'
+
+$products = Gj "$base/pos/products?page=1&limit=20&branchId=$($branch.id)&warehouseId=$($warehouse.id)" $H
 $item = $products.data | Where-Object { $_.stockQuantity -gt 5 } | Select-Object -First 1
 Check 'saleable product found' ($null -ne $item) 'no product with stock'
+Write-Host "  DIAG  picked: $($item.name) stock=$($item.stockQuantity) sell=$($item.sellingPrice) taxRate=$($item.taxRate) taxMode=$($item.taxMode) branch=$($branch.id) wh=$($warehouse.id)"
 
 # ---------------------------------------------------------------- card is offered
 $cardMethod = $context.data.paymentMethods | Where-Object { $_.provider -eq 'PAYSTACK' }
@@ -72,13 +78,24 @@ Check 'public key exposed to the browser' ($context.data.cardPublicKey -like 'pk
 Check 'secret key never sent to the browser' (-not (($context.data | ConvertTo-Json -Depth 8) -match 'sk_')) 'secret key leaked in POS context'
 
 # ---------------------------------------------------------------- a card sale is not paid upfront
+# The server prices the basket itself and refuses any payment that does not match its
+# own total, so the amount is computed the same way the server does. A single line
+# means the arithmetic is exact: gross line value, minus the discount, plus tax on top
+# at the product's own rate. INCLUSIVE tax is already inside the shelf price, so it is
+# not added again. Every value is rounded to whole cents per line, like the server.
+$cardQuantity = 2
+$cardGrossCents = [math]::Round([double]$item.sellingPrice * 100) * $cardQuantity
+$cardBaseCents = $cardGrossCents
+$cardTaxCents = if ($item.taxMode -eq 'INCLUSIVE') { 0 } else { [math]::Round(($cardBaseCents * [double]$item.taxRate) / 100) }
+$cardAmount = ($cardBaseCents + $cardTaxCents) / 100
+
 $sale = TryPost "$base/pos/sale" @{
   branchId = $branch.id
   warehouseId = $warehouse.id
   customerId = $customer.id
-  items = @(@{ productId = $item.id; quantity = 2; discountAmount = 0 })
+  items = @(@{ productId = $item.id; quantity = $cardQuantity; discountAmount = 0 })
   discountAmount = 0
-  payments = @(@{ provider = 'PAYSTACK'; methodType = 'card'; amount = ($item.sellingPrice * 2) })
+  payments = @(@{ provider = 'PAYSTACK'; methodType = 'card'; amount = $cardAmount })
   idempotencyKey = "card-$slug"
 } $H
 
