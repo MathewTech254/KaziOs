@@ -182,7 +182,8 @@ describe("opening a card payment", () => {
       expect.objectContaining({
         split: {
           type: "flat",
-          bearer_type: "account",
+          bearer_type: "subaccount",
+          bearer_subaccount: "ACCT_shop123",
           subaccounts: [{ subaccount: "ACCT_shop123", share: 98000 }],
         },
       })

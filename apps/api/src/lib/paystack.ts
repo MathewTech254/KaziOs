@@ -66,15 +66,17 @@ export interface InitializeResult {
  * computeSplitCharge (cardSplit.ts), so a browser can never redirect where money lands.
  *
  * We use a flat split with a single subaccount whose share is the shop's portion of the
- * sale. bearer_type "account" means the platform absorbs Paystack's own processing fee,
- * so the shop receives exactly `share` — the cleanest arrangement for a pilot shop.
- * (Verified against Paystack "Multi-split Payments → Dynamic splits": for flat splits,
- * share is in the subunit of the currency; bearer_type may be account/all/all-proportional/
- * subaccount, and only "subaccount" needs a bearer_subaccount.)
+ * sale. bearer_type "subaccount" (with bearer_subaccount) means the SHOP bears Paystack's
+ * own processing fee out of its share, while the platform keeps its agreed fee untouched —
+ * the standard marketplace model. We deliberately do NOT use "account": there the platform
+ * absorbs the processing fee, which drives its small percentage share negative and Paystack
+ * rejects the charge ("Merchant share cannot be lower than zero"). Verified live: "account"
+ * fails even at KES 300; "subaccount" + bearer_subaccount returns 200 OK down to KES 5.
  */
 export interface InitializeSplit {
   type: "flat";
-  bearer_type: "account";
+  bearer_type: "subaccount";
+  bearer_subaccount: string;
   subaccounts: Array<{ subaccount: string; share: number }>;
 }
 

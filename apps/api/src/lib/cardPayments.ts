@@ -54,14 +54,23 @@ async function loadSplitForOrg(organizationId: string, totalCents: number): Prom
   // No usable subaccount code -> keep today's single-recipient behaviour (no split).
   if (!charge.applySplit) return null;
 
+  const code = (cfg.subaccountCode as string).trim();
   // Flat split: the shop's subaccount receives its portion; the platform keeps the fee.
   // share is in the currency subunit (cents), matching `amount` on the initialize call.
+  //
+  // bearer_type "subaccount" (with bearer_subaccount) means the SHOP absorbs Paystack's
+  // own processing fee out of its share, while the platform keeps its agreed fee cleanly.
+  // This is the standard marketplace/POS model and — critically — the only bearer that works
+  // for a small platform fee on small sales. With "account", Paystack deducts its processing
+  // fee from the platform's share, which drives it negative and Paystack rejects the charge
+  // ("Merchant share cannot be lower than zero"). Verified against the live API.
   return {
     type: "flat",
-    bearer_type: "account",
+    bearer_type: "subaccount",
+    bearer_subaccount: code,
     subaccounts: [
       {
-        subaccount: (cfg.subaccountCode as string).trim(),
+        subaccount: code,
         share: charge.subaccountReceivesCents,
       },
     ],
