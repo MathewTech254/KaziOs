@@ -132,14 +132,6 @@ export function LoginPage() {
             </p>
           </div>
 
-          <div className="kazi-auth-note mt-4">
-            <p className="text-xs leading-5 text-[var(--kazi-muted-text)]">
-              <strong className="text-[var(--kazi-text)]">Demo access:</strong> If you have already
-              set up the demo seed, use{" "}
-              <code className="text-[var(--kazi-accent)]">admin@kazios.dev</code> /{" "}
-              <code className="text-[var(--kazi-accent)]">admin123</code>.
-            </p>
-          </div>
         </div>
 
         <AuthBrandPanel mode="login" />
