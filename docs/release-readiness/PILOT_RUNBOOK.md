@@ -97,3 +97,81 @@ four staff on four different roles.
 > The demo credentials (`admin@kazios.dev` / `admin123`) are for the **demo
 > org only**. They grant no access to real customer data. Never reuse them for a
 > pilot business.
+
+### 1.5 Hardware barcode scanner verification (manual step)
+
+Covers the limitation tracked in `TEST_RESULTS.md` ("No physical device") and
+`GO_NO_GO_REPORT.md` ("behaviour confirmed by runbook step only"). The test has
+three layers: what automation already proves, what only a human with a real
+device can prove, and the data loop that makes a scan matter.
+
+#### Layer A — already proven without a device (re-run after any POS change)
+
+The POS treats a scanner as a keyboard-wedge: full code + Enter triggers an
+immediate single-match lookup that adds the line and refocuses the scan box.
+This drives the UI exactly as a scanner does (keystrokes + Enter):
+
+```powershell
+node .audit/probe-scan.mjs        # must print SCAN-E2E=PASS
+```
+
+Everything below tests only what automation cannot: the physical device and
+the correctness of the records the scan ends up changing.
+
+#### Layer B — verify the device itself (2 minutes, before touching KaziOS)
+
+1. Open Notepad, focus it, scan any barcode.
+   - Digits appear **followed by a new line** → the device transmits the CR/Enter
+     suffix the POS relies on. Continue to step 3.
+   - Digits appear but the cursor stays on the same line → suffix is off: scan
+     the "Transmit CR/Enter" configuration barcode from the scanner manual, retest.
+   - Nothing appears → pairing/USB problem; fix the device first.
+2. In the POS scan box, **type** a barcode by hand and press Enter. It must
+   behave identically to a scan — the app cannot tell the difference.
+3. Pick something real to scan (choose one):
+   - *Real shelf item:* set a product's barcode field to the EAN printed on a
+     package you own, then scan the package itself.
+   - *Printed labels:* print the seeded demo barcodes (6001000000101,
+     6001000000117, 6001000000124, 6001000000131, 6001000000148) and scan the paper.
+   - *Phone/monitor screen:* only works with an imager (CMOS) scanner; laser
+     scanners cannot read screens.
+
+#### Layer C — scan loop in the till (expected results)
+
+| # | Step | Expected |
+|---|------|----------|
+| C1 | Open POS | Cursor is already in the scan box — no tap needed |
+| C2 | Scan an in-stock product | Line added with no click; box clears; focus returns to the box |
+| C3 | Scan the same product again immediately | Quantity increments — no duplicate line |
+| C4 | Scan three different products quickly | Three lines; total updates; focus never leaves the box |
+| C5 | Scan a code that matches nothing | Nothing added; the code stays visible; no error or crash |
+| C6 | Scan an out-of-stock product | Not added; its card shows disabled "Out of stock" |
+| C7 | Select a category filter, then scan a product outside it | Still added — scanning deliberately ignores the grid filter |
+| C8 | Tap a product card instead of scanning | Added, and focus returns to the scan box |
+| C9 | Give a product your own barcode in Products, then scan/type it | Resolves — the shop's own codes work, not just seeded ones |
+
+#### Layer D — the data loop: a scan must end in correct records
+
+Scanning only fills the cart. **Stock and sales update when the sale is
+saved** — that is the "updated according to what the user needs" check.
+
+1. Record stock before the sale:
+
+   ```sql
+   SELECT p.sku, p.name, i.quantity
+   FROM "Inventory" i JOIN "Product" p ON p.id = i."productId"
+   WHERE p.sku = 'OIL-002';
+   ```
+
+2. Scan that product, complete the sale with cash, keep the receipt.
+3. Verify in the UI:
+   - Receipt lists the scanned item and totals correctly;
+   - Inventory: stock down by exactly the quantity sold; status chip agrees;
+   - Dashboard/Reports: the sale appears in **today's** totals;
+   - Bonus — Ask your business: *"How much did we sell today?"* must now return
+     this sale's figure (this also exercises the assistant on real data).
+4. Re-run the SQL: `quantity` is lower by exactly the quantity sold. One scan
+   can never deduct twice — deduction runs in a single server-side transaction.
+
+**Recording the result:** when A–D pass, update the `TEST_RESULTS.md` row
+("Hardware barcode scanner") with the date, scanner model, tester and outcome.

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import {
   AlertCircle,
@@ -161,6 +161,11 @@ export function PosPage() {
   const [warehouseId, setWarehouseId] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [search, setSearch] = useState("");
+  // A barcode scanner is a keyboard that types the full code and presses Enter. The ref
+  // keeps the scan box focused (on load and after every add) so the next scan lands where
+  // it should, and the busy flag stops a held Enter from adding the same line twice.
+  const searchRef = useRef<HTMLInputElement>(null);
+  const scanBusyRef = useRef(false);
   const [paymentMethodId, setPaymentMethodId] = useState("");
   const [tenderedAmount, setTenderedAmount] = useState("");
   // Once the cashier types a figure, the total no longer overwrites it. Until then the
@@ -283,6 +288,12 @@ export function PosPage() {
     return () => window.clearTimeout(timer);
   }, [context, branchId, warehouseId, categoryId, search, hasPermission]);
 
+  // The scan box takes focus the moment the till is ready, so a scanner works without
+  // anyone touching the keyboard first.
+  useEffect(() => {
+    if (context) searchRef.current?.focus();
+  }, [context]);
+
   // The cash tendered field follows the total until the cashier overrides it by typing.
   //
   // It used to be seeded only while the field was empty, so once it held the total for
@@ -366,6 +377,37 @@ export function PosPage() {
     } catch (err) {
       setError(getApiError(err));
       return null;
+    }
+  };
+
+  /**
+   * Resolves a hardware scan the moment the scanner sends its Enter.
+   *
+   * The grid search is debounced by 250ms, so by the time it would show the match the
+   * scanner has long finished and the cashier is already waiting. Enter therefore runs
+   * its own immediate lookup: exactly one in-stock match goes straight into the cart,
+   * the box clears, and focus returns for the next scan. No match or several matches
+   * leaves the term alone so the cashier can read or refine the list.
+   */
+  const submitScan = async () => {
+    const term = search.trim();
+    if (!term || scanBusyRef.current) return;
+    scanBusyRef.current = true;
+    try {
+      const params = new URLSearchParams({ page: "1", limit: "10", search: term });
+      if (branchId) params.set("branchId", branchId);
+      if (warehouseId) params.set("warehouseId", warehouseId);
+      const res = await api.get<ProductsResponse>(`/pos/products?${params.toString()}`);
+      const matches = res.data.data;
+      if (matches.length === 1 && matches[0].stockQuantity > 0) {
+        addToCart(matches[0]);
+        setSearch("");
+        window.setTimeout(() => searchRef.current?.focus(), 0);
+      }
+    } catch (err) {
+      setError(getApiError(err));
+    } finally {
+      scanBusyRef.current = false;
     }
   };
 
@@ -646,8 +688,15 @@ export function PosPage() {
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
               <input
+                ref={searchRef}
                 value={search}
                 onChange={event => setSearch(event.target.value)}
+                onKeyDown={event => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void submitScan();
+                  }
+                }}
                 placeholder="Search products or barcode"
                 className="kazi-input pl-9"
               />
@@ -681,7 +730,12 @@ export function PosPage() {
               <button
                 type="button"
                 key={product.id}
-                onClick={() => addToCart(product)}
+                onClick={() => {
+                  addToCart(product);
+                  // Back to the scan box: the next product can be tapped or scanned
+                  // without hunting for the field again.
+                  searchRef.current?.focus();
+                }}
                 disabled={product.stockQuantity <= 0}
                 className="kazi-card group flex min-h-[10.5rem] flex-col gap-3 p-4 text-left transition hover:border-accent/50 hover:bg-surface-elevated disabled:cursor-not-allowed disabled:opacity-50"
               >

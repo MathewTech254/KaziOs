@@ -1,5 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../lib/auth";
+import { generateId } from "../lib/utils";
+import { DEFAULT_EXPENSE_CATEGORIES } from "../lib/expenseCategories";
 
 const prisma = new PrismaClient();
 
@@ -126,8 +128,13 @@ async function main() {
 
 async function seedDemoData(orgId: string) {
   const hasInvoices = await prisma.invoice.count({ where: { organizationId: orgId } });
-  if (hasInvoices > 0) return;
+  if (hasInvoices === 0) await seedDemoTradingData(orgId);
+  await seedDemoExpenses(orgId);
+  console.log("Demo data seeded");
+}
 
+/** Products, customers, stock, invoices and payments: guarded so a re-run cannot duplicate them. */
+async function seedDemoTradingData(orgId: string) {
   const warehouse = await prisma.warehouse.findFirst({ where: { organizationId: orgId } });
   const branch = await prisma.branch.findFirst({ where: { organizationId: orgId } });
   if (!warehouse || !branch) return;
@@ -137,6 +144,7 @@ async function seedDemoData(orgId: string) {
       {
         name: "Maize Flour (2kg)",
         sku: "MAIZ-001",
+        barcode: "6001000000101",
         costPrice: 120,
         sellingPrice: 180,
         minStock: 20,
@@ -146,6 +154,7 @@ async function seedDemoData(orgId: string) {
       {
         name: "Cooking Oil (500ml)",
         sku: "OIL-002",
+        barcode: "6001000000117",
         costPrice: 80,
         sellingPrice: 130,
         minStock: 15,
@@ -155,6 +164,7 @@ async function seedDemoData(orgId: string) {
       {
         name: "Sugar (1kg)",
         sku: "SUG-003",
+        barcode: "6001000000124",
         costPrice: 90,
         sellingPrice: 140,
         minStock: 25,
@@ -164,6 +174,7 @@ async function seedDemoData(orgId: string) {
       {
         name: "Office Printer Paper",
         sku: "PAP-004",
+        barcode: "6001000000131",
         costPrice: 2400,
         sellingPrice: 3200,
         minStock: 5,
@@ -173,6 +184,7 @@ async function seedDemoData(orgId: string) {
       {
         name: "Web Hosting Service",
         sku: "WEB-005",
+        barcode: "6001000000148",
         costPrice: 0,
         sellingPrice: 1500,
         minStock: 0,
@@ -271,13 +283,47 @@ async function seedDemoData(orgId: string) {
       });
     }
   }
+}
 
+/**
+ * Expense categories first, then demo expenses wired to them by real id.
+ *
+ * The expense table holds a foreign key to ExpenseCategory, so a category name passed
+ * where an id belongs fails the whole insert. Seeding the same defaults the categories
+ * list creates on first read keeps both paths agreeing on what a new business starts with.
+ */
+async function seedDemoExpenses(orgId: string) {
+  const branch = await prisma.branch.findFirst({ where: { organizationId: orgId } });
+  if (!branch) return;
+
+  if ((await prisma.expenseCategory.count({ where: { organizationId: orgId } })) === 0) {
+    await prisma.expenseCategory.createMany({
+      data: DEFAULT_EXPENSE_CATEGORIES.map(category => ({
+        id: generateId(),
+        organizationId: orgId,
+        name: category.name,
+        description: category.description,
+        accountCode: category.accountCode,
+      })),
+    });
+  }
+
+  if ((await prisma.expense.count({ where: { organizationId: orgId } })) > 0) return;
+
+  const categories = await prisma.expenseCategory.findMany({
+    where: { organizationId: orgId },
+    select: { id: true, name: true },
+  });
+  const categoryIdFor = (name: string) =>
+    categories.find(category => category.name === name)?.id ?? null;
+
+  const now = new Date();
   await prisma.expense.createMany({
     data: [
       {
         organizationId: orgId,
         branchId: branch.id,
-        categoryId: "Rent",
+        categoryId: categoryIdFor("Rent"),
         vendorName: "Landlord Ltd",
         amount: 45000,
         currency: "KES",
@@ -287,7 +333,7 @@ async function seedDemoData(orgId: string) {
       {
         organizationId: orgId,
         branchId: branch.id,
-        categoryId: "Utilities",
+        categoryId: categoryIdFor("Utilities"),
         vendorName: "Power Co",
         amount: 12000,
         currency: "KES",
@@ -297,7 +343,7 @@ async function seedDemoData(orgId: string) {
       {
         organizationId: orgId,
         branchId: branch.id,
-        categoryId: "Salaries",
+        categoryId: categoryIdFor("Salaries & Wages"),
         vendorName: "Payroll Services",
         amount: 120000,
         currency: "KES",
@@ -306,8 +352,6 @@ async function seedDemoData(orgId: string) {
       },
     ],
   });
-
-  console.log("Demo data seeded");
 }
 
 main()

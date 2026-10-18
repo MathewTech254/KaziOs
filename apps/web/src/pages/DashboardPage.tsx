@@ -172,35 +172,34 @@ export function DashboardPage() {
             </Link>
           </div>
           <div className="kazi-card overflow-hidden">
-            {stats?.recentInvoices.length ? (
-              <table className="kazi-table">
-                <thead>
-                  <tr>
-                    <th>Invoice</th>
-                    <th>Customer</th>
-                    <th>Status</th>
-                    <th className="text-right">Amount</th>
+            <table className="kazi-table">
+              <thead>
+                <tr>
+                  <th>Invoice</th>
+                  <th>Customer</th>
+                  <th>Status</th>
+                  <th className="text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats?.recentInvoices.map(invoice => (
+                  <tr key={invoice.id}>
+                    <td className="font-mono text-xs">{invoice.invoiceNumber}</td>
+                    {/* A walk-in sale has no customer row, so it is labelled as such
+                        rather than left blank. */}
+                    <td>{invoice.customer?.name || "Walk-in"}</td>
+                    <td className="text-xs text-muted-foreground">{invoice.status}</td>
+                    <td className="text-right font-medium">{money(invoice.total)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {stats.recentInvoices.map(invoice => (
-                    <tr key={invoice.id}>
-                      <td className="font-mono text-xs">{invoice.invoiceNumber}</td>
-                      {/* A walk-in sale has no customer row, so it is labelled as such
-                          rather than left blank. */}
-                      <td>{invoice.customer?.name || "Walk-in"}</td>
-                      <td className="text-xs text-muted-foreground">{invoice.status}</td>
-                      <td className="text-right font-medium">{money(invoice.total)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <EmptyRow
-                message={loading ? "Loading sales..." : "No sales recorded yet."}
-                colSpan={4}
-              />
-            )}
+                ))}
+                {!stats?.recentInvoices.length && (
+                  <EmptyRow
+                    message={loading ? "Loading sales..." : "No sales recorded yet."}
+                    colSpan={4}
+                  />
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -215,36 +214,35 @@ export function DashboardPage() {
             </Link>
           </div>
           <div className="kazi-card overflow-hidden">
-            {stats?.topProducts.length ? (
-              <table className="kazi-table">
-                <thead>
-                  <tr>
-                    <th>Product</th>
-                    <th className="text-right">Sold</th>
-                    <th className="text-right">Revenue</th>
+            <table className="kazi-table">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th className="text-right">Sold</th>
+                  <th className="text-right">Revenue</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats?.topProducts.map(product => (
+                  <tr key={product.productId ?? product.name}>
+                    <td>
+                      {product.name}
+                      {product.sku ? (
+                        <span className="ml-2 text-xs text-muted-foreground">{product.sku}</span>
+                      ) : null}
+                    </td>
+                    <td className="text-right">{product.quantity}</td>
+                    <td className="text-right font-medium">{money(product.revenue)}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {stats.topProducts.map(product => (
-                    <tr key={product.productId ?? product.name}>
-                      <td>
-                        {product.name}
-                        {product.sku ? (
-                          <span className="ml-2 text-xs text-muted-foreground">{product.sku}</span>
-                        ) : null}
-                      </td>
-                      <td className="text-right">{product.quantity}</td>
-                      <td className="text-right font-medium">{money(product.revenue)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <EmptyRow
-                message={loading ? "Loading products..." : "No products sold this month yet."}
-                colSpan={3}
-              />
-            )}
+                ))}
+                {!stats?.topProducts.length && (
+                  <EmptyRow
+                    message={loading ? "Loading products..." : "No products sold this month yet."}
+                    colSpan={3}
+                  />
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

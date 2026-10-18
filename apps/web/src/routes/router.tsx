@@ -17,6 +17,7 @@ import { InventoryPage } from "../pages/InventoryPage";
 import { PurchasingPage } from "../pages/PurchasingPage";
 import { ExpensesPage } from "../pages/ExpensesPage";
 import { PricingPage } from "../pages/PricingPage";
+import { AssistantPage } from "../pages/AssistantPage";
 import { AuthGuard } from "../components/Guard";
 
 /**
@@ -124,6 +125,15 @@ export const router = createBrowserRouter([
       </AuthGuard>
     ),
     children: [{ index: true, element: <ExpensesPage /> }],
+  },
+  {
+    path: "/assistant",
+    element: (
+      <AuthGuard>
+        <Layout />
+      </AuthGuard>
+    ),
+    children: [{ index: true, element: <AssistantPage /> }],
   },
   {
     path: "/dashboard",

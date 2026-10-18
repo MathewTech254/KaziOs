@@ -1,0 +1,151 @@
+import { chatCompletion, chatJson } from "@kazios/ai";
+import { isAiConfigured, loadConfig } from "@kazios/config";
+import { AppError } from "../middleware/errorHandler";
+import { runTool, TOOL_CATALOG, type ToolContext, type ToolParams } from "./aiTools";
+
+/**
+ * The assistant orchestrator: User -> AI -> Intent -> Authorized Tool -> Business Data.
+ *
+ * The contract that makes this safe to put in front of a shop's money:
+ *
+ *   1. The model reads the question and chooses a tool and its parameters. It does no maths.
+ *   2. The chosen tool computes the real figures from the database (see `aiTools.ts`).
+ *   3. The model is asked only to turn those already-computed figures into a friendly
+ *      sentence. Its system prompt forbids introducing any number that is not in the facts,
+ *      so a confident-sounding hallucination is designed out rather than merely discouraged.
+ *
+ * When AI is not configured, step 3 is skipped and the deterministic summary from step 2 is
+ * returned verbatim. The business still gets a correct, useful answer; only the polish is
+ * missing. A missing key degrades the wording, never the truth.
+ */
+
+export interface AssistantAnswer {
+  question: string;
+  /** Which tool answered, so the client can label the response. */
+  tool: string;
+  /** The model's prose answer, or the deterministic summary when AI is off. */
+  answer: string;
+  /** The structured figures behind the answer. */
+  data: Record<string, unknown>;
+  /** True when the wording came from the model rather than the deterministic summary. */
+  aiPhrased: boolean;
+}
+
+interface RouteDecision {
+  tool: string;
+  params: ToolParams;
+}
+
+/** True when a usable AI key is present, so callers can decide whether to offer the feature. */
+export function aiAssistantEnabled(): boolean {
+  try {
+    return isAiConfigured(loadConfig());
+  } catch {
+    return false;
+  }
+}
+
+function routingSystemPrompt(): string {
+  const catalog = TOOL_CATALOG.map(t => `- ${t.name}: ${t.description}. params: ${t.params}`).join(
+    "\n"
+  );
+  return [
+    "You route a shop owner's question to exactly one analytics tool.",
+    "Available tools:",
+    catalog,
+    "",
+    'Respond as JSON only: {"tool": string, "params": object}.',
+    "Rules:",
+    "- Choose the single best tool. If nothing fits, use sales_summary.",
+    "- period is one of: today, yesterday, this_week, this_month, last_month, all_time.",
+    '- Infer a sensible period from the question ("today"->today, "this month"->this_month). Default today.',
+    "- limit is a number 1-10 for top_products. days is a number for slow_movers.",
+    "- Never invent tools or params. Output nothing but the JSON object.",
+  ].join("\n");
+}
+
+/** Uses the model to pick the tool and params. Falls back to a sales summary on any trouble. */
+async function routeQuestion(question: string): Promise<RouteDecision> {
+  const fallback: RouteDecision = { tool: "sales_summary", params: { period: "today" } };
+  if (!aiAssistantEnabled()) return fallback;
+  try {
+    const decision = await chatJson<RouteDecision>({
+      messages: [
+        { role: "system", content: routingSystemPrompt() },
+        { role: "user", content: question },
+      ],
+      temperature: 0,
+    });
+    const known = TOOL_CATALOG.some(t => t.name === decision?.tool);
+    if (!decision || !known) return fallback;
+    return { tool: decision.tool, params: decision.params || {} };
+  } catch {
+    // A routing failure is not the customer's fault and must not lose them their answer.
+    return fallback;
+  }
+}
+
+function phrasingSystemPrompt(): string {
+  return [
+    "You are the friendly business assistant inside KaziOS, speaking to a shop owner.",
+    "You are given VERIFIED FACTS computed from the shop's own records.",
+    "Write a short, warm, plain-English answer (1-3 sentences) that uses ONLY those facts.",
+    "Never introduce, estimate or change any number. If a figure is not in the facts, do not state it.",
+    "Do not give financial advice or predictions. You may end with one practical next step that follows from the facts.",
+  ].join("\n");
+}
+
+/** Turns already-computed facts into prose. Returns the deterministic summary if AI is off. */
+async function phraseAnswer(
+  question: string,
+  facts: string,
+  deterministic: string
+): Promise<{ answer: string; aiPhrased: boolean }> {
+  if (!aiAssistantEnabled()) return { answer: deterministic, aiPhrased: false };
+  try {
+    const answer = await chatCompletion({
+      messages: [
+        { role: "system", content: phrasingSystemPrompt() },
+        { role: "user", content: `Question: ${question}\n\nVerified facts:\n${facts}` },
+      ],
+      temperature: 0.3,
+      maxTokens: 220,
+    });
+    const trimmed = (answer || "").trim();
+    return trimmed
+      ? { answer: trimmed, aiPhrased: true }
+      : { answer: deterministic, aiPhrased: false };
+  } catch {
+    return { answer: deterministic, aiPhrased: false };
+  }
+}
+
+/**
+ * Answers one natural-language business question for one organization.
+ *
+ * The organizationId is always taken from the authenticated request by the caller and is the
+ * only thing that scopes every query here, so a question can never reach another shop's data.
+ */
+export async function askBusiness(
+  organizationId: string,
+  currency: string,
+  question: string
+): Promise<AssistantAnswer> {
+  const trimmed = question.trim();
+  if (trimmed.length < 2) {
+    throw new AppError(
+      400,
+      "Ask a question about your business, for example: how much did we sell today?"
+    );
+  }
+  if (trimmed.length > 500) {
+    throw new AppError(400, "That question is too long. Please keep it under 500 characters.");
+  }
+
+  const ctx: ToolContext = { organizationId, currency };
+  const route = await routeQuestion(trimmed);
+  const result = await runTool(route.tool, ctx, route.params);
+  const { answer, aiPhrased } = await phraseAnswer(trimmed, result.summary, result.summary);
+
+  return { question: trimmed, tool: route.tool, answer, data: result.data, aiPhrased };
+}

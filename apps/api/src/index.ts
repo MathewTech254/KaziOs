@@ -111,6 +111,7 @@ import { inventoryRouter } from "./routes/inventory";
 import { supplierRouter } from "./routes/suppliers";
 import { purchaseOrderRouter } from "./routes/purchase-orders";
 import { expenseRouter } from "./routes/expenses";
+import { aiRouter } from "./routes/ai";
 import { auditMiddleware } from "./middleware/audit";
 import { errorHandler, lastResortGuard } from "./middleware/errorHandler";
 import { loadCoreFeatureKeys } from "./services/entitlements";
@@ -263,6 +264,7 @@ export function createApp() {
   app.use("/api/v1/suppliers", supplierRouter);
   app.use("/api/v1/purchase-orders", purchaseOrderRouter);
   app.use("/api/v1/expenses", expenseRouter);
+  app.use("/api/v1/ai", aiRouter);
 
   // The plan catalogue is public, because the pricing page has to be readable by somebody
   // who has not signed up yet. It exposes only the catalogue: never a subscription, never a

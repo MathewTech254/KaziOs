@@ -11,6 +11,7 @@ import {
   Receipt,
   Settings,
   ShoppingBag,
+  Sparkles,
   Sun,
   User,
   Users,
@@ -33,7 +34,13 @@ interface NavGroup {
 const NAV_GROUPS: NavGroup[] = [
   {
     label: "Overview",
-    items: [{ to: "/dashboard", label: "Dashboard", icon: LayoutDashboard }],
+    items: [
+      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      // Shown to everyone; the page itself explains the plan requirement and links to
+      // pricing, the same way the Pricing page does. Hiding it here would only hide it
+      // from people who might upgrade if they knew it existed.
+      { to: "/assistant", label: "Ask your business", icon: Sparkles },
+    ],
   },
   {
     label: "Sell",

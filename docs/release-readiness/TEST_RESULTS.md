@@ -56,7 +56,7 @@ walk-in POS sales are never destroyed).
 | M-PESA live STK push | No Daraja sandbox credentials. | Owner provides sandbox consumer key/secret + shortcode; run `smoke` with live creds. |
 | eTIMS/KRA submission | No credentials, no sandbox, no KRA approval. | See ETIMS_READINESS.md — BLOCKED EXTERNALLY. |
 | SendGrid / real SMS / WhatsApp | No provider API keys. | Configure keys; smoke-notifications will then deliver. |
-| Hardware barcode scanner | No physical device. | Manual pilot runbook step. |
+| Hardware barcode scanner | No physical device. | Manual pilot runbook step — `PILOT_RUNBOOK.md` §1.5 (Layers A–D). |
 | Worker tests | No worker test files exist. | Optional — add tests if worker logic grows. |
 
 ## 4. What these results do and do not prove
