@@ -57,6 +57,10 @@ export interface EnvironmentConfig {
     provider: string;
     apiKey?: string;
     from?: string;
+    /** Token Meta echoes back during webhook subscription verification. */
+    verifyToken?: string;
+    /** App secret used to verify X-Hub-Signature-256 on incoming webhooks. */
+    appSecret?: string;
   };
   storage: {
     provider: string;
@@ -170,6 +174,8 @@ export function loadConfig(): EnvironmentConfig {
       provider: getEnv("WHATSAPP_PROVIDER", "console"),
       apiKey: getEnvOptional("WHATSAPP_API_KEY"),
       from: getEnvOptional("WHATSAPP_FROM"),
+      verifyToken: getEnvOptional("WHATSAPP_VERIFY_TOKEN"),
+      appSecret: getEnvOptional("WHATSAPP_APP_SECRET"),
     },
     storage: {
       provider: getEnv("OBJECT_STORAGE_PROVIDER", "local"),

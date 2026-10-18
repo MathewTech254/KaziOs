@@ -111,7 +111,7 @@ import { inventoryRouter } from "./routes/inventory";
 import { supplierRouter } from "./routes/suppliers";
 import { purchaseOrderRouter } from "./routes/purchase-orders";
 import { expenseRouter } from "./routes/expenses";
-import { aiRouter } from "./routes/ai";
+import { aiRouter, whatsappWebhookRouter } from "./routes/ai";
 import { auditMiddleware } from "./middleware/audit";
 import { errorHandler, lastResortGuard } from "./middleware/errorHandler";
 import { loadCoreFeatureKeys } from "./services/entitlements";
@@ -214,6 +214,10 @@ export function createApp() {
   // this endpoint is built to be incapable of settling anything on its own: a
   // delivery may only cause a re-query against Safaricom (routes/mpesa.ts).
   app.use("/api/v1/webhooks", mpesaWebhookRouter);
+
+  // WhatsApp posts here with no session either. Meta signs every payload with
+  // X-Hub-Signature-256 using the app secret, so an unverified POST is rejected.
+  app.use("/api/v1/webhooks", whatsappWebhookRouter);
 
   app.use("/api/v1/auth", authLimiter);
   app.use("/api/v1", apiLimiter);
