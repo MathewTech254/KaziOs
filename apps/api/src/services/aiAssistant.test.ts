@@ -30,6 +30,13 @@ jest.mock("./aiTools", () => ({
     { name: "cash_position", description: "cash", params: "period" },
     { name: "expense_summary", description: "expenses", params: "period" },
     { name: "branch_stock", description: "stock", params: "none" },
+    { name: "send_invoice", description: "send invoice", params: "invoiceId, confirm" },
+    { name: "void_invoice", description: "void invoice", params: "invoiceId, confirm" },
+    {
+      name: "record_payment",
+      description: "record payment",
+      params: "invoiceId, amountCents, confirm",
+    },
   ],
 }));
 
@@ -60,7 +67,11 @@ describe("askBusiness", () => {
     expect(result.answer).toBe("You are low on Milk and Sugar — time to reorder.");
     expect(result.aiPhrased).toBe(true);
     // The tool received the routed params, and the facts handed to the model are the tool's.
-    expect(runTool).toHaveBeenCalledWith("low_stock", { organizationId: ORG, currency: "KES" }, {});
+    expect(runTool).toHaveBeenCalledWith(
+      "low_stock",
+      { organizationId: ORG, currency: "KES", permissions: [] },
+      {}
+    );
     const phrasedFacts = (chatCompletion as jest.Mock).mock.calls[0][0].messages[1].content;
     expect(phrasedFacts).toContain("Milk (3 left)");
   });

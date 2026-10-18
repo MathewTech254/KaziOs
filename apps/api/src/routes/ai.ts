@@ -75,7 +75,9 @@ aiRouter.post(
       });
       const currency = org?.currency || "KES";
 
-      const answer = await askBusiness(organizationId, currency, question);
+      // The user's permissions gate which write tools may execute. Read tools ignore them.
+      const permissions = (req.roles || []).flatMap((r: any) => r.role?.permissions || []);
+      const answer = await askBusiness(organizationId, currency, question, permissions);
 
       // Metered after the work is done, best-effort: an unanswered question is worse than an
       // uncounted one, so a counter failure never takes the answer away from the shop.

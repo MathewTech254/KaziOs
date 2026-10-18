@@ -11,8 +11,8 @@ import { periodRange, runTool, TOOL_CATALOG } from "./aiTools";
 
 jest.mock("../lib/prisma", () => ({
   prisma: {
-    payment: { findMany: jest.fn() },
-    invoice: { findMany: jest.fn() },
+    payment: { findMany: jest.fn(), create: jest.fn() },
+    invoice: { findMany: jest.fn(), findFirst: jest.fn(), update: jest.fn() },
     invoiceItem: { findMany: jest.fn(), groupBy: jest.fn() },
     product: { findMany: jest.fn() },
     branch: { findMany: jest.fn() },
@@ -22,6 +22,12 @@ jest.mock("../lib/prisma", () => ({
 
 const ORG = "org-1";
 const ctx = { organizationId: ORG, currency: "KES" };
+const writeCtx = {
+  organizationId: ORG,
+  currency: "KES",
+  permissions: ["invoices.send", "invoices.void", "payments.create"],
+};
+const noPermCtx = { organizationId: ORG, currency: "KES", permissions: [] };
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -264,5 +270,186 @@ describe("branch_stock", () => {
     (prisma.branch.findMany as jest.Mock).mockResolvedValue([]);
     const result = await runTool("branch_stock", ctx, {});
     expect(result.summary).toMatch(/No branches are set up yet/);
+  });
+});
+
+describe("send_invoice", () => {
+  const invoice = {
+    id: "inv-1",
+    invoiceNumber: "INV-001",
+    status: "DRAFT",
+    total: 50,
+    paidAmount: 0,
+    customer: { name: "Acme Ltd", phone: "+254700000000" },
+  };
+
+  it("previews without sending when confirm is false", async () => {
+    (prisma.invoice.findFirst as jest.Mock).mockResolvedValue(invoice);
+    const result = await runTool("send_invoice", writeCtx, { invoiceId: "inv-1", confirm: false });
+    expect(result.summary).toContain("I can send invoice INV-001");
+    expect(result.summary).toContain("nothing has been sent yet");
+    expect(result.data.wouldSend).toBe(true);
+    expect(result.data.confirmRequired).toBe(true);
+    expect((prisma.invoice.update as jest.Mock).mock.calls.length).toBe(0);
+  });
+
+  it("sends a draft invoice and updates status to SENT", async () => {
+    (prisma.invoice.findFirst as jest.Mock).mockResolvedValue(invoice);
+    (prisma.invoice.update as jest.Mock).mockResolvedValue({ ...invoice, status: "SENT" });
+    const result = await runTool("send_invoice", writeCtx, { invoiceId: "inv-1", confirm: true });
+    expect(result.summary).toContain("has been sent");
+    expect(result.data.status).toBe("SENT");
+    const updateCalls = (prisma.invoice.update as jest.Mock).mock.calls;
+    expect(updateCalls.length).toBe(1);
+    expect(updateCalls[0][0]).toEqual({
+      where: { id: "inv-1" },
+      data: { status: "SENT" },
+    });
+  });
+
+  it("refuses to send a non-draft invoice", async () => {
+    (prisma.invoice.findFirst as jest.Mock).mockResolvedValue({ ...invoice, status: "SENT" });
+    await expect(
+      runTool("send_invoice", writeCtx, { invoiceId: "inv-1", confirm: true })
+    ).rejects.toThrow(/Only draft invoices can be sent/);
+  });
+
+  it("returns 404 when the invoice does not exist", async () => {
+    (prisma.invoice.findFirst as jest.Mock).mockResolvedValue(null);
+    await expect(
+      runTool("send_invoice", writeCtx, { invoiceId: "missing", confirm: true })
+    ).rejects.toThrow(/Invoice not found/);
+  });
+
+  it("rejects when the caller lacks invoices.send permission", async () => {
+    (prisma.invoice.findFirst as jest.Mock).mockResolvedValue(invoice);
+    await expect(
+      runTool("send_invoice", noPermCtx, { invoiceId: "inv-1", confirm: true })
+    ).rejects.toThrow(/do not have permission to send invoices/);
+    expect((prisma.invoice.update as jest.Mock).mock.calls.length).toBe(0);
+  });
+});
+
+describe("void_invoice", () => {
+  const invoice = {
+    id: "inv-2",
+    invoiceNumber: "INV-002",
+    status: "SENT",
+    total: 100,
+    customer: { name: "Acme Ltd" },
+  };
+
+  it("previews voiding without mutating when confirm is false", async () => {
+    (prisma.invoice.findFirst as jest.Mock).mockResolvedValue(invoice);
+    const result = await runTool("void_invoice", writeCtx, { invoiceId: "inv-2", confirm: false });
+    expect(result.summary).toContain("I can void invoice INV-002");
+    expect(result.data.wouldVoid).toBe(true);
+    expect(result.data.confirmRequired).toBe(true);
+    expect((prisma.invoice.update as jest.Mock).mock.calls.length).toBe(0);
+  });
+
+  it("voids an invoice when confirm is true", async () => {
+    (prisma.invoice.findFirst as jest.Mock).mockResolvedValue(invoice);
+    (prisma.invoice.update as jest.Mock).mockResolvedValue({ ...invoice, status: "VOID" });
+    const result = await runTool("void_invoice", writeCtx, { invoiceId: "inv-2", confirm: true });
+    expect(result.summary).toContain("has been voided");
+    expect(result.data.status).toBe("VOID");
+    expect(result.data.voided).toBe(true);
+  });
+
+  it("refuses to void an already voided invoice", async () => {
+    (prisma.invoice.findFirst as jest.Mock).mockResolvedValue({ ...invoice, status: "VOID" });
+    await expect(
+      runTool("void_invoice", writeCtx, { invoiceId: "inv-2", confirm: true })
+    ).rejects.toThrow(/already voided/);
+  });
+
+  it("rejects when the caller lacks invoices.void permission", async () => {
+    (prisma.invoice.findFirst as jest.Mock).mockResolvedValue(invoice);
+    await expect(
+      runTool("void_invoice", noPermCtx, { invoiceId: "inv-2", confirm: true })
+    ).rejects.toThrow(/do not have permission to void invoices/);
+    expect((prisma.invoice.update as jest.Mock).mock.calls.length).toBe(0);
+  });
+});
+
+describe("record_payment", () => {
+  const invoice = {
+    id: "inv-3",
+    invoiceNumber: "INV-003",
+    status: "SENT",
+    total: 200,
+    paidAmount: 50,
+    customer: { name: "Acme Ltd" },
+  };
+
+  it("previews recording without mutating when confirm is false", async () => {
+    (prisma.invoice.findFirst as jest.Mock).mockResolvedValue(invoice);
+    const result = await runTool("record_payment", writeCtx, {
+      invoiceId: "inv-3",
+      amountCents: 10000,
+      confirm: false,
+    });
+    expect(result.summary).toContain("I can record a payment of KES\u00A0100.00");
+    expect(result.data.wouldRecord).toBe(true);
+    expect(result.data.confirmRequired).toBe(true);
+    expect((prisma.payment.create as jest.Mock).mock.calls.length).toBe(0);
+  });
+
+  it("records a payment and updates the invoice status", async () => {
+    (prisma.invoice.findFirst as jest.Mock).mockResolvedValue(invoice);
+    (prisma.payment.create as jest.Mock).mockResolvedValue({ id: "pay-1" });
+    (prisma.invoice.update as jest.Mock).mockResolvedValue({
+      ...invoice,
+      paidAmount: 150,
+      status: "PARTIALLY_PAID",
+    });
+    const result = await runTool("record_payment", writeCtx, {
+      invoiceId: "inv-3",
+      amountCents: 10000,
+      confirm: true,
+    });
+    expect(result.summary).toContain("Recorded KES\u00A0100.00");
+    expect(result.data.amountCents).toBe(10000);
+    expect(result.data.status).toBe("PARTIALLY_PAID");
+    expect((prisma.payment.create as jest.Mock).mock.calls.length).toBeGreaterThan(0);
+    const updateCalls = (prisma.invoice.update as jest.Mock).mock.calls;
+    expect(updateCalls.length).toBe(1);
+    expect(updateCalls[0][0]).toEqual({
+      where: { id: "inv-3" },
+      data: { paidAmount: 150, status: "PARTIALLY_PAID" },
+    });
+  });
+
+  it("rejects a payment that exceeds the outstanding amount", async () => {
+    (prisma.invoice.findFirst as jest.Mock).mockResolvedValue(invoice);
+    await expect(
+      runTool("record_payment", writeCtx, {
+        invoiceId: "inv-3",
+        amountCents: 200000,
+        confirm: true,
+      })
+    ).rejects.toThrow(/exceeds the outstanding/);
+    expect((prisma.payment.create as jest.Mock).mock.calls.length).toBe(0);
+  });
+
+  it("rejects a zero or negative amount", async () => {
+    (prisma.invoice.findFirst as jest.Mock).mockResolvedValue(invoice);
+    await expect(
+      runTool("record_payment", writeCtx, { invoiceId: "inv-3", amountCents: 0, confirm: true })
+    ).rejects.toThrow(/greater than zero/);
+    expect((prisma.payment.create as jest.Mock).mock.calls.length).toBe(0);
+  });
+
+  it("rejects when the caller lacks payments.create permission", async () => {
+    (prisma.invoice.findFirst as jest.Mock).mockResolvedValue(invoice);
+    await expect(
+      runTool("record_payment", noPermCtx, {
+        invoiceId: "inv-3",
+        amountCents: 10000,
+        confirm: true,
+      })
+    ).rejects.toThrow(/do not have permission to record payments/);
+    expect((prisma.payment.create as jest.Mock).mock.calls.length).toBe(0);
   });
 });

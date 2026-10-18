@@ -50,13 +50,16 @@ function routingSystemPrompt(): string {
     "\n"
   );
   return [
-    "You route a shop owner's question to exactly one analytics tool.",
+    "You route a shop owner's question to exactly one tool. Some tools are read-only analytics;",
+    "others are actions that change records (send_invoice, void_invoice, record_payment).",
     "Available tools:",
     catalog,
     "",
     'Respond as JSON only: {"tool": string, "params": object}.',
     "Rules:",
     "- Choose the single best tool. If nothing fits, use sales_summary.",
+    "- For action tools, never set confirm: true. Route with confirm: false first, present the",
+    "  preview to the shop owner, and ask them to confirm explicitly before you set confirm: true.",
     "- period is one of: today, yesterday, this_week, this_month, last_month, all_time.",
     '- Infer a sensible period from the question ("today"->today, "this month"->this_month). Default today.',
     "- limit is a number 1-10 for top_products. days is a number for slow_movers.",
@@ -129,7 +132,8 @@ async function phraseAnswer(
 export async function askBusiness(
   organizationId: string,
   currency: string,
-  question: string
+  question: string,
+  permissions: string[] = []
 ): Promise<AssistantAnswer> {
   const trimmed = question.trim();
   if (trimmed.length < 2) {
@@ -142,7 +146,7 @@ export async function askBusiness(
     throw new AppError(400, "That question is too long. Please keep it under 500 characters.");
   }
 
-  const ctx: ToolContext = { organizationId, currency };
+  const ctx: ToolContext = { organizationId, currency, permissions };
   const route = await routeQuestion(trimmed);
   const result = await runTool(route.tool, ctx, route.params);
   const { answer, aiPhrased } = await phraseAnswer(trimmed, result.summary, result.summary);

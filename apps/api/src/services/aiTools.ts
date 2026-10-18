@@ -1,4 +1,6 @@
+import { AppError, generateId } from "../lib";
 import { prisma } from "../lib/prisma";
+import { WhatsappProvider } from "@kazios/integrations";
 
 /**
  * The authorized tools behind the AI assistant.
@@ -16,6 +18,8 @@ import { prisma } from "../lib/prisma";
 export interface ToolContext {
   organizationId: string;
   currency: string;
+  /** Permissions held by the caller, used to gate write tools. Read tools ignore it. */
+  permissions?: string[];
 }
 
 export type ToolParams = Record<string, unknown>;
@@ -428,6 +432,250 @@ async function branchStock(ctx: ToolContext, _params: ToolParams): Promise<ToolR
   return { summary, data };
 }
 
+/** Console-mode WhatsApp provider: logs the message instead of sending it. Real
+ * credentials are wired in when a WhatsApp Business number and API key are configured. */
+const whatsappProvider = new WhatsappProvider({ provider: "console", from: "KaziOS" });
+
+/** Send a draft invoice: DRAFT -> SENT, plus a WhatsApp stub to the customer. */
+async function sendInvoice(ctx: ToolContext, params: ToolParams): Promise<ToolResult> {
+  const invoiceId = String(params.invoiceId || "");
+  const confirm = params.confirm === true;
+
+  if (!ctx.permissions?.includes("invoices.send")) {
+    throw new AppError(403, "You do not have permission to send invoices.");
+  }
+
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: invoiceId, organizationId: ctx.organizationId },
+    select: {
+      id: true,
+      invoiceNumber: true,
+      status: true,
+      total: true,
+      paidAmount: true,
+      customer: { select: { name: true, phone: true } },
+    },
+  });
+  if (!invoice) throw new AppError(404, "Invoice not found.");
+
+  const owedCents = Math.round(((invoice.total || 0) - (invoice.paidAmount || 0)) * 100);
+  const customerName = invoice.customer?.name || "a customer";
+
+  if (!confirm) {
+    // Dry-run: preview what would happen, mutate nothing.
+    let summary: string;
+    if (invoice.status !== "DRAFT") {
+      summary = `Invoice ${invoice.invoiceNumber} is ${invoice.status.toLowerCase()}, not a draft. Only draft invoices can be sent.`;
+    } else {
+      summary = `I can send invoice ${invoice.invoiceNumber} for ${money(owedCents, ctx.currency)} to ${customerName}. It is still a draft — nothing has been sent yet. Ask me again to confirm sending it.`;
+    }
+    return {
+      summary,
+      data: {
+        invoiceId,
+        invoiceNumber: invoice.invoiceNumber,
+        status: invoice.status,
+        owedCents,
+        customer: customerName,
+        phone: invoice.customer?.phone,
+        confirmRequired: true,
+        wouldSend: invoice.status === "DRAFT",
+      },
+    };
+  }
+
+  if (invoice.status !== "DRAFT") {
+    throw new AppError(
+      400,
+      `Only draft invoices can be sent; ${invoice.invoiceNumber} is ${invoice.status.toLowerCase()}.`
+    );
+  }
+
+  const updated = await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: { status: "SENT" },
+  });
+
+  const phone = invoice.customer?.phone;
+  if (phone) {
+    await whatsappProvider.send({
+      to: phone,
+      body: `Your invoice ${invoice.invoiceNumber} for ${money(Math.round((invoice.total || 0) * 100), ctx.currency)} is ready.`,
+    });
+  }
+
+  return {
+    summary: `Invoice ${invoice.invoiceNumber} has been sent.`,
+    data: {
+      invoiceId,
+      invoiceNumber: invoice.invoiceNumber,
+      status: updated.status,
+      sent: true,
+      whatsapp: phone ? "queued" : "no phone on file",
+    },
+  };
+}
+
+/** Void an invoice: status -> VOID. */
+async function voidInvoice(ctx: ToolContext, params: ToolParams): Promise<ToolResult> {
+  const invoiceId = String(params.invoiceId || "");
+  const confirm = params.confirm === true;
+
+  if (!ctx.permissions?.includes("invoices.void")) {
+    throw new AppError(403, "You do not have permission to void invoices.");
+  }
+
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: invoiceId, organizationId: ctx.organizationId },
+    select: {
+      id: true,
+      invoiceNumber: true,
+      status: true,
+      total: true,
+      customer: { select: { name: true } },
+    },
+  });
+  if (!invoice) throw new AppError(404, "Invoice not found.");
+
+  const customerName = invoice.customer?.name || "a customer";
+
+  if (!confirm) {
+    // Dry-run: preview what would happen, mutate nothing.
+    let summary: string;
+    if (invoice.status === "VOID") {
+      summary = `Invoice ${invoice.invoiceNumber} is already voided.`;
+    } else {
+      summary = `I can void invoice ${invoice.invoiceNumber} for ${money(Math.round((invoice.total || 0) * 100), ctx.currency)} for ${customerName}. Voiding cancels it entirely — nothing will be collected on it. Ask me again to confirm voiding it.`;
+    }
+    return {
+      summary,
+      data: {
+        invoiceId,
+        invoiceNumber: invoice.invoiceNumber,
+        status: invoice.status,
+        confirmRequired: true,
+        wouldVoid: invoice.status !== "VOID",
+      },
+    };
+  }
+
+  if (invoice.status === "VOID") {
+    throw new AppError(400, `Invoice ${invoice.invoiceNumber} is already voided.`);
+  }
+
+  const updated = await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: { status: "VOID" },
+  });
+
+  return {
+    summary: `Invoice ${invoice.invoiceNumber} has been voided.`,
+    data: {
+      invoiceId,
+      invoiceNumber: invoice.invoiceNumber,
+      status: updated.status,
+      voided: true,
+    },
+  };
+}
+
+/** Record a manual payment on an invoice. */
+async function recordPayment(ctx: ToolContext, params: ToolParams): Promise<ToolResult> {
+  const invoiceId = String(params.invoiceId || "");
+  const amountCents = Math.round(Number(params.amountCents || 0));
+  const confirm = params.confirm === true;
+
+  if (!ctx.permissions?.includes("payments.create")) {
+    throw new AppError(403, "You do not have permission to record payments.");
+  }
+
+  if (amountCents <= 0) {
+    throw new AppError(400, "The payment amount must be greater than zero.");
+  }
+
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: invoiceId, organizationId: ctx.organizationId },
+    select: {
+      id: true,
+      invoiceNumber: true,
+      status: true,
+      total: true,
+      paidAmount: true,
+      customer: { select: { name: true } },
+    },
+  });
+  if (!invoice) throw new AppError(404, "Invoice not found.");
+
+  const owedCents = Math.round(((invoice.total || 0) - (invoice.paidAmount || 0)) * 100);
+  const customerName = invoice.customer?.name || "a customer";
+
+  if (amountCents > owedCents) {
+    throw new AppError(
+      400,
+      `That exceeds the outstanding ${money(owedCents, ctx.currency)} on ${invoice.invoiceNumber}.`
+    );
+  }
+
+  if (!confirm) {
+    // Dry-run: preview what would happen, mutate nothing.
+    const summary = `I can record a payment of ${money(amountCents, ctx.currency)} on invoice ${invoice.invoiceNumber} (${money(owedCents, ctx.currency)} still outstanding for ${customerName}). Nothing has been recorded yet. Ask me again to confirm the payment.`;
+    return {
+      summary,
+      data: {
+        invoiceId,
+        invoiceNumber: invoice.invoiceNumber,
+        amountCents,
+        owedCents,
+        customer: customerName,
+        confirmRequired: true,
+        wouldRecord: true,
+      },
+    };
+  }
+
+  const payment = await prisma.payment.create({
+    data: {
+      reference: `AI-${generateId()}`,
+      organizationId: ctx.organizationId,
+      amount: amountCents / 100,
+      currency: ctx.currency,
+      provider: "manual",
+      methodType: "manual",
+      status: "SUCCESS",
+      notes: "Recorded via AI assistant",
+      invoiceId,
+      paidAt: new Date(),
+    },
+  });
+
+  const existingPaidCents = Math.round((invoice.paidAmount || 0) * 100);
+  const totalCents = Math.round((invoice.total || 0) * 100);
+  const newPaidCents = existingPaidCents + amountCents;
+  let newStatus = invoice.status;
+  if (newPaidCents >= totalCents) {
+    newStatus = "PAID";
+  } else if (newPaidCents > 0) {
+    newStatus = "PARTIALLY_PAID";
+  }
+
+  await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: { paidAmount: newPaidCents / 100, status: newStatus },
+  });
+
+  return {
+    summary: `Recorded ${money(amountCents, ctx.currency)} on invoice ${invoice.invoiceNumber}.`,
+    data: {
+      invoiceId,
+      invoiceNumber: invoice.invoiceNumber,
+      amountCents,
+      paidAmount: newPaidCents / 100,
+      status: newStatus,
+      paymentId: payment.id,
+    },
+  };
+}
+
 type ToolFn = (ctx: ToolContext, params: ToolParams) => Promise<ToolResult>;
 
 const TOOLS: Record<string, ToolFn> = {
@@ -439,6 +687,9 @@ const TOOLS: Record<string, ToolFn> = {
   cash_position: cashPosition,
   expense_summary: expenseSummary,
   branch_stock: branchStock,
+  send_invoice: sendInvoice,
+  void_invoice: voidInvoice,
+  record_payment: recordPayment,
 };
 
 /** Shown to the language model so it can route a question to the right tool. */
@@ -482,6 +733,23 @@ export const TOOL_CATALOG = [
     name: "branch_stock",
     description: "Stock position by branch: tracked products and items below their reorder level",
     params: "none",
+  },
+  {
+    name: "send_invoice",
+    description:
+      "Send a draft invoice to its customer (DRAFT -> SENT) and WhatsApp them the invoice. Requires confirm: true to execute.",
+    params: "invoiceId, confirm",
+  },
+  {
+    name: "void_invoice",
+    description:
+      "Void an invoice so nothing is collected on it. Requires confirm: true to execute.",
+    params: "invoiceId, confirm",
+  },
+  {
+    name: "record_payment",
+    description: "Record a manual payment on an invoice. Requires confirm: true to execute.",
+    params: "invoiceId, amountCents, confirm",
   },
 ];
 
