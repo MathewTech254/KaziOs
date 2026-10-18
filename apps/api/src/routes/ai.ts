@@ -23,6 +23,8 @@ export const aiRouter = Router();
 
 const zAsk = z.object({
   question: z.string().min(2).max(500),
+  /** Optional session id for conversation memory. Falls back to the authenticated session. */
+  sessionId: z.string().optional(),
 });
 
 /** Whether the assistant is available at all: the plan allows it and a key is configured. */
@@ -66,7 +68,7 @@ aiRouter.post(
         );
       }
 
-      const { question } = zAsk.parse(req.body);
+      const { question, sessionId } = zAsk.parse(req.body);
 
       // Currency comes from the shop, not the client, so a caller cannot spoof the unit.
       const org = await prisma.organization.findUnique({
@@ -77,7 +79,15 @@ aiRouter.post(
 
       // The user's permissions gate which write tools may execute. Read tools ignore them.
       const permissions = (req.roles || []).flatMap((r: any) => r.role?.permissions || []);
-      const answer = await askBusiness(organizationId, currency, question, permissions);
+      // Prefer the client-supplied session id, falling back to the authenticated session.
+      const effectiveSessionId = sessionId || req.sessionId;
+      const answer = await askBusiness(
+        organizationId,
+        currency,
+        question,
+        permissions,
+        effectiveSessionId
+      );
 
       // Metered after the work is done, best-effort: an unanswered question is worse than an
       // uncounted one, so a counter failure never takes the answer away from the shop.

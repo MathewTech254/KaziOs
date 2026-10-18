@@ -40,14 +40,28 @@ jest.mock("./aiTools", () => ({
   ],
 }));
 
+// In-memory fake Redis for conversation memory tests.
+const redisStore = new Map<string, string>();
+jest.mock("../lib/redis", () => ({
+  getRedis: jest.fn(() => ({
+    get: jest.fn((key: string) => Promise.resolve(redisStore.get(key) || null)),
+    set: jest.fn((key: string, value: string) => {
+      redisStore.set(key, value);
+      return Promise.resolve("OK");
+    }),
+  })),
+}));
+
 import { chatCompletion, chatJson } from "@kazios/ai";
 import { isAiConfigured } from "@kazios/config";
+import { getRedis } from "../lib/redis";
 
 const ORG = "org-1";
 
 beforeEach(() => {
   jest.clearAllMocks();
   (isAiConfigured as jest.Mock).mockReturnValue(true);
+  redisStore.clear();
 });
 
 describe("askBusiness", () => {
@@ -151,5 +165,104 @@ describe("aiAssistantEnabled", () => {
       throw new Error("no env");
     });
     expect(aiAssistantEnabled()).toBe(false);
+  });
+});
+
+describe("conversation memory", () => {
+  const sessionId = "sess-1";
+
+  it("passes recent history to the router when a session is provided", async () => {
+    // Pre-populate a previous turn in the fake Redis store.
+    const previousTurn = {
+      question: "how much did we sell today?",
+      answer: "You took KES 500.00 across 3 sales today.",
+      tool: "sales_summary",
+      ts: new Date().toISOString(),
+    };
+    redisStore.set(`conv:${sessionId}`, JSON.stringify([previousTurn]));
+
+    (chatJson as jest.Mock).mockResolvedValue({ tool: "low_stock", params: {} });
+    (runTool as jest.Mock).mockResolvedValue({
+      summary: "2 products at or below the reorder level.",
+      data: {},
+    });
+    (chatCompletion as jest.Mock).mockResolvedValue("You are low on Milk and Sugar.");
+
+    const result = await askBusiness(ORG, "KES", "what about tomorrow?", [], sessionId);
+
+    expect(result.tool).toBe("low_stock");
+    // The routing prompt received the previous turn as context.
+    const systemPrompt = (chatJson as jest.Mock).mock.calls[0][0].messages[0].content;
+    expect(systemPrompt).toContain("how much did we sell today?");
+    expect(systemPrompt).toContain("KES 500.00");
+  });
+
+  it("stores the turn after answering when a session is provided", async () => {
+    (chatJson as jest.Mock).mockResolvedValue({
+      tool: "sales_summary",
+      params: { period: "today" },
+    });
+    (runTool as jest.Mock).mockResolvedValue({
+      summary: "No sales were recorded today.",
+      data: {},
+    });
+    (chatCompletion as jest.Mock).mockResolvedValue("Nothing sold today.");
+
+    await askBusiness(ORG, "KES", "how much did we sell today?", [], sessionId);
+
+    const stored = redisStore.get(`conv:${sessionId}`);
+    expect(stored).toBeTruthy();
+    const turns = JSON.parse(stored!) as { question: string; answer: string; tool: string }[];
+    expect(turns.length).toBe(1);
+    expect(turns[0].question).toBe("how much did we sell today?");
+    expect(turns[0].answer).toBe("Nothing sold today.");
+    expect(turns[0].tool).toBe("sales_summary");
+  });
+
+  it("keeps only the last N turns per session", async () => {
+    (chatJson as jest.Mock).mockResolvedValue({
+      tool: "sales_summary",
+      params: { period: "today" },
+    });
+    (runTool as jest.Mock).mockResolvedValue({
+      summary: "No sales were recorded today.",
+      data: {},
+    });
+    (chatCompletion as jest.Mock).mockResolvedValue("Nothing sold today.");
+
+    // Seed 6 turns so only the last 5 should remain.
+    const seedTurns = Array.from({ length: 6 }, (_, i) => ({
+      question: `q${i}`,
+      answer: `a${i}`,
+      tool: "sales_summary",
+      ts: new Date().toISOString(),
+    }));
+    redisStore.set(`conv:${sessionId}`, JSON.stringify(seedTurns));
+
+    await askBusiness(ORG, "KES", "how much did we sell today?", [], sessionId);
+
+    const stored = redisStore.get(`conv:${sessionId}`);
+    const turns = JSON.parse(stored!) as { question: string }[];
+    expect(turns.length).toBe(5);
+    expect(turns[0].question).toBe("q2"); // q0 and q1 were dropped
+    expect(turns[4].question).toBe("how much did we sell today?");
+  });
+
+  it("does not touch Redis when no session id is provided", async () => {
+    (chatJson as jest.Mock).mockResolvedValue({
+      tool: "sales_summary",
+      params: { period: "today" },
+    });
+    (runTool as jest.Mock).mockResolvedValue({
+      summary: "No sales were recorded today.",
+      data: {},
+    });
+    (chatCompletion as jest.Mock).mockResolvedValue("Nothing sold today.");
+
+    const result = await askBusiness(ORG, "KES", "how much did we sell today?");
+
+    expect(result.tool).toBe("sales_summary");
+    expect(getRedis).not.toHaveBeenCalled();
+    expect(redisStore.size).toBe(0);
   });
 });

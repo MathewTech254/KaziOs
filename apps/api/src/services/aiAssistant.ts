@@ -1,7 +1,44 @@
 import { chatCompletion, chatJson } from "@kazios/ai";
 import { isAiConfigured, loadConfig } from "@kazios/config";
 import { AppError } from "../middleware/errorHandler";
+import { getRedis } from "../lib/redis";
 import { runTool, TOOL_CATALOG, type ToolContext, type ToolParams } from "./aiTools";
+
+interface ConversationTurn {
+  question: string;
+  answer: string;
+  tool: string;
+  ts: string;
+}
+
+const CONVERSATION_TTL_SECONDS = 24 * 60 * 60; // 24 hours
+const MAX_CONVERSATION_TURNS = 5;
+
+async function getConversationTurns(sessionId: string): Promise<ConversationTurn[]> {
+  try {
+    const redis = getRedis();
+    const raw = await redis.get(`conv:${sessionId}`);
+    if (!raw) return [];
+    return JSON.parse(raw) as ConversationTurn[];
+  } catch {
+    // Redis unavailable or unparseable: no memory for this session.
+    return [];
+  }
+}
+
+async function appendConversationTurn(sessionId: string, turn: ConversationTurn): Promise<void> {
+  try {
+    const redis = getRedis();
+    const key = `conv:${sessionId}`;
+    const raw = await redis.get(key);
+    const turns: ConversationTurn[] = raw ? (JSON.parse(raw) as ConversationTurn[]) : [];
+    turns.push(turn);
+    const trimmed = turns.slice(-MAX_CONVERSATION_TURNS);
+    await redis.set(key, JSON.stringify(trimmed), "EX", CONVERSATION_TTL_SECONDS);
+  } catch {
+    // Conversation memory is best-effort; never break the answer because of it.
+  }
+}
 
 /**
  * The assistant orchestrator: User -> AI -> Intent -> Authorized Tool -> Business Data.
@@ -45,10 +82,17 @@ export function aiAssistantEnabled(): boolean {
   }
 }
 
-function routingSystemPrompt(): string {
+function routingSystemPrompt(history?: ConversationTurn[]): string {
   const catalog = TOOL_CATALOG.map(t => `- ${t.name}: ${t.description}. params: ${t.params}`).join(
     "\n"
   );
+  const historySection = history?.length
+    ? [
+        "",
+        "Recent conversation:",
+        ...history.map(h => `User: ${h.question}\nAssistant: ${h.answer}`),
+      ]
+    : [];
   return [
     "You route a shop owner's question to exactly one tool. Some tools are read-only analytics;",
     "others are actions that change records (send_invoice, void_invoice, record_payment).",
@@ -64,17 +108,21 @@ function routingSystemPrompt(): string {
     '- Infer a sensible period from the question ("today"->today, "this month"->this_month). Default today.',
     "- limit is a number 1-10 for top_products. days is a number for slow_movers.",
     "- Never invent tools or params. Output nothing but the JSON object.",
+    ...historySection,
   ].join("\n");
 }
 
 /** Uses the model to pick the tool and params. Falls back to a sales summary on any trouble. */
-async function routeQuestion(question: string): Promise<RouteDecision> {
+async function routeQuestion(
+  question: string,
+  history: ConversationTurn[] = []
+): Promise<RouteDecision> {
   const fallback: RouteDecision = { tool: "sales_summary", params: { period: "today" } };
   if (!aiAssistantEnabled()) return fallback;
   try {
     const decision = await chatJson<RouteDecision>({
       messages: [
-        { role: "system", content: routingSystemPrompt() },
+        { role: "system", content: routingSystemPrompt(history) },
         { role: "user", content: question },
       ],
       temperature: 0,
@@ -133,7 +181,8 @@ export async function askBusiness(
   organizationId: string,
   currency: string,
   question: string,
-  permissions: string[] = []
+  permissions: string[] = [],
+  sessionId?: string
 ): Promise<AssistantAnswer> {
   const trimmed = question.trim();
   if (trimmed.length < 2) {
@@ -147,9 +196,31 @@ export async function askBusiness(
   }
 
   const ctx: ToolContext = { organizationId, currency, permissions };
-  const route = await routeQuestion(trimmed);
+
+  // Retrieve recent conversation history so follow-up questions ("what about yesterday?")
+  // can be resolved in the context of the shop's own chat.
+  const history = sessionId ? await getConversationTurns(sessionId) : [];
+  const route = await routeQuestion(trimmed, history);
   const result = await runTool(route.tool, ctx, route.params);
   const { answer, aiPhrased } = await phraseAnswer(trimmed, result.summary, result.summary);
 
-  return { question: trimmed, tool: route.tool, answer, data: result.data, aiPhrased };
+  const assistantAnswer: AssistantAnswer = {
+    question: trimmed,
+    tool: route.tool,
+    answer,
+    data: result.data,
+    aiPhrased,
+  };
+
+  // Persist the turn for future follow-ups, best-effort only.
+  if (sessionId) {
+    await appendConversationTurn(sessionId, {
+      question: trimmed,
+      answer,
+      tool: route.tool,
+      ts: new Date().toISOString(),
+    });
+  }
+
+  return assistantAnswer;
 }
