@@ -106,6 +106,7 @@ function pendingCard(overrides: Record<string, unknown> = {}) {
     amountCents: 100000,
     currency: "KES",
     status: "PENDING",
+    provider: "PAYSTACK",
     authorizationUrl: "https://checkout.paystack.com/abc",
     email: "amina@shop.test",
     ...overrides,
@@ -390,6 +391,19 @@ describe("confirming with the provider", () => {
     await expect(confirmCardPayment(REFERENCE)).rejects.toMatchObject({
       code: "AMOUNT_MISMATCH",
     });
+  });
+
+  it("refuses an M-PESA reference pressed against the card confirm route", async () => {
+    // The reverse of the POS route's own guard: each rail refuses to settle the
+    // other's rows, and this refusal happens before Paystack is asked anything.
+    db.cardPayment.findUnique.mockResolvedValue(pendingCard({ provider: "MPESA" }));
+
+    await expect(confirmCardPayment(REFERENCE)).rejects.toMatchObject({
+      code: "WRONG_PAYMENT_RAIL",
+    });
+    expect(paystack.verifyTransaction).not.toHaveBeenCalled();
+    expect(db.invoice.update).not.toHaveBeenCalled();
+    expect(db.payment.create).not.toHaveBeenCalled();
   });
 
   it("does not settle while the customer is still paying", async () => {

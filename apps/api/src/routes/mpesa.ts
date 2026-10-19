@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 import { prisma } from "../lib/prisma";
 import { AppError } from "../middleware/errorHandler";
 import { confirmMpesaCheckout } from "../services/mpesaBilling";
+import { confirmMpesaPosPayment } from "../services/mpesaPos";
 
 export const mpesaWebhookRouter = Router();
 
@@ -15,9 +16,10 @@ export const mpesaWebhookRouter = Router();
  * anybody to press, so this endpoint is built to be incapable of that:
  *
  *  1. The payload's own ResultCode is deliberately never read. The only thing
- *     a delivery may do is cause `confirmMpesaCheckout` to run, and that asks
- *     Safaricom directly with our own credentials, keyed on the
- *     CheckoutRequestID we stored at push time. The query is the verification.
+ *     a delivery may do is cause `confirmMpesaCheckout` (a subscription) or
+ *     `confirmMpesaPosPayment` (a till push) to run, and both ask Safaricom
+ *     directly with our own credentials, keyed on the CheckoutRequestID we
+ *     stored at push time. The query is the verification.
  *  2. Every delivery is recorded first, under `mpesa:<CheckoutRequestID>`, so
  *     a redelivery is acknowledged without being applied twice and a delivery
  *     whose handler died mid-way is retried on the next attempt.
@@ -102,14 +104,26 @@ mpesaWebhookRouter.post("/mpesa", async (req: Request, res: Response) => {
       where: { providerRef: checkoutRequestId, provider: "MPESA" },
       select: { reference: true, organizationId: true },
     });
-    if (!payment) {
+    // Not a subscription checkout: the same callback also serves a till push
+    // (services/mpesaPos). A POS row holds its CheckoutRequestID in providerRef
+    // while the prompt is open; a settled row holds the M-PESA receipt there
+    // instead, so a late redelivery finds nothing — rule 4 above, unchanged.
+    const posPayment = payment
+      ? null
+      : await prisma.cardPayment.findFirst({
+          where: { providerRef: checkoutRequestId, provider: "MPESA" },
+          select: { reference: true, organizationId: true },
+        });
+    if (!payment && !posPayment) {
       await finish("IGNORED", { error: "No M-PESA payment matches this checkout" });
       return res.json({ received: true, handled: false });
     }
 
     // Everything above only earned the right to ask the real question. The
     // answer decides, never this payload.
-    const result = await confirmMpesaCheckout(payment.reference);
+    const result = payment
+      ? await confirmMpesaCheckout(payment.reference)
+      : await confirmMpesaPosPayment(posPayment!.reference);
 
     if (result.status === "PENDING") {
       // No verdict — either Safaricom has not decided, or it could not be
@@ -128,7 +142,7 @@ mpesaWebhookRouter.post("/mpesa", async (req: Request, res: Response) => {
 
     // Settled, or confirmed failed and written to the row: either way the
     // delivery was applied and must not be applied again.
-    await finish("PROCESSED", { organizationId: payment.organizationId });
+    await finish("PROCESSED", { organizationId: (payment ?? posPayment)!.organizationId });
     return res.json({ received: true, handled: true, status: result.status });
   } catch (err) {
     if (err instanceof AppError) {

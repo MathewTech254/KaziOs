@@ -14,6 +14,8 @@ import { applyStockChange } from "../services/inventory";
 import { LIMIT_KEYS } from "@kazios/types";
 import { assertWithinLimit, getEntitlements } from "../services/entitlements";
 import { recordTransaction } from "../services/usage";
+import { isMpesaEnabled } from "../lib/mpesa";
+import { confirmMpesaPosPayment, startMpesaPosPayment } from "../services/mpesaPos";
 
 export const posRouter = Router();
 
@@ -72,7 +74,20 @@ function getPaymentMethods() {
       });
     }
   } catch {
-    return methods;
+    // The card config could not be read, so card stays hidden. M-PESA still decides
+    // for itself below: it reads its own credentials and never throws.
+  }
+
+  // Offered only when the Daraja credentials are actually set — the same posture as
+  // card behind Paystack's keys, and as billing's mpesaEnabled flag (routes/billing.ts).
+  if (isMpesaEnabled()) {
+    methods.push({
+      id: "MPESA",
+      label: "M-PESA",
+      provider: "MPESA",
+      methodType: "mobile_money",
+      configured: true,
+    });
   }
 
   return methods;
@@ -891,6 +906,90 @@ posRouter.get(
       const organizationId = getOrganizationId(req);
       if (!organizationId) throw new AppError(401, "Authentication required");
       res.json({ data: await getReceipt(req.params.invoiceId, organizationId) });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * Opens the M-PESA STK prompt for a POS sale — the till half of the second rail.
+ *
+ * Mirrors POST /card-payments/initialize: the request carries only the phone
+ * number, never an amount, because `startMpesaPosPayment` charges the invoice's
+ * outstanding balance from the database. Nothing about the invoice changes here
+ * either; it turns paid only when /mpesa/confirm comes back with Safaricom's own
+ * answer, keyed on the CheckoutRequestID stored at push time.
+ */
+posRouter.post(
+  "/sales/:invoiceId/mpesa",
+  requireAuth,
+  requirePermission("pos.sale"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const organizationId = getOrganizationId(req);
+      if (!organizationId) throw new AppError(401, "Authentication required");
+
+      const result = await startMpesaPosPayment({
+        invoiceId: req.params.invoiceId,
+        organizationId,
+        phone: String(req.body?.phone ?? ""),
+      });
+      res.status(201).json({ data: result });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * The till asks what Safaricom decided about one M-PESA payment.
+ *
+ * Mirrors POST /card-payments/confirm: the browser only says "the customer may
+ * have paid", and the server asks the provider — but the reference is scoped to
+ * this organization first, so another shop's reference is a 404 here and never
+ * a question sent to Daraja on someone else's behalf. The response carries the
+ * invoice snapshot alongside the verdict, so the caller can show what the sale
+ * owes now without a second round-trip.
+ */
+posRouter.post(
+  "/mpesa/confirm",
+  requireAuth,
+  requirePermission("pos.sale"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const organizationId = getOrganizationId(req);
+      if (!organizationId) throw new AppError(401, "Authentication required");
+
+      const reference = String(req.body?.reference ?? "");
+      if (!reference) throw new AppError(400, "A payment reference is required");
+
+      const owned = await prisma.cardPayment.findFirst({
+        where: { reference, organizationId },
+        select: { id: true },
+      });
+      if (!owned) throw new AppError(404, "Payment not found");
+
+      const result = await confirmMpesaPosPayment(reference);
+
+      const payment = await prisma.cardPayment.findUnique({
+        where: { reference },
+        select: { invoiceId: true },
+      });
+      const invoice = payment
+        ? await prisma.invoice.findUnique({
+            where: { id: payment.invoiceId },
+            select: {
+              invoiceNumber: true,
+              status: true,
+              paidAmount: true,
+              total: true,
+              currency: true,
+            },
+          })
+        : null;
+
+      res.json({ data: { ...result, invoice } });
     } catch (err) {
       next(err);
     }

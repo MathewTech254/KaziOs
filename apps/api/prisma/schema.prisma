@@ -1203,6 +1203,10 @@ model CardPayment {
   amountCents      Int
   currency         String
   email            String
+  /// Which rail opened this attempt: PAYSTACK (card) or MPESA (STK push).
+  /// The confirm paths refuse rows of the other rail, so a card reference can
+  /// never be settled by Daraja or the reverse.
+  provider         String   @default("PAYSTACK")
   status           String    @default("PENDING")
   providerRef      String?
   authorizationUrl String?

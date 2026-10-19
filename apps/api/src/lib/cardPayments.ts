@@ -30,7 +30,10 @@ export function paystackIsReady(): boolean {
  * settles to the platform account exactly as it does today. The subaccount code and fee
  * are never read from the client; they are decided here on the server only.
  */
-async function loadSplitForOrg(organizationId: string, totalCents: number): Promise<InitializeSplit | null> {
+async function loadSplitForOrg(
+  organizationId: string,
+  totalCents: number
+): Promise<InitializeSplit | null> {
   const row = await prisma.setting.findUnique({
     where: { organizationId_key: { organizationId, key: "payments" } },
     select: { value: true },
@@ -114,9 +117,10 @@ export async function startCardPayment(input: {
   }
 
   // A repeat attempt reuses the open payment, so a double tap at the till cannot
-  // create two charges for one sale.
+  // create two charges for one sale. Scoped to this rail: an open M-PESA prompt
+  // on the same invoice must never be mistaken for a card attempt.
   const existing = await prisma.cardPayment.findFirst({
-    where: { invoiceId: invoice.id, status: "PENDING" },
+    where: { invoiceId: invoice.id, status: "PENDING", provider: "PAYSTACK" },
     orderBy: { createdAt: "desc" },
   });
   if (existing?.authorizationUrl) {
@@ -214,6 +218,10 @@ export async function settleCardPayment(
     : invoice.paidAmount || 0;
   const fullyPaid = succeeded && newPaid + 0.001 >= invoice.total;
 
+  // The row remembers which rail opened it; the settled Payment must carry the
+  // same rail, or an M-PESA collection would appear in the books as a card sale.
+  const rail = record.provider === "MPESA" ? "MPESA" : "PAYSTACK";
+
   await prisma.$transaction([
     prisma.payment.create({
       data: {
@@ -221,12 +229,15 @@ export async function settleCardPayment(
         organizationId: record.organizationId,
         amount,
         currency: record.currency,
-        provider: "PAYSTACK",
-        methodType: "card",
+        provider: rail,
+        methodType: rail === "MPESA" ? "mobile_money" : "card",
         status: succeeded ? "SUCCESS" : "FAILED",
         providerRef: details.providerRef ?? null,
         invoiceId: record.invoiceId,
-        notes: `Card payment for ${invoice.invoiceNumber}`,
+        notes:
+          rail === "MPESA"
+            ? `M-PESA payment for ${invoice.invoiceNumber}`
+            : `Card payment for ${invoice.invoiceNumber}`,
       },
     }),
     prisma.invoice.update({
@@ -242,7 +253,11 @@ export async function settleCardPayment(
         status: succeeded ? "SUCCESS" : "FAILED",
         providerRef: details.providerRef ?? null,
         paidAt: succeeded ? (details.paidAt ?? new Date()) : null,
-        failureReason: succeeded ? null : `Paystack reported ${paymentStatus}`,
+        failureReason: succeeded
+          ? null
+          : rail === "MPESA"
+            ? `M-PESA reported ${paymentStatus}`
+            : `Paystack reported ${paymentStatus}`,
       },
     }),
   ]);
@@ -268,6 +283,15 @@ export async function confirmCardPayment(reference: string): Promise<{
 }> {
   const record = await prisma.cardPayment.findUnique({ where: { reference } });
   if (!record) throw new AppError(404, "Card payment not found");
+  if (record.provider !== "PAYSTACK") {
+    // An M-PESA reference pressed against the card confirm route (or the reverse).
+    // The two rails never settle each other's rows.
+    throw new AppError(
+      409,
+      "This payment belongs to the other payment method. Confirm it the way it was opened.",
+      "WRONG_PAYMENT_RAIL"
+    );
+  }
   if (record.status === "SUCCESS") {
     return {
       status: "SUCCESS",
