@@ -20,11 +20,18 @@ export const posRouter = Router();
 const immediatePaymentMethods = new Set(["CASH", "BANK", "MANUAL", "CHECK"]);
 
 /**
- * A card sale is only recorded as paid once Paystack confirms the money, so the invoice
- * and journal entry are created up front as unpaid. Stock still leaves the shelf because
- * the goods do leave the counter the moment the sale is rung up.
+ * Two rails record the sale before their money is: a card sale waits for Paystack and an
+ * M-PESA sale for Safaricom, so the invoice is written up front unpaid (bar any tender
+ * already in hand) and it turns paid only when the provider confirms. Stock still leaves
+ * the shelf because the goods do leave the counter the moment the sale is rung up.
  */
-const cardPaymentMethods = new Set(["PAYSTACK"]);
+const deferredPaymentMethods = new Set(["PAYSTACK", "MPESA"]);
+
+/** Each deferred rail insists on its own methodType; anything else is a client bug. */
+const deferredMethodType: Record<string, string> = {
+  PAYSTACK: "card",
+  MPESA: "mobile_money",
+};
 
 function toCents(value: number): number {
   return Math.round(value * 100);
@@ -446,13 +453,24 @@ posRouter.post(
       if (tenderedCents < totalCents)
         throw new AppError(400, "Tendered amount is less than the sale total");
 
-      const hasCardPayment = input.payments.some(payment =>
-        cardPaymentMethods.has(payment.provider)
+      const hasDeferredPayment = input.payments.some(payment =>
+        deferredPaymentMethods.has(payment.provider)
+      );
+      // Money actually in hand — every tender whose provider does not still have to
+      // confirm. Computed before the transaction because it seeds the invoice's
+      // paidAmount: the cash half of a split sale is truthfully paid from the first
+      // moment, so the deferred settle only ever adds what is still missing.
+      const settledPayments = input.payments.filter(
+        payment => !deferredPaymentMethods.has(payment.provider)
+      );
+      const settledCents = settledPayments.reduce(
+        (sum, payment) => sum + toCents(payment.amount),
+        0
       );
       for (const payment of input.payments) {
-        if (cardPaymentMethods.has(payment.provider)) {
-          if (payment.methodType !== "card")
-            throw new AppError(400, "Card payment method is invalid");
+        if (deferredPaymentMethods.has(payment.provider)) {
+          if (payment.methodType !== deferredMethodType[payment.provider])
+            throw new AppError(400, `${payment.provider} payment method is invalid`);
           continue;
         }
         if (!immediatePaymentMethods.has(payment.provider)) {
@@ -504,9 +522,12 @@ posRouter.post(
           const invoice = await tx.invoice.create({
             data: {
               invoiceNumber,
-              // A card sale is not paid until Paystack says so. Recording it as paid here would
-              // let a failed or abandoned card payment leave the till believing it took money.
-              status: hasCardPayment ? "SENT" : "PAID",
+              // A deferred sale is not fully paid until its provider says so. Marking it
+              // paid here would let a failed or abandoned payment leave the till believing
+              // it took money — but whatever tender IS in hand stays counted, so a split
+              // sale reads PARTIALLY_PAID from the first moment and the deferred rail only
+              // ever owes the remainder.
+              status: hasDeferredPayment ? (settledCents > 0 ? "PARTIALLY_PAID" : "SENT") : "PAID",
               issueDate: now,
               dueDate: now,
               subtotal: toCurrency(subtotalCents),
@@ -514,7 +535,7 @@ posRouter.post(
               discountTotal: toCurrency(discountTotalCents),
               total: toCurrency(totalCents),
               currency: organization.currency,
-              paidAmount: hasCardPayment ? 0 : toCurrency(totalCents),
+              paidAmount: hasDeferredPayment ? toCurrency(settledCents) : toCurrency(totalCents),
               notes: input.notes || "POS sale",
               organizationId,
               customerId: input.customerId || null,
@@ -538,11 +559,10 @@ posRouter.post(
           });
 
           const referencePrefix = `POS-${Date.now()}-${generateId().slice(0, 8)}`;
-          // Only money that is actually in hand is written here. A card payment is left out
-          // entirely; it is recorded by the verified webhook once Paystack confirms it.
-          const settledPayments = input.payments.filter(
-            payment => !cardPaymentMethods.has(payment.provider)
-          );
+          // Only money that is actually in hand is written here (settledPayments was
+          // decided above, before the invoice took its opening paidAmount). A deferred
+          // payment is left out entirely; it is recorded by the verified confirm path
+          // once Paystack or Safaricom says the money moved.
           if (settledPayments.length) {
             await tx.payment.createMany({
               data: settledPayments.map((payment, index) => ({
@@ -704,11 +724,20 @@ posRouter.post(
         data: {
           invoice: result,
           receiptNumber: invoiceNumber,
-          // A card sale has no cash in hand yet, so there is no change to give back.
-          changeAmount: hasCardPayment ? 0 : toCurrency(tenderedCents - totalCents),
+          // A deferred sale has no full amount in hand yet, so there is no change to give back.
+          changeAmount: hasDeferredPayment ? 0 : toCurrency(tenderedCents - totalCents),
           currency: organization.currency,
-          // The client needs this to open the card payment for this exact sale.
-          ...(hasCardPayment ? { requiresCardPayment: true, invoiceId: result.id } : {}),
+          // The client needs the invoice id to open the deferred payment — card popup or
+          // M-PESA prompt — for this exact sale. requiresCardPayment stays card's own flag
+          // so nothing that checks it is ever told an M-PESA sale was a card sale.
+          ...(hasDeferredPayment
+            ? {
+                invoiceId: result.id,
+                ...(input.payments.some(payment => payment.provider === "PAYSTACK")
+                  ? { requiresCardPayment: true }
+                  : {}),
+              }
+            : {}),
         },
       });
     } catch (err) {
