@@ -77,7 +77,7 @@ export interface InitializeSplit {
   type: "flat";
   bearer_type: "subaccount";
   bearer_subaccount: string;
-  subaccounts: Array<{ subaccount: string; share: number }>;
+  subaccounts: { subaccount: string; share: number }[];
 }
 
 export interface VerifiedTransaction {

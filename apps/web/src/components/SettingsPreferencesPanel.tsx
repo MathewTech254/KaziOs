@@ -73,9 +73,7 @@ const SECTIONS: SectionSpec[] = [
     title: "Card payouts (split payments)",
     description:
       "Where card sales settle. Paste your Paystack subaccount code (it starts with ACCT_) to have card payments paid straight to your own bank account. Leave it blank to settle to the platform account.",
-    fields: [
-      { key: "subaccountCode", label: "Paystack subaccount code (ACCT_...)", type: "text" },
-    ],
+    fields: [{ key: "subaccountCode", label: "Paystack subaccount code (ACCT_...)", type: "text" }],
   },
 ];
 

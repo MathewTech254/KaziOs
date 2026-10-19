@@ -42,11 +42,9 @@ export interface SplitCharge {
  *  - The platform fee is clamped to [0, totalCents] so it can never be negative or exceed the sale.
  */
 export function computeSplitCharge(totalCents: number, config: SplitConfig): SplitCharge {
-  const total =
-    Number.isFinite(totalCents) && totalCents > 0 ? Math.round(totalCents) : 0;
+  const total = Number.isFinite(totalCents) && totalCents > 0 ? Math.round(totalCents) : 0;
 
-  const code =
-    typeof config.subaccountCode === "string" ? config.subaccountCode.trim() : "";
+  const code = typeof config.subaccountCode === "string" ? config.subaccountCode.trim() : "";
   const applySplit = code.length > 0;
 
   if (!applySplit) {

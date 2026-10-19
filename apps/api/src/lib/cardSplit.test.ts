@@ -1,4 +1,5 @@
-import { computeSplitCharge, SplitConfig } from "./cardSplit";
+import type { SplitConfig } from "./cardSplit";
+import { computeSplitCharge } from "./cardSplit";
 
 describe("computeSplitCharge", () => {
   const base: SplitConfig = { subaccountCode: "ACCT_test" };
