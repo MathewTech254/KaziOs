@@ -8,6 +8,7 @@ import { FEATURE_KEYS } from "@kazios/types";
 import { loadConfig } from "@kazios/config";
 import { prisma } from "../lib/prisma";
 import { WhatsappProvider } from "@kazios/integrations";
+import { normalizePhone } from "@kazios/validation";
 import { assertFeature, assertWithinLimit, getEntitlements } from "../services/entitlements";
 import { recordAiRequest } from "../services/usage";
 import { aiAssistantEnabled, askBusiness } from "../services/aiAssistant";
@@ -202,13 +203,47 @@ whatsappWebhookRouter.post("/whatsapp", async (req: Request, res: Response, next
           // Best-effort reply: route through the same assistant as the chat widget.
           // The session id is the phone number so conversations stay threaded per customer.
           try {
+            // Look up the organisation that owns the incoming WhatsApp number so we
+            // route the request to the right business and use its local currency.
+            // The display number is normalized the same way the save path stores
+            // it, so "+254 708..." from Meta matches "0708..." typed by the owner.
+            // An unmatched number is dropped silently: answering business data to
+            // an unregistered sender would leak one shop's figures to a stranger.
+            const displayNumber = value.metadata?.display_phone_number;
+            const normalized = displayNumber ? normalizePhone(String(displayNumber)) : null;
+            const org = normalized
+              ? await prisma.organization.findUnique({
+                  where: { whatsappNumber: normalized },
+                  select: { id: true, currency: true },
+                })
+              : null;
+            if (!org) continue;
+            const organizationId = org.id;
+            const currency = org.currency || "KES";
+
+            // The webhook carries no session, so the in-app entitlement guards do
+            // not apply here. Gate explicitly: no AI feature, no AI quota, no
+            // answer. A reply that is never sent costs nothing and leaks nothing.
+            const entitlements = await getEntitlements(organizationId);
+            try {
+              await assertFeature(entitlements, FEATURE_KEYS.AI_ASSISTANT, {
+                featureName: "AI assistant",
+              });
+              await assertWithinLimit(entitlements, "ai_requests", {
+                featureKey: FEATURE_KEYS.AI_ASSISTANT,
+              });
+            } catch {
+              continue;
+            }
+
             const answer = await askBusiness(
-              "org-webhook", // placeholder org; real pairing comes in Phase 4 shop linking
-              "KES",
+              organizationId,
+              currency,
               text,
               [],
               `whatsapp:${from}`
             );
+            await recordAiRequest(organizationId, true);
             const provider = new WhatsappProvider({
               provider: config.whatsapp.provider,
               apiKey: config.whatsapp.apiKey,

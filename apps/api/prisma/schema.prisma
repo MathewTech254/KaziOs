@@ -20,6 +20,7 @@ model Organization {
   businessCategory String?
   address          String?
   phone            String?
+  whatsappNumber   String?  @unique
   email            String?
   status           String   @default("ACTIVE")
   /// The plan this business is on, kept in step with its Subscription inside the same

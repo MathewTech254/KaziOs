@@ -19,6 +19,19 @@ export const zEmail = z.string().trim().toLowerCase().email("Invalid email addre
 
 export const zPhone = z.string().min(5, "Invalid phone number");
 
+/**
+ * Normalizes any human-typed or provider-supplied phone number to a comparable
+ * digit string. Meta delivers display_phone_number as "+254 7XX ..." while a
+ * shop owner types "0708..."; without normalization the findUnique in the
+ * WhatsApp webhook never matches and every message falls through to the
+ * placeholder org. Returns null for values with too few digits to be a number.
+ */
+export function normalizePhone(input: string): string | null {
+  const digits = input.replace(/\D/g, "");
+  if (digits.length < 5) return null;
+  return digits;
+}
+
 export const zCurrency = z.enum(["KES", "UGX", "TZS", "NGN", "ZAR", "USD", "EUR", "GBP"]);
 
 export const zCountry = z.enum(["KE", "UG", "TZ", "NG", "ZA", "US", "GB", "EU"]);

@@ -7,6 +7,8 @@ import {
   zBranchSchema,
   zBranchUpdateSchema,
   zOrganizationUpdateSchema,
+  zPhone,
+  normalizePhone,
   zWarehouseSchema,
   zWarehouseUpdateSchema,
 } from "@kazios/validation";
@@ -40,6 +42,63 @@ organizationRouter.patch(
         data: { ...data, updatedAt: new Date() },
       });
       res.json({ data: org });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+organizationRouter.get("/whatsapp-number", requireAuth, async (req: AuthRequest, res, next) => {
+  try {
+    const org = await prisma.organization.findUnique({
+      where: { id: req.organizationId },
+      select: { id: true, whatsappNumber: true },
+    });
+    if (!org) throw new AppError(404, "Organization not found");
+    res.json({ data: org.whatsappNumber ?? null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+organizationRouter.patch(
+  "/whatsapp-number",
+  requireAuth,
+  requirePermission("settings.manage"),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const parsed = zPhone.safeParse(req.body?.whatsappNumber);
+      if (!parsed.success) {
+        throw new AppError(400, "Invalid phone number");
+      }
+      // Normalized before store, so "+254 708..." and "0708..." compare equal
+      // when Meta's display_phone_number arrives on the webhook.
+      const normalized = normalizePhone(parsed.data);
+      if (!normalized) {
+        throw new AppError(400, "Invalid phone number");
+      }
+      const org = await prisma.organization.update({
+        where: { id: req.organizationId },
+        data: { whatsappNumber: normalized, updatedAt: new Date() },
+      });
+      res.json({ data: org.whatsappNumber });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+organizationRouter.delete(
+  "/whatsapp-number",
+  requireAuth,
+  requirePermission("settings.manage"),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const org = await prisma.organization.update({
+        where: { id: req.organizationId },
+        data: { whatsappNumber: null, updatedAt: new Date() },
+      });
+      res.json({ data: org.whatsappNumber ?? null });
     } catch (err) {
       next(err);
     }
