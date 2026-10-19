@@ -10,6 +10,7 @@ import { generateId, generateInvoiceNumber, paginate } from "../lib/utils";
 import { getOrganizationId, getScopedValues, getUserId, isAllowed } from "../lib/scope";
 import { notifyPermissionHolders } from "../services/notifications";
 import { alertOnLowStock } from "../services/stockAlerts";
+import { applyStockChange } from "../services/inventory";
 import { LIMIT_KEYS } from "@kazios/types";
 import { assertWithinLimit, getEntitlements } from "../services/entitlements";
 import { recordTransaction } from "../services/usage";
@@ -713,6 +714,138 @@ posRouter.post(
     } catch (err) {
       // Reported like any other route failure: the sale is rolled back by its own
       // transaction, and the till gets a message it can act on rather than a dead server.
+      next(err);
+    }
+  }
+);
+
+/**
+ * Return a POS sale: restores stock for every tracked line item back to the
+ * warehouse it was taken from, then marks the invoice void.
+ *
+ * Stock is restored through applyStockChange so the Inventory record and the
+ * StockMovement ledger are updated in the same Serializable transaction and can
+ * never drift apart. A return can only happen once — a second return on the same
+ * invoice is rejected with 409.
+ */
+posRouter.post(
+  "/sales/:id/return",
+  requireAuth,
+  requirePermission("pos.sale"),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const organizationId = getOrganizationId(req);
+      if (!organizationId) throw new AppError(401, "Authentication required");
+
+      const warehouseId =
+        typeof req.body.warehouseId === "string" ? req.body.warehouseId : undefined;
+      if (!warehouseId) throw new AppError(400, "Warehouse is required");
+
+      const warehouse = await prisma.warehouse.findFirst({
+        where: { id: warehouseId, organizationId },
+      });
+      if (!warehouse)
+        throw new AppError(400, "The selected warehouse is not available in this organization");
+
+      const invoice = await prisma.invoice.findFirst({
+        where: { id: req.params.id, organizationId },
+        include: { items: { include: { product: true } } },
+      });
+      if (!invoice) throw new AppError(404, "Sale not found");
+
+      if (invoice.status === "VOID")
+        throw new AppError(409, "This sale has already been cancelled or returned");
+
+      if (invoice.status !== "PAID" && invoice.status !== "SENT")
+        throw new AppError(400, "Only paid or sent sales can be returned");
+
+      const updated = await prisma.$transaction(
+        async tx => {
+          for (const item of invoice.items) {
+            if (
+              !item.product?.trackStock ||
+              item.product.productType === "SERVICE" ||
+              item.product.productType === "DIGITAL"
+            )
+              continue;
+
+            await applyStockChange(tx, {
+              organizationId,
+              productId: item.productId!,
+              warehouseId,
+              branchId: invoice.branchId ?? null,
+              delta: Number(item.quantity),
+              type: "RETURN",
+              reason: `POS return ${invoice.invoiceNumber}`,
+              reference: invoice.invoiceNumber,
+              productName: item.product.name,
+            });
+          }
+
+          // Reverse the accounting the sale posted. Without this the revenue and
+          // cash stay on the books while the goods come back, and the trial
+          // balance can no longer be derived from the sale records. The reversal
+          // mirrors the original entry line-for-line with debit/credit swapped,
+          // following the same pattern as the expense-void reversal.
+          const original = await tx.journalEntry.findFirst({
+            where: {
+              organizationId,
+              description: `POS sale ${invoice.invoiceNumber}`,
+            },
+            include: { lines: true },
+            orderBy: { journalDate: "desc" },
+          });
+          if (original) {
+            await tx.journalEntry.create({
+              data: {
+                reference: `JE-RETURN-${generateId()}`,
+                description: `POS return ${invoice.invoiceNumber}`,
+                journalDate: new Date(),
+                status: "POSTED",
+                organizationId,
+                lines: {
+                  create: original.lines.map(line => ({
+                    accountId: line.accountId,
+                    description: `Reversal: ${line.description ?? invoice.invoiceNumber}`,
+                    // Swapped, not copied: repeating the original direction
+                    // would double the sale instead of undoing it.
+                    debit: line.credit,
+                    credit: line.debit,
+                  })),
+                },
+              },
+            });
+          }
+
+          // Cash handed back over the counter (or voided card intent) is no
+          // longer money in hand: mark linked payments refunded and zero the
+          // collected amount so the invoice cannot read as both void and paid.
+          await tx.payment.updateMany({
+            where: { invoiceId: invoice.id, organizationId },
+            data: { status: "REFUNDED" },
+          });
+
+          return tx.invoice.update({
+            where: { id: invoice.id },
+            data: { status: "VOID", paidAmount: 0 },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+      );
+
+      await notifyPermissionHolders({
+        organizationId,
+        permission: "reports.view",
+        title: "Sale returned",
+        body: `${invoice.invoiceNumber} stock restored`,
+        type: "warning",
+        link: "/dashboard/invoices",
+        actorName: String(req.body?.soldBy || "").trim() || undefined,
+        excludeUserIds: [getUserId(req)!],
+      }).catch(() => 0);
+
+      res.json({ data: updated });
+    } catch (err) {
       next(err);
     }
   }
