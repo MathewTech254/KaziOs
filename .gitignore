@@ -22,5 +22,8 @@ coverage
 # Local audit / probe scratch created while wiring payments. Never commit: these logs
 # and probe scripts can contain provider responses and must not enter history.
 .audit/
+
+# Scratch verification harnesses (one-off live test scripts and their logs).
+tmp/
 check_user.sql
 apps/web/scripts/probe-pos.mjs
