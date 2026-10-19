@@ -17,6 +17,7 @@ import {
 import { api } from "../lib/api";
 import { getApiError } from "../lib/api";
 import { useCardPayment } from "../lib/useCardPayment";
+import { useMpesaPayment } from "../lib/useMpesaPayment";
 import { useAuth } from "../contexts/AuthContext";
 // The till prices a cart with the same maths the server prices it with. If the two
 // disagree, the total on screen is not the total that gets charged.
@@ -130,9 +131,10 @@ interface PosCustomer {
   email?: string | null;
 }
 
-// Card is listed because the server verifies it properly: the till records the sale, then
-// Paystack confirms the money before the invoice is ever marked paid.
-const immediatePaymentProviders = new Set(["CASH", "BANK", "MANUAL", "CHECK", "PAYSTACK"]);
+// Card and M-PESA are listed because the server verifies them properly: the till records
+// the sale, then Paystack or Safaricom confirms the money before the invoice is ever
+// marked paid. (The name is historical — these are the providers this till may offer.)
+const immediatePaymentProviders = new Set(["CASH", "BANK", "MANUAL", "CHECK", "PAYSTACK", "MPESA"]);
 
 function formatMoney(value: number, currency: string): string {
   try {
@@ -180,6 +182,8 @@ export function PosPage() {
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   // Paystack sends the customer a receipt, so card payments need an email up front.
   const [customerEmail, setCustomerEmail] = useState("");
+  // M-PESA prompts are pushed to a phone number, so the till asks for that up front.
+  const [mpesaPhone, setMpesaPhone] = useState("");
   // Null is a walk-in sale, which is the default for ordinary retail. It is stored as a
   // null customer rather than a placeholder "Walk-in Customer" row, because creating one
   // row per anonymous sale would flood the customer table and corrupt every report that
@@ -192,6 +196,7 @@ export function PosPage() {
   // quick create is offered only to a role that already holds customers.create.
   const canCreateCustomers = hasPermission("customers.create");
   const cardPayment = useCardPayment();
+  const mpesaPayment = useMpesaPayment();
 
   const availablePaymentMethods = useMemo(
     () =>
@@ -205,8 +210,9 @@ export function PosPage() {
     availablePaymentMethods.find(method => method.id === paymentMethodId) ||
     availablePaymentMethods[0];
 
-  // A receipt must never claim money was taken when it was not. Card sales are created
-  // unpaid and only turn paid once the server confirms the money with Paystack.
+  // A receipt must never claim money was taken when it was not. Card and M-PESA sales are
+  // created unpaid and only turn paid once the server confirms the money with Paystack or
+  // Safaricom.
   const isReceiptPaid = receipt
     ? receipt.invoice.status === "PAID" ||
       receipt.invoice.paidAmount + 0.001 >= receipt.invoice.total
@@ -453,6 +459,7 @@ export function PosPage() {
     setError("");
     const total = totals.total;
     const isCard = selectedPaymentMethod.provider === "PAYSTACK";
+    const isMpesa = selectedPaymentMethod.provider === "MPESA";
     const isCash = selectedPaymentMethod.provider === "CASH";
     if (isCash && !tender.coversTotal) {
       // The amount is named because "not enough" leaves the cashier to guess by how
@@ -475,6 +482,26 @@ export function PosPage() {
       }
       if (!context?.cardPublicKey) {
         setError("Card payments are not available on this terminal");
+        setSubmitting(false);
+        return;
+      }
+    }
+    if (isMpesa) {
+      if (!mpesaPhone.trim()) {
+        setError("Enter the customer's M-PESA phone number");
+        setSubmitting(false);
+        return;
+      }
+      // M-PESA has no subunit. Refuse before the sale exists rather than
+      // creating an unpaid invoice the prompt could never cover — the server
+      // refuses this too, and saying it here saves the cashier a dead sale.
+      if (totals.totalCents % 100 !== 0) {
+        setError(
+          `M-PESA collects whole shillings, and this total is ${formatMoney(
+            totals.total,
+            context?.organization.currency || "KES"
+          )}. Take the shilling part by cash or adjust the sale.`
+        );
         setSubmitting(false);
         return;
       }
@@ -533,6 +560,30 @@ export function PosPage() {
               "The card payment was not completed. The sale is saved and unpaid; take payment another way."
           );
         }
+      } else if (isMpesa && sale.invoiceId) {
+        // The sale is recorded but not yet paid. Push the prompt to the customer's
+        // phone now; the invoice turns paid only once the server hears from Safaricom.
+        const paid = await mpesaPayment.startMpesaPayment(sale.invoiceId, mpesaPhone.trim());
+
+        // Refresh the receipt so a successful sale shows as paid.
+        if (paid) {
+          try {
+            const receiptRes = await api.get<{ data: ReceiptData }>(
+              `/pos/receipt/${sale.invoiceId}`
+            );
+            setReceipt(receiptRes.data.data);
+          } catch {
+            setReceipt(sale);
+          }
+        } else {
+          // The sale exists and stock has moved, so the cashier is told exactly that
+          // rather than being left to guess whether the customer still owes money.
+          setReceipt(sale);
+          setError(
+            mpesaPayment.error ||
+              "The M-PESA payment was not completed. The sale is saved and unpaid; take payment another way."
+          );
+        }
       } else {
         setReceipt(sale);
       }
@@ -549,6 +600,8 @@ export function PosPage() {
       setReference("");
       setNotes("");
       if (isCard) setCustomerEmail("");
+      // The next customer is a different customer: the phone goes with them.
+      if (isMpesa) setMpesaPhone("");
       await loadProducts(1);
     } catch (err) {
       setError(getApiError(err));
@@ -566,8 +619,9 @@ export function PosPage() {
     setReference("");
     setNotes("");
     setError("");
-    // Clears the card banner so the next sale starts from a clean till.
+    // Clears the card and M-PESA banners so the next sale starts from a clean till.
     cardPayment.reset();
+    mpesaPayment.reset();
   };
 
   if (!hasPermission("pos.sale")) {
@@ -1068,6 +1122,26 @@ export function PosPage() {
               </p>
             </div>
           )}
+          {selectedPaymentMethod?.provider === "MPESA" && (
+            <div className="mt-3">
+              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                Customer phone
+              </label>
+              <input
+                type="tel"
+                inputMode="tel"
+                value={mpesaPhone}
+                onChange={event => setMpesaPhone(event.target.value)}
+                placeholder="0712345678"
+                autoComplete="tel"
+                className="kazi-input"
+              />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                The M-PESA prompt is sent to this number after the sale is recorded. The sale turns
+                paid only when Safaricom confirms the money.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Clear, honest feedback while the customer is in the payment window. */}
@@ -1107,6 +1181,43 @@ export function PosPage() {
           </div>
         )}
 
+        {/* The second rail gets the same honest feedback: prompt sent, waiting, verdict. */}
+        {mpesaPayment.stage !== "IDLE" && (
+          <div
+            className={`rounded-lg border p-3 text-sm ${
+              mpesaPayment.stage === "SUCCESS"
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : mpesaPayment.stage === "FAILED"
+                  ? "border-red-200 bg-red-50 text-red-800"
+                  : "border-blue-200 bg-blue-50 text-blue-800"
+            }`}
+            role="status"
+            aria-live="polite"
+          >
+            <div className="flex items-center gap-2 font-medium">
+              {mpesaPayment.stage === "SUCCESS" ? (
+                <CheckCircle className="h-4 w-4" />
+              ) : mpesaPayment.stage === "FAILED" ? (
+                <AlertCircle className="h-4 w-4" />
+              ) : (
+                <RotateCcw className="h-4 w-4 animate-spin" />
+              )}
+              <span>
+                {mpesaPayment.stage === "STARTING" && "Sending the M-PESA prompt..."}
+                {mpesaPayment.stage === "AWAITING_CUSTOMER" &&
+                  "Waiting for the customer to enter their PIN..."}
+                {mpesaPayment.stage === "VERIFYING" && "Confirming payment with Safaricom..."}
+                {mpesaPayment.stage === "SUCCESS" && "Payment received"}
+                {mpesaPayment.stage === "FAILED" && "Payment not completed"}
+              </span>
+            </div>
+            {mpesaPayment.error && <p className="mt-1.5 text-xs">{mpesaPayment.error}</p>}
+            {mpesaPayment.reference && (
+              <p className="mt-1.5 font-mono text-xs">Reference: {mpesaPayment.reference}</p>
+            )}
+          </div>
+        )}
+
         <div>
           <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Notes</label>
           <textarea
@@ -1129,7 +1240,11 @@ export function PosPage() {
               ? cardPayment.stage === "VERIFYING"
                 ? "Confirming payment..."
                 : "Opening payment..."
-              : "Processing..."
+              : selectedPaymentMethod?.provider === "MPESA"
+                ? mpesaPayment.stage === "VERIFYING"
+                  ? "Confirming payment..."
+                  : "Sending M-PESA prompt..."
+                : "Processing..."
             : `Charge ${formatMoney(totals.total, context.organization.currency)}`}
           {!submitting && <ArrowRight className="h-4 w-4" />}
         </button>
