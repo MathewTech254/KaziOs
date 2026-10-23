@@ -212,6 +212,37 @@ async function lowStock(ctx: ToolContext, _params: ToolParams): Promise<ToolResu
   return { summary, data };
 }
 
+/** The single tracked product with the lowest on-hand quantity, regardless of reorder level. */
+async function lowestStock(ctx: ToolContext, _params: ToolParams): Promise<ToolResult> {
+  const products = await prisma.product.findMany({
+    where: { organizationId: ctx.organizationId, isActive: true },
+    select: {
+      name: true,
+      sku: true,
+      inventories: { select: { quantity: true, reserved: true } },
+    },
+    take: 300,
+  });
+  const ranked = products
+    .map(p => {
+      const onHand = p.inventories.reduce(
+        (s, i) => s + Math.max(0, (i.quantity || 0) - (i.reserved || 0)),
+        0
+      );
+      return { name: p.name, sku: p.sku, onHand };
+    })
+    .filter(r => r.onHand > 0)
+    .sort((a, b) => a.onHand - b.onHand);
+  const lowest = ranked[0];
+  const data = { count: ranked.length, lowest, items: ranked.slice(0, 10) };
+  const summary = lowest
+    ? `The product with the lowest stock is ${lowest.name} (${lowest.onHand} left${
+        lowest.sku ? `, SKU ${lowest.sku}` : ""
+      }).`
+    : "No products have stock on hand.";
+  return { summary, data };
+}
+
 /** Unpaid invoices: who owes the business money, and how much in total. */
 async function whoOwes(ctx: ToolContext, _params: ToolParams): Promise<ToolResult> {
   const invoices = await prisma.invoice.findMany({
@@ -328,6 +359,62 @@ async function cashPosition(ctx: ToolContext, params: ToolParams): Promise<ToolR
           "payment"
         )}.`;
   return { summary, data };
+}
+
+/** Summarize payments received: total, count, average, and method breakdown. */
+async function paymentSummary(ctx: ToolContext, params: ToolParams): Promise<ToolResult> {
+  const { from, to, label } = periodRange(normalizePeriod(params.period));
+  const payments = await prisma.payment.findMany({
+    where: {
+      organizationId: ctx.organizationId,
+      status: "SUCCESS",
+      paidAt: { gte: from, lt: to },
+    },
+    select: {
+      id: true,
+      amount: true,
+      currency: true,
+      methodType: true,
+      paidAt: true,
+    },
+  });
+
+  const totalCents = payments.reduce((sum, p) => sum + Math.round((p.amount || 0) * 100), 0);
+  const count = payments.length;
+  const averageCents = count > 0 ? Math.round(totalCents / count) : 0;
+
+  const byMethod: Record<string, number> = {};
+  for (const p of payments) {
+    const method = p.methodType || "unknown";
+    byMethod[method] = (byMethod[method] || 0) + Math.round((p.amount || 0) * 100);
+  }
+
+  const data = {
+    period: label,
+    totalCents,
+    paymentCount: count,
+    averageCents,
+    byMethod,
+    currencies: [...new Set(payments.map(p => p.currency))],
+    firstPayment: count > 0 ? payments.sort((a, b) => a.paidAt!.getTime() - b.paidAt!.getTime())[0].paidAt : null,
+    lastPayment: count > 0 ? payments.sort((a, b) => b.paidAt!.getTime() - a.paidAt!.getTime())[0].paidAt : null,
+  };
+
+  const parts: string[] = [
+    `${label}: ${money(totalCents, ctx.currency)} total across ${count} successful payment${count !== 1 ? "s" : ""}.`,
+  ];
+  if (count > 0) {
+    parts.push(`Average: ${money(averageCents, ctx.currency)} per payment.`);
+    const methodParts = Object.entries(byMethod)
+      .map(([method, cents]) => `${method}: ${money(cents, ctx.currency)}`)
+      .join(", ");
+    parts.push(`By method: ${methodParts}.`);
+  }
+
+  return {
+    summary: parts.join(" "),
+    data,
+  };
 }
 
 /** Money spent, grouped by expense category, for a period. Voided expenses are excluded. */
@@ -682,9 +769,11 @@ const TOOLS: Record<string, ToolFn> = {
   sales_summary: salesSummary,
   top_products: topProducts,
   low_stock: lowStock,
+  lowest_stock: lowestStock,
   who_owes: whoOwes,
   slow_movers: slowMovers,
   cash_position: cashPosition,
+  payment_summary: paymentSummary,
   expense_summary: expenseSummary,
   branch_stock: branchStock,
   send_invoice: sendInvoice,
@@ -695,60 +784,89 @@ const TOOLS: Record<string, ToolFn> = {
 /** Shown to the language model so it can route a question to the right tool. */
 export const TOOL_CATALOG = [
   {
+    name: "general",
+    description: "General questions, greetings, or when no specific analytics tool fits. Tells the shop owner what the assistant can do.",
+    example: "hello, what can you do, help",
+    params: "none",
+  },
+  {
     name: "sales_summary",
     description: "Total sales/revenue and number of sales for a time period",
+    example: "how much did we sell today, sales this month, revenue yesterday",
     params: "period",
   },
   {
     name: "top_products",
     description: "Best-selling products by revenue for a time period",
+    example: "top products, best selling items this week, top 5 products",
     params: "period, limit",
   },
   {
     name: "low_stock",
     description: "Products at or below their reorder level that need restocking",
+    example: "what am I running low on, low stock, products to reorder",
+    params: "none",
+  },
+  {
+    name: "lowest_stock",
+    description: "The single product with the lowest on-hand quantity, even if it's above its reorder level",
+    example: "which product has the lowest stock, lowest quantity, product with minimum stock, deepest stock",
     params: "none",
   },
   {
     name: "who_owes",
     description: "Unpaid invoices and who owes the business money",
+    example: "who owes me money, unpaid invoices, outstanding payments",
     params: "none",
   },
   {
     name: "slow_movers",
     description: "Products with stock that have not sold recently",
+    example: "slow movers, products not selling, stale stock",
     params: "days",
   },
   {
     name: "cash_position",
     description: "Money collected through successful payments for a time period (till position)",
+    example: "cash position today, money collected this week, till balance",
+    params: "period",
+  },
+  {
+    name: "payment_summary",
+    description: "Summarize payments received: total, count, average, and method breakdown",
+    example: "summarize payments made, payment summary, payments received this month, total payments today",
     params: "period",
   },
   {
     name: "expense_summary",
     description: "Money spent, grouped by expense category, for a time period",
+    example: "expenses this month, spending by category, where did money go",
     params: "period",
   },
   {
     name: "branch_stock",
     description: "Stock position by branch: tracked products and items below their reorder level",
+    example: "branch stock, stock by location, inventory per branch",
     params: "none",
   },
   {
     name: "send_invoice",
     description:
       "Send a draft invoice to its customer (DRAFT -> SENT) and WhatsApp them the invoice. Requires confirm: true to execute.",
+    example: "send invoice INV-001 to customer",
     params: "invoiceId, confirm",
   },
   {
     name: "void_invoice",
     description:
       "Void an invoice so nothing is collected on it. Requires confirm: true to execute.",
+    example: "void invoice INV-002",
     params: "invoiceId, confirm",
   },
   {
     name: "record_payment",
     description: "Record a manual payment on an invoice. Requires confirm: true to execute.",
+    example: "record payment on invoice INV-003 for 5000",
     params: "invoiceId, amountCents, confirm",
   },
 ];

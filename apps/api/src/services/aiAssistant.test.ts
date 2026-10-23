@@ -24,6 +24,7 @@ jest.mock("./aiTools", () => ({
   TOOL_CATALOG: [
     { name: "sales_summary", description: "sales", params: "period" },
     { name: "low_stock", description: "low stock", params: "none" },
+    { name: "lowest_stock", description: "lowest stock", params: "none" },
     { name: "who_owes", description: "debts", params: "none" },
     { name: "top_products", description: "top", params: "period" },
     { name: "slow_movers", description: "slow", params: "days" },
@@ -90,7 +91,50 @@ describe("askBusiness", () => {
     expect(phrasedFacts).toContain("Milk (3 left)");
   });
 
-  it("returns the deterministic summary when the model is not configured", async () => {
+  it("routes lowest-stock phrasing to lowest_stock", async () => {
+    (chatJson as jest.Mock).mockResolvedValue({ tool: "lowest_stock", params: {} });
+    (runTool as jest.Mock).mockResolvedValue({
+      summary: "The product with the lowest stock is Milk (2 left).",
+      data: { count: 2, lowest: { name: "Milk", onHand: 2 }, items: [] },
+    });
+    (chatCompletion as jest.Mock).mockResolvedValue(
+      "The product with the lowest stock is Milk (2 left)."
+    );
+
+    const result = await askBusiness(ORG, "KES", "which product has the lowest stock?");
+
+    expect(result.tool).toBe("lowest_stock");
+    expect(result.answer).toBe("The product with the lowest stock is Milk (2 left).");
+    expect(result.aiPhrased).toBe(true);
+    expect(runTool).toHaveBeenCalledWith(
+      "lowest_stock",
+      { organizationId: ORG, currency: "KES", permissions: [] },
+      {}
+    );
+  });
+
+  it("routes 'lowest quantity' phrasing to lowest_stock", async () => {
+    (chatJson as jest.Mock).mockResolvedValue({ tool: "lowest_stock", params: {} });
+    (runTool as jest.Mock).mockResolvedValue({
+      summary: "The product with the lowest stock is Sugar (1 left).",
+      data: { count: 2, lowest: { name: "Sugar", onHand: 1 }, items: [] },
+    });
+    (chatCompletion as jest.Mock).mockResolvedValue(
+      "The product with the lowest stock is Sugar (1 left)."
+    );
+
+    const result = await askBusiness(ORG, "KES", "which product has the lowest quantity?");
+
+    expect(result.tool).toBe("lowest_stock");
+    expect(result.aiPhrased).toBe(true);
+    expect(runTool).toHaveBeenCalledWith(
+      "lowest_stock",
+      { organizationId: ORG, currency: "KES", permissions: [] },
+      {}
+    );
+  });
+
+  it("returns the general help message when the model is not configured", async () => {
     (isAiConfigured as jest.Mock).mockReturnValue(false);
     (runTool as jest.Mock).mockResolvedValue({
       summary: "You took KES 60.49 across 3 sales today.",
@@ -100,14 +144,15 @@ describe("askBusiness", () => {
     const result = await askBusiness(ORG, "KES", "how much did we sell today?");
 
     expect(result.aiPhrased).toBe(false);
-    expect(result.answer).toBe("You took KES 60.49 across 3 sales today.");
+    expect(result.tool).toBe("general");
+    expect(result.answer).toContain("I can help you with sales");
     // No routing or phrasing calls were made at all when AI is off.
     expect(chatJson).not.toHaveBeenCalled();
     expect(chatCompletion).not.toHaveBeenCalled();
-    expect(runTool).toHaveBeenCalled();
+    expect(runTool).not.toHaveBeenCalled();
   });
 
-  it("still answers when the model fails to route, defaulting to a sales summary", async () => {
+  it("still answers when the model fails to route, defaulting to general help", async () => {
     (chatJson as jest.Mock).mockRejectedValue(new Error("model down"));
     (runTool as jest.Mock).mockResolvedValue({
       summary: "No sales were recorded today.",
@@ -116,8 +161,8 @@ describe("askBusiness", () => {
     (chatCompletion as jest.Mock).mockResolvedValue("No sales yet today.");
 
     const result = await askBusiness(ORG, "KES", "anything today?");
-    expect(result.tool).toBe("sales_summary");
-    expect(result.answer).toBe("No sales yet today.");
+    expect(result.tool).toBe("general");
+    expect(result.answer).toContain("I can help you with sales");
   });
 
   it("keeps the deterministic answer if phrasing fails after a successful tool run", async () => {
@@ -133,7 +178,7 @@ describe("askBusiness", () => {
     expect(result.answer).toBe("1 unpaid invoice totalling KES 75.00.");
   });
 
-  it("ignores an unknown tool the model invents and falls back to sales_summary", async () => {
+  it("ignores an unknown tool the model invents and falls back to general help", async () => {
     (chatJson as jest.Mock).mockResolvedValue({ tool: "hack_the_planet", params: {} });
     (runTool as jest.Mock).mockResolvedValue({
       summary: "No sales were recorded today.",
@@ -142,7 +187,8 @@ describe("askBusiness", () => {
     (chatCompletion as jest.Mock).mockResolvedValue("Here is your day.");
 
     const result = await askBusiness(ORG, "KES", "how is business?");
-    expect(result.tool).toBe("sales_summary");
+    expect(result.tool).toBe("general");
+    expect(result.answer).toContain("I can help you with sales");
   });
 
   it("rejects an empty or over-long question before spending anything", async () => {

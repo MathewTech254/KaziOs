@@ -19,7 +19,9 @@
     "test:unit": "jest --testPathPattern=.*\\.test\\.ts$ --passWithNoTests",
     "test:integration": "jest --testPathPattern=.*\\.integration\\.ts$ --passWithNoTests"
   },
-  "dependencies": {},
+  "dependencies": {
+    "openai": "^7.15.0"
+  },
   "devDependencies": {
     "jest": "^29.7.0",
     "ts-jest": "^29.1.4",

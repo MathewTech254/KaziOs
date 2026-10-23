@@ -40,21 +40,86 @@ async function appendConversationTurn(sessionId: string, turn: ConversationTurn)
   }
 }
 
+/** Common misspellings and fragments the model should not have to guess at. */
+const TYPO_MAP: Record<string, string> = {
+  salse: "sales",
+  sale: "sales",
+  revanue: "revenue",
+  revnue: "revenue",
+  incom: "income",
+  stok: "stock",
+  invce: "invoice",
+  invoce: "invoice",
+  custmer: "customer",
+  cust: "customer",
+  paymnt: "payment",
+  paymet: "payment",
+  expenes: "expense",
+  availble: "available",
+  availbale: "available",
+  owe: "owes",
+  debt: "owes",
+  best: "top",
+  till: "cash",
+};
+
 /**
- * The assistant orchestrator: User -> AI -> Intent -> Authorized Tool -> Business Data.
- *
- * The contract that makes this safe to put in front of a shop's money:
- *
- *   1. The model reads the question and chooses a tool and its parameters. It does no maths.
- *   2. The chosen tool computes the real figures from the database (see `aiTools.ts`).
- *   3. The model is asked only to turn those already-computed figures into a friendly
- *      sentence. Its system prompt forbids introducing any number that is not in the facts,
- *      so a confident-sounding hallucination is designed out rather than merely discouraged.
- *
- * When AI is not configured, step 3 is skipped and the deterministic summary from step 2 is
- * returned verbatim. The business still gets a correct, useful answer; only the polish is
- * missing. A missing key degrades the wording, never the truth.
+ * Cleans up a raw user question before routing: lowercases, collapses whitespace,
+ * fixes common typos, and normalises period words. This lets the assistant give a
+ * useful answer even from a rough, typo-ridden or fragmented query.
  */
+export function normalizeQuestion(question: string): string {
+  let q = question.toLowerCase().trim();
+  q = q.replace(/\s+/g, " ");
+  q = q
+    .split(" ")
+    .map((w) => TYPO_MAP[w] ?? w)
+    .join(" ");
+  q = q
+    .replace(/\bthis week\b/g, "this_week")
+    .replace(/\blast week\b/g, "last_week")
+    .replace(/\bthis month\b/g, "this_month")
+    .replace(/\blast month\b/g, "last_month")
+    .replace(/\ball time\b/g, "all_time")
+    .replace(/\byesterday\b/g, "yesterday")
+    .replace(/\btoday\b/g, "today");
+  return q;
+}
+
+/**
+ * Keyword-based pre-routing for common patterns. Runs before the model so that
+ * obvious questions (\"low stock\", \"who owes me\") always get the right tool even
+ * when the model struggles with JSON output on some providers.
+ */
+function keywordRoute(question: string): RouteDecision | null {
+  const q = question.toLowerCase();
+
+  const patterns: Array<[RegExp, RouteDecision]> = [
+    [/\b(low|running.?out|reorder|need.?stock|stock.?level)\b/, { tool: "low_stock", params: {} }],
+    [/\b(who.?owes|unpaid|outstanding|debt|money.?owed|owes.?me)\b/, { tool: "who_owes", params: {} }],
+    [/b(lowest|deepest|minimum|top.?down)b/, { tool: "lowest_stock", params: {} }],
+    [/\b(top.?product|best.?selling|best.?product|top.?selling)\b/, { tool: "top_products", params: { limit: 5 } }],
+    [/\b(slow.?mover|not.?selling|stale.?stock|dead.?stock)\b/, { tool: "slow_movers", params: { days: 30 } }],
+    [/b(summariz|total|payment|receiv\w*)\b/i, { tool: "payment_summary", params: { period: "today" } }],
+    [/\b(cash|till|money.?collected|payments.?received)\b/, { tool: "cash_position", params: { period: "today" } }],
+    [/\b(expense|spending|spent|where.?did.?money.?go)\b/, { tool: "expense_summary", params: { period: "today" } }],
+    [/\b(branch.?stock|stock.?by.?branch|inventory.?by.?location)\b/, { tool: "branch_stock", params: {} }],
+    [/\b(sales|revenue|income|sold|how.?much.?sell|how.?much.?sale)\b/, { tool: "sales_summary", params: { period: "today" } }],
+  ];
+
+  for (const [regex, decision] of patterns) {
+    if (regex.test(q)) return decision;
+  }
+  return null;
+}
+
+/** The platform context the model needs to understand what KaziOS can do. */
+const PLATFORM_CONTEXT = [
+  "You are the AI assistant inside KaziOS, a shop-management platform for small businesses.",
+  "You answer questions about the shop's own sales, stock, customers, invoices, expenses and cash.",
+  "Every figure you give is computed from the shop's real database records by a tool — you never do maths yourself.",
+  "If you do not know the answer or no tool fits the question, say so honestly instead of guessing.",
+].join(" ");
 
 export interface AssistantAnswer {
   question: string;
@@ -83,31 +148,35 @@ export function aiAssistantEnabled(): boolean {
 }
 
 function routingSystemPrompt(history?: ConversationTurn[]): string {
-  const catalog = TOOL_CATALOG.map(t => `- ${t.name}: ${t.description}. params: ${t.params}`).join(
-    "\n"
-  );
+  const catalog = TOOL_CATALOG.map(
+    (t) => `- ${t.name}: ${t.description}. Example: "${t.example}". params: ${t.params}`,
+  ).join("\n");
   const historySection = history?.length
     ? [
         "",
         "Recent conversation:",
-        ...history.map(h => `User: ${h.question}\nAssistant: ${h.answer}`),
+        ...history.map((h) => `User: ${h.question}\nAssistant: ${h.answer}`),
       ]
     : [];
   return [
-    "You route a shop owner's question to exactly one tool. Some tools are read-only analytics;",
-    "others are actions that change records (send_invoice, void_invoice, record_payment).",
+    PLATFORM_CONTEXT,
+    "",
+    "Your job is to read the shop owner's question and pick exactly one tool to answer it.",
     "Available tools:",
     catalog,
     "",
-    'Respond as JSON only: {"tool": string, "params": object}.',
+    "There is also a special tool called `general`. Use it when the question is a greeting,",
+    "a general \"what can you do\" question, or when no analytics tool fits the question.",
+    "general needs no params.",
+    "",
+    "Respond as JSON only: {\"tool\": string, \"params\": object}.",
     "Rules:",
-    "- Choose the single best tool. If nothing fits, use sales_summary.",
-    "- For action tools, never set confirm: true. Route with confirm: false first, present the",
-    "  preview to the shop owner, and ask them to confirm explicitly before you set confirm: true.",
-    "- period is one of: today, yesterday, this_week, this_month, last_month, all_time.",
-    '- Infer a sensible period from the question ("today"->today, "this month"->this_month). Default today.',
+    "- Choose the single best tool for the question. If nothing fits, use `general`.",
+    "- Do not default every question to sales_summary. Read the question carefully.",
+    '- Infer a sensible period from the question ("today" -> today, "this month" -> this_month, "yesterday" -> yesterday). Default today.',
     "- limit is a number 1-10 for top_products. days is a number for slow_movers.",
     "- Never invent tools or params. Output nothing but the JSON object.",
+    "- The shop owner may write broken English, typos or fragments. Do your best to match intent.",
     ...historySection,
   ].join("\n");
 }
@@ -117,17 +186,24 @@ async function routeQuestion(
   question: string,
   history: ConversationTurn[] = []
 ): Promise<RouteDecision> {
-  const fallback: RouteDecision = { tool: "sales_summary", params: { period: "today" } };
+  const fallback: RouteDecision = { tool: "general", params: {} };
   if (!aiAssistantEnabled()) return fallback;
+
+  // Keyword pre-routing: handle obvious patterns without hitting the model,
+  // so they always work even when the model struggles with JSON output.
+  const keyword = keywordRoute(question);
+  if (keyword) return keyword;
+
   try {
+    const normalized = normalizeQuestion(question);
     const decision = await chatJson<RouteDecision>({
       messages: [
         { role: "system", content: routingSystemPrompt(history) },
-        { role: "user", content: question },
+        { role: "user", content: normalized },
       ],
       temperature: 0,
     });
-    const known = TOOL_CATALOG.some(t => t.name === decision?.tool);
+    const known = TOOL_CATALOG.some((t) => t.name === decision?.tool);
     if (!decision || !known) return fallback;
     return { tool: decision.tool, params: decision.params || {} };
   } catch {
@@ -139,10 +215,12 @@ async function routeQuestion(
 function phrasingSystemPrompt(): string {
   return [
     "You are the friendly business assistant inside KaziOS, speaking to a shop owner.",
-    "You are given VERIFIED FACTS computed from the shop's own records.",
+    "You are given VERIFIED FACTS computed from the shop's own records by a tool.",
     "Write a short, warm, plain-English answer (1-3 sentences) that uses ONLY those facts.",
     "Never introduce, estimate or change any number. If a figure is not in the facts, do not state it.",
-    "Do not give financial advice or predictions. You may end with one practical next step that follows from the facts.",
+    "If the facts say there is no data, say so plainly and offer one practical next step.",
+    "Do not give financial advice or predictions.",
+    "Vary your wording — do not repeat the same sentence for every question.",
   ].join("\n");
 }
 
@@ -184,7 +262,8 @@ export async function askBusiness(
   permissions: string[] = [],
   sessionId?: string
 ): Promise<AssistantAnswer> {
-  const trimmed = question.trim();
+  const normalized = normalizeQuestion(question);
+  const trimmed = normalized.trim();
   if (trimmed.length < 2) {
     throw new AppError(
       400,
@@ -201,6 +280,30 @@ export async function askBusiness(
   // can be resolved in the context of the shop's own chat.
   const history = sessionId ? await getConversationTurns(sessionId) : [];
   const route = await routeQuestion(trimmed, history);
+
+  // When the model could not match any tool, give an honest general response instead of
+  // forcing an irrelevant sales figure.
+  if (route.tool === "general") {
+    const answer =
+      "I can help you with sales, top products, low stock, who owes you money, slow movers, cash position, expenses and branch stock. Try asking something like \"how much did we sell today?\" or \"what am I running low on?\".";
+    const assistantAnswer: AssistantAnswer = {
+      question: trimmed,
+      tool: "general",
+      answer,
+      data: {},
+      aiPhrased: false,
+    };
+    if (sessionId) {
+      await appendConversationTurn(sessionId, {
+        question: trimmed,
+        answer,
+        tool: "general",
+        ts: new Date().toISOString(),
+      });
+    }
+    return assistantAnswer;
+  }
+
   const result = await runTool(route.tool, ctx, route.params);
   const { answer, aiPhrased } = await phraseAnswer(trimmed, result.summary, result.summary);
 

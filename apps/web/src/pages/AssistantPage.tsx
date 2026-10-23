@@ -45,6 +45,10 @@ const TOOL_LABELS: Record<string, string> = {
   low_stock: "Low stock",
   who_owes: "Who owes you",
   slow_movers: "Slow movers",
+  payment_summary: "Payment summary",
+  cash_position: "Cash position",
+  expense_summary: "Expenses",
+  branch_stock: "Branch stock",
 };
 
 export function AssistantPage() {
