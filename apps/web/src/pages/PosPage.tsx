@@ -495,7 +495,7 @@ export function PosPage() {
       // M-PESA has no subunit. Refuse before the sale exists rather than
       // creating an unpaid invoice the prompt could never cover — the server
       // refuses this too, and saying it here saves the cashier a dead sale.
-      if (totals.totalCents % 100 !== 0) {
+      if (totals.totalCents % 100 !== 0 && totals.totalCents < 100) {
         setError(
           `M-PESA collects whole shillings, and this total is ${formatMoney(
             totals.total,
@@ -521,15 +521,34 @@ export function PosPage() {
           discountAmount: line.discountAmount,
         })),
         discountAmount: 0,
-        payments: [
-          {
-            provider: selectedPaymentMethod.provider,
-            methodType: selectedPaymentMethod.methodType,
-            amount: total,
-            ...(isCash ? { tenderedAmount: toCurrency(tender.tenderedCents) } : {}),
-            ...(reference.trim() ? { reference: reference.trim() } : {}),
-          },
-        ],
+        payments: (() => {
+          if (isMpesa && totals.totalCents % 100 !== 0) {
+            const remainderCents = totals.totalCents % 100;
+            const mpesaCents = totals.totalCents - remainderCents;
+            return [
+              {
+                provider: "MPESA",
+                methodType: "mobile_money",
+                amount: toCurrency(mpesaCents),
+              },
+              {
+                provider: "CASH",
+                methodType: "cash",
+                amount: toCurrency(remainderCents),
+                tenderedAmount: toCurrency(remainderCents),
+              },
+            ];
+          }
+          return [
+            {
+              provider: selectedPaymentMethod.provider,
+              methodType: selectedPaymentMethod.methodType,
+              amount: total,
+              ...(isCash ? { tenderedAmount: toCurrency(tender.tenderedCents) } : {}),
+              ...(reference.trim() ? { reference: reference.trim() } : {}),
+            },
+          ];
+        })(),
         notes: notes.trim() || null,
         idempotencyKey: `pos-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
       });
@@ -1175,8 +1194,8 @@ export function PosPage() {
               </span>
             </div>
             {cardPayment.error && <p className="mt-1.5 text-xs">{cardPayment.error}</p>}
-            {cardPayment.reference && (
-              <p className="mt-1.5 font-mono text-xs">Reference: {cardPayment.reference}</p>
+            {cardPayment.stage !== "SUCCESS" && cardPayment.stage !== "FAILED" && (
+              <p className="mt-1.5 text-xs">Payment on progress</p>
             )}
           </div>
         )}
@@ -1212,8 +1231,8 @@ export function PosPage() {
               </span>
             </div>
             {mpesaPayment.error && <p className="mt-1.5 text-xs">{mpesaPayment.error}</p>}
-            {mpesaPayment.reference && (
-              <p className="mt-1.5 font-mono text-xs">Reference: {mpesaPayment.reference}</p>
+            {mpesaPayment.stage !== "SUCCESS" && mpesaPayment.stage !== "FAILED" && (
+              <p className="mt-1.5 text-xs">Payment on progress</p>
             )}
           </div>
         )}
@@ -1305,7 +1324,7 @@ export function PosPage() {
               {!isReceiptPaid && (
                 <p className="mt-2 text-xs text-muted-foreground">
                   The stock for this sale has been recorded. The card payment did not complete, so
-                  the customer still owes this amount.
+                  the customer still owes this amount. If the sale is cancelled, use Return sale to restore stock.
                 </p>
               )}
             </div>

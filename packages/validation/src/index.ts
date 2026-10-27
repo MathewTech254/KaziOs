@@ -17,7 +17,18 @@ export const zString = (min = 1, max = 255) =>
  */
 export const zEmail = z.string().trim().toLowerCase().email("Invalid email address");
 
-export const zPhone = z.string().min(5, "Invalid phone number");
+export const zPhone = z
+  .string()
+  .trim()
+  .refine(value => {
+    const digits = value.replace(/\D/g, "");
+    // A phone number must contain at least five digits, and a run of zeros is not a
+    // number: it is what an empty/unasked field gets mistaken for when typed in.
+    if (digits.length < 5) return false;
+    if (/^0+$/.test(digits)) return false;
+    // Only phone-like characters are allowed; letters or other junk are not a number.
+    return /^[+\d\s\-().]+$/.test(value);
+  }, "Invalid phone number");
 
 /**
  * Normalizes any human-typed or provider-supplied phone number to a comparable
@@ -29,6 +40,8 @@ export const zPhone = z.string().min(5, "Invalid phone number");
 export function normalizePhone(input: string): string | null {
   const digits = input.replace(/\D/g, "");
   if (digits.length < 5) return null;
+  // A run of zeros is not a phone number.
+  if (/^0+$/.test(digits)) return null;
   return digits;
 }
 

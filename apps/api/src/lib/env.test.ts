@@ -122,7 +122,7 @@ describe("env file resolution", () => {
 
     const files = resolveEnvFiles({ NODE_ENV: "production" }, root, libDir);
 
-    expect(fi 
+    expect(files.indexOf(path.join(apiDir, ".env"))).toBeLessThan(
       files.indexOf(path.join(root, ".env"))
     );
   });

@@ -97,10 +97,10 @@ function keywordRoute(question: string): RouteDecision | null {
   const patterns: Array<[RegExp, RouteDecision]> = [
     [/\b(low|running.?out|reorder|need.?stock|stock.?level)\b/, { tool: "low_stock", params: {} }],
     [/\b(who.?owes|unpaid|outstanding|debt|money.?owed|owes.?me)\b/, { tool: "who_owes", params: {} }],
-    [/b(lowest|deepest|minimum|top.?down)b/, { tool: "lowest_stock", params: {} }],
+    [/\b(lowest|deepest|minimum|top.?down)\b/, { tool: "lowest_stock", params: {} }],
     [/\b(top.?product|best.?selling|best.?product|top.?selling)\b/, { tool: "top_products", params: { limit: 5 } }],
     [/\b(slow.?mover|not.?selling|stale.?stock|dead.?stock)\b/, { tool: "slow_movers", params: { days: 30 } }],
-    [/b(summariz|total|payment|receiv\w*)\b/i, { tool: "payment_summary", params: { period: "today" } }],
+    [/\b(summariz|total|payment|receiv\w*)\b/i, { tool: "payment_summary", params: { period: "today" } }],
     [/\b(cash|till|money.?collected|payments.?received)\b/, { tool: "cash_position", params: { period: "today" } }],
     [/\b(expense|spending|spent|where.?did.?money.?go)\b/, { tool: "expense_summary", params: { period: "today" } }],
     [/\b(branch.?stock|stock.?by.?branch|inventory.?by.?location)\b/, { tool: "branch_stock", params: {} }],
