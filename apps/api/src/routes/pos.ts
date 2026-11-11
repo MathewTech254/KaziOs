@@ -5,6 +5,7 @@ import { isPaystackConfigured, loadConfig } from "@kazios/config";
 import { zPosSaleSchema } from "@kazios/validation";
 import { prisma } from "../lib/prisma";
 import { requireAuth, requirePermission } from "../middleware/auth";
+import type { AuthRequest } from "../middleware/auth";
 import { AppError } from "../middleware/errorHandler";
 import { generateId, generateInvoiceNumber, paginate } from "../lib/utils";
 import { getOrganizationId, getScopedValues, getUserId, isAllowed } from "../lib/scope";
@@ -288,7 +289,7 @@ posRouter.post(
   "/sale",
   requireAuth,
   requirePermission("pos.sale"),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const organizationId = getOrganizationId(req);
       if (!organizationId) throw new AppError(401, "Authentication required");
@@ -336,10 +337,13 @@ posRouter.post(
             throw new AppError(400, "MPESA_MANUAL payment method is invalid");
           if (!payment.transactionCode || payment.transactionCode.trim() === "")
             throw new AppError(400, "MPESA_MANUAL requires a transaction code");
-          const code = payment.transactionCode.trim();
+          // Normalize: trim + uppercase so "abc123" and "ABC 123" are the same code.
+          const code = payment.transactionCode.trim().toUpperCase();
           if (mpesaManualCodes.has(code))
             throw new AppError(400, "Duplicate M-PESA transaction code in this sale");
           mpesaManualCodes.add(code);
+          // Store the normalized code back so it's persisted consistently.
+          payment.transactionCode = code;
         }
 
         if (payment.provider === "CREDIT") {
@@ -409,11 +413,41 @@ posRouter.post(
           const orderTotal = toCurrency(orderTotalCents);
 
           if (currentBalance + orderTotal > creditLimit) {
-            throw new AppError(
-              409,
-              `Customer credit limit exceeded: owes KES ${currentBalance.toFixed(2)}, ` +
-                `this sale adds KES ${orderTotal.toFixed(2)}, limit is KES ${creditLimit.toFixed(2)}`
+            // Owner-level override: a user with settings.manage can explicitly
+            // override the credit limit. Requires an opt-in confirmation flag and
+            // is always audit-logged.
+            const canOverride = req.roles?.some(
+              (r: any) =>
+                r.role.permissions.includes("*") || r.role.permissions.includes("settings.manage")
             );
+            if (
+              canOverride &&
+              input.overrideCreditLimit === true &&
+              input.overrideCreditLimitReason
+            ) {
+              await prisma.auditLog.create({
+                data: {
+                  organizationId,
+                  userId: req.userId,
+                  entity: "Customer",
+                  entityId: creditCustomerId,
+                  action: "CREDIT_LIMIT_OVERRIDE",
+                  changes: {
+                    customerName: customer.name,
+                    currentBalance,
+                    orderTotal,
+                    creditLimit,
+                    reason: input.overrideCreditLimitReason,
+                  },
+                },
+              });
+            } else {
+              throw new AppError(
+                409,
+                `Customer credit limit exceeded: owes KES ${currentBalance.toFixed(2)}, ` +
+                  `this sale adds KES ${orderTotal.toFixed(2)}, limit is KES ${creditLimit.toFixed(2)}`
+              );
+            }
           }
         }
       }
@@ -621,62 +655,63 @@ posRouter.post(
       const invoiceNumber = generateInvoiceNumber("POS");
       const now = new Date();
 
-      const result = await prisma.$transaction(
-        async tx => {
-          for (const line of lines) {
-            if (
-              !line.product.trackStock ||
-              line.product.productType === "SERVICE" ||
-              line.product.productType === "DIGITAL"
-            )
-              continue;
-            const inventory = await tx.inventory.findUnique({
-              where: {
-                productId_warehouseId: { productId: line.product.id, warehouseId: warehouse.id },
-              },
-            });
-            const available = inventory ? inventory.quantity - inventory.reserved : 0;
-            if (!inventory || (available < line.quantity && !allowNegativeStock)) {
-              throw new AppError(
-                409,
-                `${line.product.name} has only ${available} available in this warehouse`
-              );
-            }
-            const updated = await tx.inventory.updateMany({
-              where: {
-                productId: line.product.id,
-                warehouseId: warehouse.id,
-                ...(allowNegativeStock
-                  ? {}
-                  : { quantity: { gte: line.quantity + inventory.reserved } }),
-              },
-              data: { quantity: { decrement: line.quantity } },
-            });
-            if (!allowNegativeStock && updated.count !== 1)
-              throw new AppError(409, `${line.product.name} stock changed; please review the cart`);
-          }
+      // Serializable transactions can abort under concurrent access (Prisma P2034).
+      // Retry once so the till doesn't fail a customer's purchase because two
+      // sales hit the same stock at the same instant.
+      let result: any;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          result = await prisma.$transaction(
+            async tx => {
+              for (const line of lines) {
+                if (
+                  !line.product.trackStock ||
+                  line.product.productType === "SERVICE" ||
+                  line.product.productType === "DIGITAL"
+                )
+                  continue;
+                const inventory = await tx.inventory.findUnique({
+                  where: {
+                    productId_warehouseId: { productId: line.product.id, warehouseId: warehouse.id },
+                  },
+                });
+                const available = inventory ? inventory.quantity - inventory.reserved : 0;
+                if (!inventory || (available < line.quantity && !allowNegativeStock)) {
+                  throw new AppError(
+                    409,
+                    `${line.product.name} has only ${available} available in this warehouse`
+                  );
+                }
+                const updated = await tx.inventory.updateMany({
+                  where: {
+                    productId: line.product.id,
+                    warehouseId: warehouse.id,
+                    ...(allowNegativeStock
+                      ? {}
+                      : { quantity: { gte: line.quantity + inventory.reserved } }),
+                  },
+                  data: { quantity: { decrement: line.quantity } },
+                });
+                if (!allowNegativeStock && updated.count !== 1)
+                  throw new AppError(409, `${line.product.name} stock changed; please review the cart`);
+              }
 
-          const invoice = await tx.invoice.create({
-            data: {
-              invoiceNumber,
-              // A deferred sale is not fully paid until its provider says so. Marking it
-              // paid here would let a failed or abandoned payment leave the till believing
-              // it took money — but whatever tender IS in hand stays counted, so a split
-              // sale reads PARTIALLY_PAID from the first moment and the deferred rail only
-              // ever owes the remainder.
-              status: settledCents >= totalCents ? "PAID" : settledCents > 0 ? "PARTIALLY_PAID" : "SENT",
-              issueDate: now,
-              dueDate: now,
-              subtotal: toCurrency(subtotalCents),
-              taxTotal: toCurrency(taxTotalCents),
-              discountTotal: toCurrency(discountTotalCents),
-              total: toCurrency(totalCents),
-              currency: organization.currency,
-              paidAmount: toCurrency(settledCents),
-              notes: input.notes || "POS sale",
-              organizationId,
-              customerId: input.customerId || null,
-              branchId: branch.id,
+              const invoice = await tx.invoice.create({
+                data: {
+                  invoiceNumber,
+                  status: settledCents >= totalCents ? "PAID" : settledCents > 0 ? "PARTIALLY_PAID" : "SENT",
+                  issueDate: now,
+                  dueDate: now,
+                  subtotal: toCurrency(subtotalCents),
+                  taxTotal: toCurrency(taxTotalCents),
+                  discountTotal: toCurrency(discountTotalCents),
+                  total: toCurrency(totalCents),
+                  currency: organization.currency,
+                  paidAmount: toCurrency(settledCents),
+                  notes: input.notes || "POS sale",
+                  organizationId,
+                  customerId: input.customerId || null,
+                  branchId: branch.id,
               idempotencyKey: input.idempotencyKey || null,
             },
           });
@@ -829,8 +864,17 @@ posRouter.post(
         },
         { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
       );
+      break; // success, exit retry loop
+    } catch (err: any) {
+      // Prisma P2034 = Serializable transaction aborted due to concurrent write.
+      // Retry once so the till doesn't fail a customer's purchase under contention.
+      if (err.code === "P2034" && attempt === 0) continue;
+      // Any other error (insufficient stock, credit limit, etc.) is re-thrown as-is.
+      throw err;
+    }
+  }
 
-      if (!result) throw new AppError(500, "Sale could not be completed");
+  if (!result) throw new AppError(500, "Sale could not be completed");
 
       // The till that rang the sale already knows about it, so the alert goes to everyone
       // else who can see reporting. An owner watching the dashboard sees the shop taking

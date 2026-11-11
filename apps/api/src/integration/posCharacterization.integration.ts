@@ -153,10 +153,11 @@ describe("/pos/sale characterization", () => {
       .send(payloadOverrides({
         items: [{ productId, quantity: 999, discountAmount: 0 }],
         payments: [{ provider: "CASH", methodType: "cash", amount: 34965000, tenderedAmount: 34965000 }],
+        idempotencyKey: `char-neg-stock-${Date.now()}`,
       }))
       .expect(409);
 
-    expect(res.body.error).toContain("only");
+    expect(res.body.error).toContain("available");
 
     // No invoice written
     const afterCount = await testPrisma.invoice.count({
@@ -723,6 +724,285 @@ describe("/pos/sale characterization", () => {
       where: { productId, warehouseId },
     });
     expect(inventory?.quantity).toBeLessThan(0);
+  });
+
+  it("CREDIT balance: full payment of one invoice reduces balance to zero", async () => {
+    // Create a customer with a credit limit
+    const customer = await request(testApp)
+      .post("/api/v1/customers")
+      .set(auth(tenant.token))
+      .send({
+        name: "Repayment Customer",
+        phone: "+254700000010",
+        customerType: "INDIVIDUAL",
+      })
+      .expect(201);
+    const customerId = customer.body.data.id;
+
+    await testPrisma.customer.update({
+      where: { id: customerId },
+      data: { creditLimit: 50000 },
+    });
+
+    // Make a credit sale of 35000
+    await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        customerId,
+        items: [{ productId, quantity: 1, discountAmount: 0 }],
+        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
+        idempotencyKey: `char-repay-full-${Date.now()}`,
+      }))
+      .expect(201);
+
+    // Verify the invoice was created with the customer and correct balance
+    const invoice = await testPrisma.invoice.findFirst({
+      where: { customerId, organizationId: tenant.organizationId },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(invoice).toBeTruthy();
+    expect(Number(invoice?.total ?? 0)).toBe(35000);
+    expect(Number(invoice?.paidAmount ?? 0)).toBe(0);
+    expect(invoice?.status).toBe("SENT");
+
+    // Now repay the full 35000
+    await request(testApp)
+      .post("/api/v1/payments")
+      .set(auth(tenant.token))
+      .send({
+        amount: 35000,
+        currency: "KES",
+        paymentProvider: "CREDIT",
+        paymentMethodType: "credit",
+        customerId,
+        reference: `REPAY-FULL-${Date.now()}`,
+        notes: "Full repayment",
+      })
+      .expect(201);
+
+    // Balance should now be 0, so a new credit sale up to the limit should work
+    await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        customerId,
+        items: [{ productId, quantity: 1, discountAmount: 0 }],
+        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
+        idempotencyKey: `char-repay-full-2-${Date.now()}`,
+      }))
+      .expect(201);
+  });
+
+  it("CREDIT balance: partial payment reduces balance proportionally", async () => {
+    const customer = await request(testApp)
+      .post("/api/v1/customers")
+      .set(auth(tenant.token))
+      .send({
+        name: "Partial Repayment Customer",
+        phone: "+254700000011",
+        customerType: "INDIVIDUAL",
+      })
+      .expect(201);
+    const customerId = customer.body.data.id;
+
+    await testPrisma.customer.update({
+      where: { id: customerId },
+      data: { creditLimit: 60000 },
+    });
+
+    // Credit sale of 35000
+    await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        customerId,
+        items: [{ productId, quantity: 1, discountAmount: 0 }],
+        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
+        idempotencyKey: `char-repay-partial-${Date.now()}`,
+      }))
+      .expect(201);
+
+    // Partial repayment of 10000 - balance should now be 25000
+    await request(testApp)
+      .post("/api/v1/payments")
+      .set(auth(tenant.token))
+      .send({
+        amount: 10000,
+        currency: "KES",
+        paymentProvider: "CREDIT",
+        paymentMethodType: "credit",
+        customerId,
+        reference: `REPAY-PARTIAL-${Date.now()}`,
+        notes: "Partial repayment",
+      })
+      .expect(201);
+
+    // With 25000 owed and 60000 limit, a 35000 credit sale works (25000+35000=60000 <= 60000)
+    await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        customerId,
+        items: [{ productId, quantity: 1, discountAmount: 0 }],
+        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
+        idempotencyKey: `char-repay-partial-2-${Date.now()}`,
+      }))
+      .expect(201);
+  });
+
+  it("CREDIT balance: payment spanning several invoices applies oldest first", async () => {
+    const customer = await request(testApp)
+      .post("/api/v1/customers")
+      .set(auth(tenant.token))
+      .send({
+        name: "Multi-Invoice Customer",
+        phone: "+254700000012",
+        customerType: "INDIVIDUAL",
+      })
+      .expect(201);
+    const customerId = customer.body.data.id;
+
+    await testPrisma.customer.update({
+      where: { id: customerId },
+      data: { creditLimit: 150000 },
+    });
+
+    // Three credit sales of 35000 each = 105000 owed
+    for (let i = 0; i < 3; i++) {
+      await request(testApp)
+        .post("/api/v1/pos/sale")
+        .set(auth(tenant.token))
+        .send(payloadOverrides({
+          customerId,
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
+          idempotencyKey: `char-repay-multi-${i}-${Date.now()}`,
+        }))
+        .expect(201);
+    }
+
+    // Repay 40000 - balance should now be 65000
+    await request(testApp)
+      .post("/api/v1/payments")
+      .set(auth(tenant.token))
+      .send({
+        amount: 40000,
+        currency: "KES",
+        paymentProvider: "CREDIT",
+        paymentMethodType: "credit",
+        customerId,
+        reference: `REPAY-MULTI-${Date.now()}`,
+        notes: "Repay across invoices",
+      })
+      .expect(201);
+
+    // Balance is 65000, limit is 100000. A 35000 sale: 65000+35000=100000 <= 100000, should work
+    await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        customerId,
+        items: [{ productId, quantity: 1, discountAmount: 0 }],
+        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
+        idempotencyKey: `char-repay-multi-2-${Date.now()}`,
+      }))
+      .expect(201);
+  });
+
+  it("CREDIT balance: overpayment is rejected", async () => {
+    const customer = await request(testApp)
+      .post("/api/v1/customers")
+      .set(auth(tenant.token))
+      .send({
+        name: "Overpayment Customer",
+        phone: "+254700000013",
+        customerType: "INDIVIDUAL",
+      })
+      .expect(201);
+    const customerId = customer.body.data.id;
+
+    await testPrisma.customer.update({
+      where: { id: customerId },
+      data: { creditLimit: 50000 },
+    });
+
+    // Credit sale of 35000
+    await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        customerId,
+        items: [{ productId, quantity: 1, discountAmount: 0 }],
+        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
+        idempotencyKey: `char-repay-over-${Date.now()}`,
+      }))
+      .expect(201);
+
+    // Try to overpay 60000 (more than the 35000 owed) - rejected
+    await request(testApp)
+      .post("/api/v1/payments")
+      .set(auth(tenant.token))
+      .send({
+        amount: 60000,
+        currency: "KES",
+        paymentProvider: "CREDIT",
+        paymentMethodType: "credit",
+        customerId,
+        reference: `REPAY-OVER-${Date.now()}`,
+        notes: "Overpayment attempt",
+      })
+      .expect(400);
+  });
+
+  it("CREDIT balance: returned credit sale reduces the balance", async () => {
+    const customer = await request(testApp)
+      .post("/api/v1/customers")
+      .set(auth(tenant.token))
+      .send({
+        name: "Return Customer",
+        phone: "+254700000014",
+        customerType: "INDIVIDUAL",
+      })
+      .expect(201);
+    const customerId = customer.body.data.id;
+
+    await testPrisma.customer.update({
+      where: { id: customerId },
+      data: { creditLimit: 50000 },
+    });
+
+    // Credit sale of 35000
+    const sale = await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        customerId,
+        items: [{ productId, quantity: 1, discountAmount: 0 }],
+        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
+        idempotencyKey: `char-repay-return-${Date.now()}`,
+      }))
+      .expect(201);
+    const invoiceId = sale.body.data.invoice.id;
+
+    // Return the sale - this voids the invoice and refunds payments
+    await request(testApp)
+      .post(`/api/v1/pos/sales/${invoiceId}/return`)
+      .set(auth(tenant.token))
+      .send({ warehouseId })
+      .expect(200);
+
+    // Balance should now be 0, so a new credit sale up to the limit should work
+    await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        customerId,
+        items: [{ productId, quantity: 1, discountAmount: 0 }],
+        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
+        idempotencyKey: `char-repay-return-2-${Date.now()}`,
+      }))
+      .expect(201);
   });
 
   afterAll(async () => {

@@ -13,6 +13,7 @@ import { organizationRouter } from "../routes/organization";
 import { userRouter } from "../routes/users";
 import { roleRouter } from "../routes/roles";
 import { cardPaymentRouter, paystackWebhookRouter } from "../routes/card-payments";
+import { paymentRouter } from "../routes/payments";
 import { billingRouter } from "../routes/billing";
 import { planRouter } from "../routes/plans";
 import { platformRouter } from "../routes/platform";
@@ -87,6 +88,7 @@ app.use("/api/v1/expenses", expenseRouter);
 app.use("/api/v1/inventory", inventoryRouter);
 app.use("/api/v1/reports", reportRouter);
 app.use("/api/v1/card-payments", cardPaymentRouter);
+app.use("/api/v1/payments", paymentRouter);
 // The webhook carries no session by design, so it is mounted on its own unauthenticated
 // path rather than behind the card payment router's requireAuth.
 app.use("/api/v1/webhooks", paystackWebhookRouter);

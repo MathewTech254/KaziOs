@@ -315,8 +315,8 @@ export const zPaymentSchema = z.object({
   invoiceId: zUuid.optional().nullable(),
   amount: z.number().positive("Amount must be positive"),
   currency: zCurrency,
-  paymentProvider: z.enum(["PAYSTACK", "MPESA", "BANK", "MANUAL", "CASH", "CHECK"]),
-  paymentMethodType: z.enum(["card", "bank_transfer", "mobile_money", "cash", "check", "manual"]),
+  paymentProvider: z.enum(["PAYSTACK", "MPESA", "BANK", "MANUAL", "CASH", "CHECK", "CREDIT"]),
+  paymentMethodType: z.enum(["card", "bank_transfer", "mobile_money", "cash", "check", "manual", "credit"]),
   reference: zString(1, 100).optional().nullable(),
   notes: zString(0, 500).optional().nullable(),
   customerId: zUuid.optional().nullable(),
@@ -347,6 +347,9 @@ export const zPosSaleSchema = z.object({
   payments: z.array(zPosPaymentSchema).min(1, "Select a payment method").max(10),
   notes: zString(0, 500).optional().nullable(),
   idempotencyKey: z.string().max(100).optional(),
+  // Owner override for customer credit limit. Requires settings.manage permission.
+  overrideCreditLimit: z.boolean().default(false),
+  overrideCreditLimitReason: zString(1, 500).optional().nullable(),
 });
 
 export const zJournalEntrySchema = z
