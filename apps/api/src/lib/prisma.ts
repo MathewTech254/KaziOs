@@ -6,8 +6,16 @@ loadRepoEnv();
 
 import { PrismaClient } from "@prisma/client";
 
+type PrismaLogLevel = "error" | "warn" | "query" | "info";
+
 export const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === "development" ? ["query", "error", "warn"] : ["error"],
+  log: (() => {
+    const levels: PrismaLogLevel[] = ["error"];
+    // Query logging is noisy in integration test output. Opt in with DEBUG_PRISMA=1.
+    if (process.env.DEBUG_PRISMA === "1") levels.push("query", "warn");
+    else if (process.env.NODE_ENV === "development") levels.push("warn");
+    return levels;
+  })(),
 });
 
 export async function disconnectPrisma() {
