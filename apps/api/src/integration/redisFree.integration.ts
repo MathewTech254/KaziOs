@@ -134,7 +134,7 @@ describe("API without Redis", () => {
 
   it("reads stock levels", async () => {
     const res = await request(app)
-      .get("/api/v1/inventory/levels")
+      .get("/api/v1/inventory/")
       .set("Authorization", `Bearer ${token}`)
       .expect(200);
     const row = res.body.data.find((r: { productId: string }) => r.productId === productId);
@@ -205,20 +205,26 @@ describe("API without Redis", () => {
     // Remove only the organization this test created.
     if (organizationId) {
       await prisma.$transaction(async tx => {
-        await tx.auditLog.deleteMany({ where: { organizationId } });
-        await tx.notification.deleteMany({ where: { organizationId } });
-        await tx.session.deleteMany({ where: { user: { organizationId } } });
+        await tx.journalLine.deleteMany({ where: { journalEntry: { organizationId } } });
+        await tx.journalEntry.deleteMany({ where: { organizationId } });
+        await tx.invoiceItem.deleteMany({ where: { invoice: { organizationId } } });
+        await tx.cardPayment.deleteMany({ where: { organizationId } });
+        await tx.payment.deleteMany({ where: { organizationId } });
+        await tx.paymentWebhookEvent.deleteMany({ where: { organizationId } });
+        await tx.invoice.deleteMany({ where: { organizationId } });
         await tx.stockMovement.deleteMany({ where: { organizationId } });
         await tx.inventory.deleteMany({ where: { organizationId } });
-        await tx.payment.deleteMany({ where: { organizationId } });
-        await tx.invoiceItem.deleteMany({ where: { invoice: { organizationId } } });
-        await tx.invoice.deleteMany({ where: { organizationId } });
         await tx.expense.deleteMany({ where: { organizationId } });
         await tx.customer.deleteMany({ where: { organizationId } });
         await tx.product.deleteMany({ where: { organizationId } });
+        await tx.taxCategory.deleteMany({ where: { organizationId } });
+        await tx.account.deleteMany({ where: { organizationId } });
         await tx.warehouse.deleteMany({ where: { organizationId } });
         await tx.branch.deleteMany({ where: { organizationId } });
         await tx.setting.deleteMany({ where: { organizationId } });
+        await tx.auditLog.deleteMany({ where: { organizationId } });
+        await tx.notification.deleteMany({ where: { organizationId } });
+        await tx.session.deleteMany({ where: { user: { organizationId } } });
         await tx.userRole.deleteMany({ where: { user: { organizationId } } });
         await tx.role.deleteMany({ where: { organizationId } });
         await tx.user.deleteMany({ where: { organizationId } });

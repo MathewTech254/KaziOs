@@ -292,7 +292,258 @@ describe("/pos/sale characterization", () => {
     expect(count).toBe(0);
   });
 
+  it("restores stock via RETURN movement on full return", async () => {
+    // Make a sale of 2 units
+    const sale = await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        items: [{ productId, quantity: 2, discountAmount: 0 }],
+        payments: [{ provider: "CASH", methodType: "cash", amount: 70000, tenderedAmount: 70000 }],
+        idempotencyKey: `char-return-${Date.now()}`,
+      }))
+      .expect(201);
+    const invoiceId = sale.body.data.invoice.id;
+
+    const beforeReturn = await testPrisma.inventory.findFirst({
+      where: { productId, warehouseId },
+    });
+
+    const returned = await request(testApp)
+      .post(`/api/v1/pos/sales/${invoiceId}/return`)
+      .set(auth(tenant.token))
+      .send({ warehouseId })
+      .expect(200);
+
+    expect(returned.body.data.status).toBe("VOID");
+    expect(returned.body.data.paidAmount).toBe(0);
+
+    // Stock restored
+    const afterReturn = await testPrisma.inventory.findFirst({
+      where: { productId, warehouseId },
+    });
+    expect(afterReturn?.quantity).toBe(beforeReturn?.quantity! + 2);
+
+    // RETURN movement exists
+    const movements = await testPrisma.stockMovement.findMany({
+      where: { organizationId: tenant.organizationId, type: "RETURN" },
+    });
+    expect(movements.length).toBeGreaterThanOrEqual(1);
+    const returnMovement = movements.find(m => m.reference === sale.body.data.invoice.invoiceNumber);
+    expect(returnMovement).toBeTruthy();
+    expect(returnMovement!.quantity).toBe(2);
+
+    // Payments refunded
+    const payments = await testPrisma.payment.findMany({ where: { invoiceId } });
+    expect(payments.every(p => p.status === "REFUNDED")).toBe(true);
+  });
+
+  it("rejects a second return of the same invoice with 409", async () => {
+    const sale = await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        items: [{ productId, quantity: 1, discountAmount: 0 }],
+        payments: [{ provider: "CASH", methodType: "cash", amount: 35000, tenderedAmount: 35000 }],
+        idempotencyKey: `char-dblreturn-${Date.now()}`,
+      }))
+      .expect(201);
+    const invoiceId = sale.body.data.invoice.id;
+
+    // First return succeeds
+    await request(testApp)
+      .post(`/api/v1/pos/sales/${invoiceId}/return`)
+      .set(auth(tenant.token))
+      .send({ warehouseId })
+      .expect(200);
+
+    // Second return is rejected
+    const second = await request(testApp)
+      .post(`/api/v1/pos/sales/${invoiceId}/return`)
+      .set(auth(tenant.token))
+      .send({ warehouseId });
+    expect(second.status).toBe(409);
+    expect(second.body.error).toMatch(/already|cancelled|returned/i);
+
+    // Stock was restored only once (no over-refund)
+    const movements = await testPrisma.stockMovement.findMany({
+      where: {
+        organizationId: tenant.organizationId,
+        type: "RETURN",
+        reference: sale.body.data.invoice.invoiceNumber,
+      },
+    });
+    expect(movements).toHaveLength(1);
+  });
+
+  it("concurrency: two simultaneous sales of the last unit - exactly one succeeds", async () => {
+    // Set up a product with exactly 1 unit
+    const concurrencyProduct = await request(testApp)
+      .post("/api/v1/products")
+      .set(auth(tenant.token))
+      .send({
+        name: "Concurrency Bottle",
+        sku: `CONC-${Date.now().toString(36)}`,
+        costPrice: 10000,
+        sellingPrice: 25000,
+        minStock: 0,
+        trackStock: true,
+        unitId: null,
+      });
+    expect(concurrencyProduct.status).toBe(201);
+    const concurrencyProductId = concurrencyProduct.body.data.id;
+
+    await request(testApp)
+      .post("/api/v1/inventory/adjustments")
+      .set(auth(tenant.token))
+      .send({
+        productId: concurrencyProductId,
+        warehouseId,
+        quantity: 1,
+        adjustmentType: "INCREASE",
+        reason: "Single unit",
+      })
+      .expect(201);
+
+    const basePayload = {
+      customerId: null,
+      items: [{ productId: concurrencyProductId, quantity: 1, discountAmount: 0 }],
+      discountAmount: 0,
+      payments: [{ provider: "CASH", methodType: "cash", amount: 25000, tenderedAmount: 25000 }],
+    };
+
+    // Fire two simultaneous sales
+    const [first, second] = await Promise.all([
+      request(testApp)
+        .post("/api/v1/pos/sale")
+        .set(auth(tenant.token))
+        .send({ ...basePayload, idempotencyKey: `conc-1-${Date.now()}` }),
+      request(testApp)
+        .post("/api/v1/pos/sale")
+        .set(auth(tenant.token))
+        .send({ ...basePayload, idempotencyKey: `conc-2-${Date.now()}` }),
+    ]);
+
+    const statuses = [first.status, second.status].sort();
+    // Exactly one succeeds (201). The other must be refused — today it can be 409
+    // (clean stock conflict) or 500 (Prisma serialization abort under concurrent
+    // Serializable transactions). Both prevent overselling; the 500 case is a bug
+    // tracked in Findings.
+    expect(statuses[0]).toBe(201);
+    expect([409, 500]).toContain(statuses[1]);
+
+    // Stock never goes negative
+    const inventory = await testPrisma.inventory.findFirst({
+      where: { productId: concurrencyProductId, warehouseId },
+    });
+    expect(inventory?.quantity).toBe(0);
+    expect(inventory?.quantity).toBeGreaterThanOrEqual(0);
+  });
+
+  it("ledger consistency: inventory decreases by exactly sold quantity", async () => {
+    const before = await testPrisma.inventory.findFirst({
+      where: { productId, warehouseId },
+    });
+    const beforeQty = before?.quantity ?? 0;
+
+    const sale = await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        items: [{ productId, quantity: 4, discountAmount: 0 }],
+        payments: [{ provider: "CASH", methodType: "cash", amount: 140000, tenderedAmount: 140000 }],
+        idempotencyKey: `char-ledger-${Date.now()}`,
+      }))
+      .expect(201);
+
+    const after = await testPrisma.inventory.findFirst({
+      where: { productId, warehouseId },
+    });
+    expect(after?.quantity).toBe(beforeQty - 4);
+
+    // Exactly one SALE movement for this sale
+    const movements = await testPrisma.stockMovement.findMany({
+      where: {
+        organizationId: tenant.organizationId,
+        type: "SALE",
+        productId,
+        reference: sale.body.data.invoice.invoiceNumber,
+      },
+    });
+    expect(movements).toHaveLength(1);
+    expect(movements[0].quantity).toBe(-4);
+    expect(movements[0].warehouseId).toBe(warehouseId);
+  });
+
+  it("rounding: discount allocated across multiple lines", async () => {
+    // Two products at 33333 each, order discount 10000
+    const p1 = await request(testApp)
+      .post("/api/v1/products")
+      .set(auth(tenant.token))
+      .send({
+        name: "Rounding Product A",
+        sku: `RND-A-${Date.now().toString(36)}`,
+        costPrice: 10000,
+        sellingPrice: 33333,
+        minStock: 0,
+        trackStock: true,
+        unitId: null,
+      });
+    expect(p1.status).toBe(201);
+
+    const p2 = await request(testApp)
+      .post("/api/v1/products")
+      .set(auth(tenant.token))
+      .send({
+        name: "Rounding Product B",
+        sku: `RND-B-${Date.now().toString(36)}`,
+        costPrice: 10000,
+        sellingPrice: 33333,
+        minStock: 0,
+        trackStock: true,
+        unitId: null,
+      });
+    expect(p2.status).toBe(201);
+
+    await request(testApp)
+      .post("/api/v1/inventory/adjustments")
+      .set(auth(tenant.token))
+      .send({ productId: p1.body.data.id, warehouseId, quantity: 10, adjustmentType: "INCREASE", reason: "stock" })
+      .expect(201);
+    await request(testApp)
+      .post("/api/v1/inventory/adjustments")
+      .set(auth(tenant.token))
+      .send({ productId: p2.body.data.id, warehouseId, quantity: 10, adjustmentType: "INCREASE", reason: "stock" })
+      .expect(201);
+
+    const sale = await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        items: [
+          { productId: p1.body.data.id, quantity: 1, discountAmount: 0 },
+          { productId: p2.body.data.id, quantity: 1, discountAmount: 0 },
+        ],
+        discountAmount: 10000,
+        payments: [{ provider: "CASH", methodType: "cash", amount: 56666, tenderedAmount: 56666 }],
+        idempotencyKey: `char-round-${Date.now()}`,
+      }))
+      .expect(201);
+
+    // Total = 33333 + 33333 - 10000 = 56666
+    expect(sale.body.data.invoice.total).toBe(56666);
+    expect(sale.body.data.invoice.paidAmount).toBe(56666);
+
+    // Line totals must sum to the invoice total
+    const items = await testPrisma.invoiceItem.findMany({
+      where: { invoiceId: sale.body.data.invoice.id },
+    });
+    const lineSum = items.reduce((sum, i) => sum + Number(i.lineTotal), 0);
+    expect(lineSum).toBe(56666);
+  });
+
   afterAll(async () => {
     await cleanupRun();
   });
 });
+
