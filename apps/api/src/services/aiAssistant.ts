@@ -17,6 +17,7 @@ const MAX_CONVERSATION_TURNS = 5;
 async function getConversationTurns(sessionId: string): Promise<ConversationTurn[]> {
   try {
     const redis = getRedis();
+    if (!redis) return [];
     const raw = await redis.get(`conv:${sessionId}`);
     if (!raw) return [];
     return JSON.parse(raw) as ConversationTurn[];
@@ -29,6 +30,7 @@ async function getConversationTurns(sessionId: string): Promise<ConversationTurn
 async function appendConversationTurn(sessionId: string, turn: ConversationTurn): Promise<void> {
   try {
     const redis = getRedis();
+    if (!redis) return;
     const key = `conv:${sessionId}`;
     const raw = await redis.get(key);
     const turns: ConversationTurn[] = raw ? (JSON.parse(raw) as ConversationTurn[]) : [];

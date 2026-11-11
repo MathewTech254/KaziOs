@@ -59,20 +59,17 @@ function deliver(event: RealtimeEvent): void {
  */
 export function startRealtimeSubscriber(): void {
   if (subscriberReady) return;
-  subscriberReady = true;
-
-  try {
-    const redis = getRedis();
-    // A connection in subscriber mode cannot issue ordinary commands, so the
-    // subscriber has to be a separate connection from the shared client.
-    subscriber = redis.duplicate();
-  } catch (err) {
-    console.warn(
-      "Realtime subscriber unavailable, running single process:",
-      (err as Error).message
-    );
+  const redis = getRedis();
+  if (!redis) {
+    console.log("Realtime subscriber unavailable, running single process: Redis not configured");
+    subscriberReady = true;
     return;
   }
+  subscriberReady = true;
+
+  // A connection in subscriber mode cannot issue ordinary commands, so the
+  // subscriber has to be a separate connection from the shared client.
+  subscriber = redis.duplicate();
 
   const connection = subscriber;
 
@@ -100,10 +97,12 @@ export function startRealtimeSubscriber(): void {
 export function publishRealtime<T>(event: Omit<RealtimeEvent<T>, "origin">): void {
   const enriched: RealtimeEvent<T> = { ...event, origin: INSTANCE_ID };
   deliver(enriched);
+  const redis = getRedis();
+  if (!redis) return;
   try {
-    getRedis()
-      .publish(CHANNEL, JSON.stringify(enriched))
-      .catch(err => console.warn("Realtime publish failed:", err.message));
+    redis.publish(CHANNEL, JSON.stringify(enriched)).catch(err =>
+      console.warn("Realtime publish failed:", err.message)
+    );
   } catch {
     // Redis being down must never surface as a failed business operation.
   }
