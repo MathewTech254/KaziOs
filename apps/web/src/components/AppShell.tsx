@@ -3,6 +3,7 @@ import {
   Building2,
   ChevronLeft,
   Command,
+  Clock,
   FileText,
   LayoutDashboard,
   Moon,
@@ -72,6 +73,9 @@ const NAV_GROUPS: NavGroup[] = (() => {
 
   const financeItems: { to: string; label: string; icon: React.ElementType }[] = [
     { to: "/dashboard/reports", label: "Reports", icon: BarChart3 },
+    ...(isFeatureEnabled("closing")
+      ? [{ to: "/closing", label: "Daily Closing", icon: Clock }]
+      : []),
     { to: "/expenses", label: "Expenses", icon: Wallet },
   ];
   groups.push({ label: "Finance", items: financeItems });

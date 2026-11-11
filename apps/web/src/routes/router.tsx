@@ -15,6 +15,7 @@ import { SettingsPage } from "../pages/SettingsPage";
 import { InventoryPage } from "../pages/InventoryPage";
 import { PurchasingPage } from "../pages/PurchasingPage";
 import { ExpensesPage } from "../pages/ExpensesPage";
+import { ClosingPage } from "../pages/ClosingPage";
 import { PricingPage } from "../pages/PricingPage";
 import { AssistantPage } from "../pages/AssistantPage";
 import { AuthGuard } from "../components/Guard";
@@ -133,6 +134,22 @@ export const router = createBrowserRouter([
       </AuthGuard>
     ),
     children: [{ index: true, element: <ExpensesPage /> }],
+  },
+  {
+    path: "/closing",
+    element: isFeatureEnabled("closing") ? (
+      <AuthGuard>
+        <Layout />
+      </AuthGuard>
+    ) : (
+      <Navigate to="/pos" replace />
+    ),
+    children: [
+      {
+        index: true,
+        element: isFeatureEnabled("closing") ? <ClosingPage /> : <Navigate to="/pos" replace />,
+      },
+    ],
   },
   {
     path: "/assistant",

@@ -302,6 +302,38 @@ posRouter.post(
       const organization = await prisma.organization.findUnique({ where: { id: organizationId } });
       if (!organization) throw new AppError(404, "Organization not found");
 
+      // A closed trading day blocks new sales for attendants. The owner can reopen
+      // via /day-closings/reopen. Compute "today" in the organization's own timezone.
+      const tz = organization.timezone || "UTC";
+      const todayParts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: tz,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour12: false,
+      }).formatToParts(new Date());
+      const get = (type: string) =>
+        Number(todayParts.find(p => p.type === type)?.value);
+      const today = `${get("year")}-${String(get("month")).padStart(2, "0")}-${String(
+        get("day")
+      ).padStart(2, "0")}`;
+
+      const dayClosing = await prisma.dayClosing.findUnique({
+        where: { organizationId_date: { organizationId, date: today } },
+      });
+      const isOwnerOrClosingManager =
+        req.roles?.some(
+          (r: any) =>
+            r.role.permissions.includes("*") ||
+            r.role.permissions.includes("closing.manage")
+        ) ?? false;
+      if (dayClosing && dayClosing.status === "CLOSED" && !isOwnerOrClosingManager) {
+        throw new AppError(
+          409,
+          `Today (${today}) is closed. Reopen the day before making another sale.`
+        );
+      }
+
       // POS settings: allowNegativeStock defaults to false. Read from the stored
       // setting, falling back to the schema default when none is stored for this org.
       const settingsRow = await prisma.setting.findUnique({

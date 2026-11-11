@@ -54,6 +54,7 @@ model Organization {
   projects       Project[]
   tasks          Task[]
   leads          Lead[]
+  dayClosings    DayClosing[]
   tickets        SupportTicket[]
   /// One business holds at most one subscription, so this is singular rather than a list.
   /// The uniqueness is enforced by the unique index on Subscription.organizationId.
@@ -100,6 +101,8 @@ model User {
   // not infer which of the two foreign keys a back reference refers to.
   recordedExpenses Expense[] @relation("ExpenseRecordedBy")
   approvedExpenses Expense[] @relation("ExpenseApprovedBy")
+  openedDayClosings DayClosing[] @relation("DayClosingOpenedBy")
+  closedDayClosings DayClosing[] @relation("DayClosingClosedBy")
   // Platform administration is recorded against the user rather than against a business
   // role, so owning a shop can never imply authority over the platform.
   subscriptionEvents SubscriptionEvent[]
@@ -626,6 +629,37 @@ model Expense {
 
   @@index([organizationId, expenseDate])
   @@index([organizationId, categoryId])
+}
+
+// A single trading day's opening and closing. One row per organization per calendar
+// date. OPEN means the day is trading; CLOSED means attendants cannot start new sales
+// for that date (the owner can reopen). Everything in the closing report is computed
+// from the database on demand; the stored counted_* and difference fields capture the
+// owner's physical count for the nightly reconciliation.
+model DayClosing {
+  id             String   @id @default(uuid())
+  date           String
+  status         String   @default("OPEN") // OPEN | CLOSED | REOPENED
+  openedById     String
+  openedBy       User     @relation("DayClosingOpenedBy", fields: [openedById], references: [id])
+  openedAt       DateTime @default(now())
+  closedById     String?
+  closedBy       User?    @relation("DayClosingClosedBy", fields: [closedById], references: [id])
+  closedAt       DateTime?
+  expectedCash   Float?
+  countedCash    Float?
+  expectedMpesa  Float?
+  countedMpesa   Float?
+  difference     Float?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  @@unique([organizationId, date])
+  @@index([organizationId, status])
 }
 
 model Project {

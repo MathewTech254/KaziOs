@@ -101,6 +101,7 @@ import { taxCategoryRouter } from "./routes/tax-categories";
 import { userRouter } from "./routes/users";
 import { roleRouter } from "./routes/roles";
 import { posRouter } from "./routes/pos";
+import { dayClosingRouter } from "./routes/day-closings";
 import { cardPaymentRouter, paystackWebhookRouter } from "./routes/card-payments";
 import { mpesaWebhookRouter } from "./routes/mpesa";
 import { planRouter } from "./routes/plans";
@@ -263,6 +264,7 @@ export function createApp() {
   app.use("/api/v1/invoices", invoiceRouter);
   app.use("/api/v1/payments", paymentRouter);
   app.use("/api/v1/reports", reportRouter);
+app.use("/api/v1/day-closings", dayClosingRouter);
   app.use("/api/v1/settings", settingsRouter);
   app.use("/api/v1/tax-categories", taxCategoryRouter);
   app.use("/api/v1/users", userRouter);

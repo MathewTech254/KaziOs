@@ -233,6 +233,27 @@ export const zExpenseVoidSchema = z.object({
   reason: z.string().trim().min(3, "A reason is required to void an expense").max(300),
 });
 
+export const zDayClosingOpenSchema = z.object({
+  // Calendar date in the organization's own timezone, YYYY-MM-DD.
+  date: z.string().trim().min(10, "Date is required").max(10, "Date must be YYYY-MM-DD"),
+});
+
+export const zDayClosingCloseSchema = z.object({
+  date: z.string().trim().min(10, "Date is required").max(10, "Date must be YYYY-MM-DD"),
+  // The owner's physical counts, entered manually at closing.
+  countedCash: z.number().nonnegative("Counted cash cannot be negative"),
+  countedMpesa: z.number().nonnegative("Counted M-PESA cannot be negative"),
+  notes: zString(0, 500).optional().nullable(),
+});
+
+export const zDayClosingQuerySchema = z.object({
+  startDate: zString(1, 10).optional(),
+  endDate: zString(1, 10).optional(),
+  status: z.enum(["OPEN", "CLOSED", "REOPENED"]).optional(),
+  page: z.coerce.number().int().positive().optional().default(1),
+  limit: z.coerce.number().int().positive().max(200).optional().default(50),
+});
+
 export const zSupplierQuerySchema = z.object({
   search: zString(0, 100).optional(),
   page: z.coerce.number().int().positive().optional().default(1),
@@ -685,6 +706,12 @@ export const PERMISSION_GROUPS = [
   {
     label: "Reports",
     permissions: [{ key: "reports.view", label: "View reports" }],
+  },
+  {
+    label: "Closing",
+    permissions: [
+      { key: "closing.manage", label: "Open and close the trading day" },
+    ],
   },
   {
     // Split into view and manage deliberately. A bookkeeper needs to see what the
