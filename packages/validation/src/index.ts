@@ -147,6 +147,7 @@ export const zCustomerSchema = z.object({
   address: zString(1, 200).optional().nullable(),
   taxNumber: zString(1, 50).optional().nullable(),
   customerType: z.enum(["INDIVIDUAL", "BUSINESS"]).default("INDIVIDUAL"),
+  creditLimit: z.number().nonnegative("Credit limit cannot be negative").optional().nullable(),
 });
 
 export const zSupplierSchema = z.object({

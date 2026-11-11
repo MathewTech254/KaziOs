@@ -49,10 +49,56 @@ customerRouter.get(
       }
 
       const [data, total] = await Promise.all([
-        prisma.customer.findMany({ where, skip, take, orderBy: { createdAt: "desc" } }),
+        prisma.customer.findMany({
+          where,
+          skip,
+          take,
+          orderBy: { createdAt: "desc" },
+          include: {
+            _count: {
+              select: {
+                invoices: {
+                  where: { status: { not: "VOID" } },
+                },
+              },
+            },
+            invoices: {
+              where: { status: { not: "VOID" } },
+              select: { total: true, paidAmount: true, createdAt: true },
+              orderBy: { createdAt: "desc" },
+              take: 1,
+            },
+          },
+        }),
         prisma.customer.count({ where }),
       ]);
-      res.json({ data, total, page: p, limit: l, totalPages: Math.ceil(total / l) });
+
+      // Balance owed = unpaid invoice totals − standalone customer repayments.
+      // Last purchase date = most recent non-void invoice date.
+      const customersWithBalance = data.map(customer => {
+        const invoices = customer.invoices as { total: number; paidAmount: number; createdAt: Date }[];
+        const owed = invoices.reduce(
+          (sum, inv) => sum + Number(inv.total) - Number(inv.paidAmount),
+          0
+        );
+        const balanceOwed = Math.max(0, owed);
+        const lastPurchase = invoices.length ? invoices[0].createdAt : null;
+        const { invoices: _, _count: __, ...rest } = customer;
+        return {
+          ...rest,
+          balanceOwed,
+          lastPurchaseDate: lastPurchase,
+          creditLimit: rest.creditLimit,
+        };
+      });
+
+      res.json({
+        data: customersWithBalance,
+        total,
+        page: p,
+        limit: l,
+        totalPages: Math.ceil(total / l),
+      });
     } catch (err) {
       next(err);
     }
@@ -147,12 +193,35 @@ customerRouter.get(
       const customer = await prisma.customer.findFirst({
         where: { id: req.params.id, organizationId: (req as AuthRequest).organizationId },
         include: {
-          invoices: { take: 10, orderBy: { createdAt: "desc" } },
-          payments: { take: 10, orderBy: { createdAt: "desc" } },
+          invoices: {
+            where: { status: { not: "VOID" } },
+            select: { total: true, paidAmount: true, createdAt: true },
+            orderBy: { createdAt: "desc" },
+          },
+          payments: {
+            where: { provider: "CREDIT", invoiceId: null, status: "SUCCESS" },
+            select: { amount: true },
+          },
         },
       });
       if (!customer) throw new AppError(404, "Customer not found");
-      res.json({ data: customer });
+      const owed = customer.invoices.reduce(
+        (sum, inv) => sum + Number(inv.total) - Number(inv.paidAmount),
+        0
+      );
+      const repaid = customer.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+      const { invoices: _, payments: __, ...rest } = customer;
+      res.json({
+        data: {
+          ...rest,
+          balanceOwed: Math.max(0, owed - repaid),
+          lastPurchaseDate:
+            customer.invoices.length > 0
+              ? (customer.invoices[0] as { createdAt: Date }).createdAt
+              : null,
+          creditLimit: rest.creditLimit,
+        },
+      });
     } catch (err) {
       next(err);
     }
