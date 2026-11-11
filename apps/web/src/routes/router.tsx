@@ -1,6 +1,5 @@
 import { createBrowserRouter, Link, useRouteError } from "react-router-dom";
 import { Layout } from "../components/Layout";
-import { LoginPage } from "../pages/LoginPage";
 import { RegisterPage } from "../pages/RegisterPage";
 import { ForgotPasswordPage } from "../pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "../pages/ResetPasswordPage";
@@ -19,6 +18,8 @@ import { ExpensesPage } from "../pages/ExpensesPage";
 import { PricingPage } from "../pages/PricingPage";
 import { AssistantPage } from "../pages/AssistantPage";
 import { AuthGuard } from "../components/Guard";
+import { isFeatureEnabled } from "../lib/features";
+import { Navigate } from "react-router-dom";
 
 /**
  * Shown for a URL that matches nothing.
@@ -59,8 +60,8 @@ export const router = createBrowserRouter([
     element: <LandingPage />,
   },
   {
-    path: "/login",
-    element: <LoginPage />,
+    path: "/pricing",
+    element: isFeatureEnabled("billing") ? <PricingPage /> : <Navigate to="/pos" replace />,
   },
   {
     // Public on purpose: somebody deciding whether to sign up has to be able to read the
@@ -110,12 +111,19 @@ export const router = createBrowserRouter([
   },
   {
     path: "/purchases",
-    element: (
+    element: isFeatureEnabled("purchasing") ? (
       <AuthGuard>
         <Layout />
       </AuthGuard>
+    ) : (
+      <Navigate to="/pos" replace />
     ),
-    children: [{ index: true, element: <PurchasingPage /> }],
+    children: [
+      {
+        index: true,
+        element: isFeatureEnabled("purchasing") ? <PurchasingPage /> : <Navigate to="/pos" replace />,
+      },
+    ],
   },
   {
     path: "/expenses",
@@ -128,12 +136,19 @@ export const router = createBrowserRouter([
   },
   {
     path: "/assistant",
-    element: (
+    element: isFeatureEnabled("ai") ? (
       <AuthGuard>
         <Layout />
       </AuthGuard>
+    ) : (
+      <Navigate to="/pos" replace />
     ),
-    children: [{ index: true, element: <AssistantPage /> }],
+    children: [
+      {
+        index: true,
+        element: isFeatureEnabled("ai") ? <AssistantPage /> : <Navigate to="/pos" replace />,
+      },
+    ],
   },
   {
     path: "/dashboard",
@@ -146,9 +161,9 @@ export const router = createBrowserRouter([
       { index: true, element: <DashboardPage /> },
       { path: "products", element: <ProductsPage /> },
       { path: "customers", element: <CustomersPage /> },
-      { path: "invoices", element: <InvoicesPage /> },
+      { path: "invoices", element: isFeatureEnabled("invoices") ? <InvoicesPage /> : <Navigate to="/pos" replace /> },
       { path: "reports", element: <ReportsPage /> },
-      { path: "payments", element: <PaymentsPage /> },
+      { path: "payments", element: isFeatureEnabled("payments") ? <PaymentsPage /> : <Navigate to="/pos" replace /> },
     ],
   },
   {

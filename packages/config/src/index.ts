@@ -86,6 +86,71 @@ export interface EnvironmentConfig {
   enableRegistration: boolean;
   enableDemoSeed: boolean;
   logLevel: string;
+  features: Features;
+}
+
+/**
+ * One switch per product surface. The v1 pilot keeps only the liquor-store POS
+ * stock-and-sales path visible; everything else stays in the code but behind a flag.
+ *
+ * Read from `FEATURE_<KEY>` env vars ("true"/"1" on, anything else off). A missing
+ * var falls back to the v1 default below, so a fresh deploy is pilot-ready without
+ * touching environment.
+ */
+export interface Features {
+  dashboard: boolean;
+  pos: boolean;
+  products: boolean;
+  inventory: boolean;
+  customers: boolean;
+  credit: boolean;
+  closing: boolean;
+  reports: boolean;
+  expenses: boolean;
+  settings: boolean;
+  users: boolean;
+  invoices: boolean;
+  payments: boolean;
+  purchasing: boolean;
+  billing: boolean;
+  ai: boolean;
+  notifications: boolean;
+  platformAdmin: boolean;
+  branches: boolean;
+  accounting: boolean;
+  transfers: boolean;
+  stocktake: boolean;
+}
+
+const FEATURE_DEFAULTS: Features = {
+  dashboard: true,
+  pos: true,
+  products: true,
+  inventory: true,
+  customers: true,
+  credit: true,
+  closing: false,
+  reports: true,
+  expenses: true,
+  settings: true,
+  users: true,
+  invoices: false,
+  payments: false,
+  purchasing: false,
+  billing: false,
+  ai: false,
+  notifications: false,
+  platformAdmin: false,
+  branches: false,
+  accounting: false,
+  transfers: false,
+  stocktake: false,
+};
+
+function featureFlag(key: keyof Features): boolean {
+  const raw = getEnvOptional(`FEATURE_${key.toUpperCase()}`);
+  if (raw === undefined) return FEATURE_DEFAULTS[key];
+  return raw === "1" || raw === "true";
 }
 
 function getEnv(name: string, fallback?: string): string {
@@ -201,6 +266,30 @@ export function loadConfig(): EnvironmentConfig {
     enableRegistration: getEnvBoolean("ENABLE_REGISTRATION", true),
     enableDemoSeed: getEnvBoolean("ENABLE_DEMO_SEED", true),
     logLevel: getEnv("LOG_LEVEL", "debug"),
+    features: {
+      dashboard: featureFlag("dashboard"),
+      pos: featureFlag("pos"),
+      products: featureFlag("products"),
+      inventory: featureFlag("inventory"),
+      customers: featureFlag("customers"),
+      credit: featureFlag("credit"),
+      closing: featureFlag("closing"),
+      reports: featureFlag("reports"),
+      expenses: featureFlag("expenses"),
+      settings: featureFlag("settings"),
+      users: featureFlag("users"),
+      invoices: featureFlag("invoices"),
+      payments: featureFlag("payments"),
+      purchasing: featureFlag("purchasing"),
+      billing: featureFlag("billing"),
+      ai: featureFlag("ai"),
+      notifications: featureFlag("notifications"),
+      platformAdmin: featureFlag("platformAdmin"),
+      branches: featureFlag("branches"),
+      accounting: featureFlag("accounting"),
+      transfers: featureFlag("transfers"),
+      stocktake: featureFlag("stocktake"),
+    },
   };
 }
 
@@ -215,3 +304,7 @@ export const isTimsConfigured = (config: EnvironmentConfig) =>
 
 export const isAiConfigured = (config: EnvironmentConfig) =>
   Boolean(config.ai.provider && config.ai.apiKey);
+
+export function isFeatureEnabled(config: EnvironmentConfig, key: keyof Features): boolean {
+  return config.features[key];
+}

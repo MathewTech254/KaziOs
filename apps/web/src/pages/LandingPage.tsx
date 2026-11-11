@@ -87,7 +87,7 @@ export function LandingPage() {
                 KaziOS
               </div>
               <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[.24em] text-[var(--kazi-muted-text)]">
-                Business operating system
+                Stock and sales control for liquor stores. Sell fast, take M-PESA, know your stock every night.
               </div>
             </div>
           </Link>

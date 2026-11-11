@@ -25,52 +25,72 @@ import { useTheme } from "../hooks/useTheme";
 import { BrandLogo } from "./BrandLogo";
 import { CommandPalette } from "./CommandPalette";
 import { NotificationBell } from "./NotificationBell";
+import { isFeatureEnabled } from "../lib/features";
 
 interface NavGroup {
   label: string;
   items: { to: string; label: string; icon: React.ElementType }[];
 }
 
-const NAV_GROUPS: NavGroup[] = [
-  {
-    label: "Overview",
-    items: [
-      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      // Shown to everyone; the page itself explains the plan requirement and links to
-      // pricing, the same way the Pricing page does. Hiding it here would only hide it
-      // from people who might upgrade if they knew it existed.
-      { to: "/assistant", label: "Ask your business", icon: Sparkles },
-    ],
-  },
-  {
-    label: "Sell",
-    items: [
-      { to: "/pos", label: "POS", icon: ShoppingBag },
-      { to: "/dashboard/invoices", label: "Invoices", icon: FileText },
-      { to: "/dashboard/payments", label: "Payments", icon: Receipt },
-      { to: "/dashboard/customers", label: "Customers", icon: Users },
-    ],
-  },
-  {
-    label: "Operate",
-    items: [
-      { to: "/dashboard/products", label: "Products", icon: Package },
-      { to: "/inventory", label: "Inventory", icon: Warehouse },
-      { to: "/purchases", label: "Purchasing", icon: Building2 },
-    ],
-  },
-  {
-    label: "Finance",
-    items: [
-      { to: "/dashboard/reports", label: "Reports", icon: BarChart3 },
-      { to: "/expenses", label: "Expenses", icon: Wallet },
-    ],
-  },
-  {
-    label: "Organization",
-    items: [{ to: "/settings", label: "Settings", icon: Settings }],
-  },
-];
+const NAV_GROUPS: NavGroup[] = (() => {
+  const groups: NavGroup[] = [];
+
+  if (isFeatureEnabled("dashboard")) {
+    groups.push({
+      label: "Overview",
+      items: [
+        { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+        // Ask your business is the AI assistant; hidden behind the `ai` flag but the
+        // route and page stay in place so nothing is deleted.
+        ...(isFeatureEnabled("ai")
+          ? [{ to: "/assistant", label: "Ask your business", icon: Sparkles }]
+          : []),
+      ],
+    });
+  }
+
+  if (isFeatureEnabled("pos")) {
+    groups.push({
+      label: "Sell",
+      items: [
+        { to: "/pos", label: "POS", icon: ShoppingBag },
+        { to: "/dashboard/invoices", label: "Invoices", icon: FileText },
+        { to: "/dashboard/payments", label: "Payments", icon: Receipt },
+        { to: "/dashboard/customers", label: "Customers", icon: Users },
+      ],
+    });
+  }
+
+  const operateItems: { to: string; label: string; icon: React.ElementType }[] = [
+    { to: "/dashboard/products", label: "Products", icon: Package },
+    { to: "/inventory", label: "Inventory", icon: Warehouse },
+  ];
+  if (isFeatureEnabled("purchasing")) {
+    operateItems.push({ to: "/purchases", label: "Purchasing", icon: Building2 });
+  }
+  groups.push({ label: "Operate", items: operateItems });
+
+  const financeItems: { to: string; label: string; icon: React.ElementType }[] = [
+    { to: "/dashboard/reports", label: "Reports", icon: BarChart3 },
+    { to: "/expenses", label: "Expenses", icon: Wallet },
+  ];
+  groups.push({ label: "Finance", items: financeItems });
+
+  if (isFeatureEnabled("settings")) {
+    groups.push({
+      label: "Organization",
+      items: [
+        { to: "/settings", label: "Settings", icon: Settings },
+        // User and role management lives inside Settings (Roles & permissions tab).
+        ...(isFeatureEnabled("users")
+          ? [{ to: "/settings?tab=roles", label: "Users", icon: Users }]
+          : []),
+      ],
+    });
+  }
+
+  return groups;
+})();
 
 interface AppShellProps {
   collapsed: boolean;
