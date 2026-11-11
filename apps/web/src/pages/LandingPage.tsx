@@ -97,12 +97,6 @@ export function LandingPage() {
               Built for the way African businesses operate
             </span>
             <Link
-              to="/pricing"
-              className="rounded-md px-2 py-2 font-medium text-[var(--kazi-text)] transition-colors hover:text-[var(--kazi-accent-hover)]"
-            >
-              Pricing
-            </Link>
-            <Link
               to="/login"
               className="rounded-md px-2 py-2 font-medium text-[var(--kazi-text)] transition-colors hover:text-[var(--kazi-accent-hover)]"
             >
@@ -292,7 +286,7 @@ export function LandingPage() {
       <footer className="border-t border-white/10 bg-[var(--kazi-ink)]">
         <div className="mx-auto flex max-w-[1328px] flex-col gap-3 px-5 py-6 text-xs text-[var(--kazi-muted-text)] sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-14">
           <span>© {new Date().getFullYear()} KaziOS · Built for African businesses.</span>
-          <span>Sales · inventory · customers · invoices · reports</span>
+          <span>Sales · inventory · customers · reports</span>
         </div>
       </footer>
     </div>

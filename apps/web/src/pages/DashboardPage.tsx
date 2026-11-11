@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowRight,
@@ -14,6 +14,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { api, getApiError } from "../lib/api";
 import { formatMoney } from "../lib/currency";
+import { isFeatureEnabled } from "../lib/features";
 import { Notice, EmptyRow } from "../components/Feedback";
 
 /**
@@ -161,48 +162,49 @@ export function DashboardPage() {
       ) : null}
 
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="kazi-section-title">Recent Sales</h2>
-            <Link
-              to="/dashboard/invoices"
-              className="flex items-center gap-1 text-sm text-accent hover:underline"
-            >
-              All invoices <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
-          <div className="kazi-card overflow-hidden">
-            <table className="kazi-table">
-              <thead>
-                <tr>
-                  <th>Invoice</th>
-                  <th>Customer</th>
-                  <th>Status</th>
-                  <th className="text-right">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stats?.recentInvoices.map(invoice => (
-                  <tr key={invoice.id}>
-                    <td className="font-mono text-xs">{invoice.invoiceNumber}</td>
-                    {/* A walk-in sale has no customer row, so it is labelled as such
-                        rather than left blank. */}
-                    <td>{invoice.customer?.name || "Walk-in"}</td>
-                    <td className="text-xs text-muted-foreground">{invoice.status}</td>
-                    <td className="text-right font-medium">{money(invoice.total)}</td>
+        {isFeatureEnabled("invoices") && (
+          <div>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="kazi-section-title">Recent Sales</h2>
+              <Link
+                to="/dashboard/invoices"
+                className="flex items-center gap-1 text-sm text-accent hover:underline"
+              >
+                All invoices <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+            <div className="kazi-card overflow-hidden">
+              <table className="kazi-table">
+                <thead>
+                  <tr>
+                    <th>Invoice</th>
+                    <th>Customer</th>
+                    <th>Status</th>
+                    <th className="text-right">Amount</th>
                   </tr>
-                ))}
-                {!stats?.recentInvoices.length && (
-                  <EmptyRow
-                    message={loading ? "Loading sales..." : "No sales recorded yet."}
-                    colSpan={4}
-                  />
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {stats?.recentInvoices.map(invoice => (
+                    <tr key={invoice.id}>
+                      <td className="font-mono text-xs">{invoice.invoiceNumber}</td>
+                      {/* A walk-in sale has no customer row, so it is labelled as such
+                          rather than left blank. */}
+                      <td>{invoice.customer?.name || "Walk-in"}</td>
+                      <td className="text-xs text-muted-foreground">{invoice.status}</td>
+                      <td className="text-right font-medium">{money(invoice.total)}</td>
+                    </tr>
+                  ))}
+                  {!stats?.recentInvoices.length && (
+                    <EmptyRow
+                      message={loading ? "Loading sales..." : "No sales recorded yet."}
+                      colSpan={4}
+                    />
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-
+        )}
         <div>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="kazi-section-title">Top Products This Month</h2>
@@ -250,14 +252,16 @@ export function DashboardPage() {
       <div className="mt-8">
         <h2 className="kazi-section-title mb-4">Quick Actions</h2>
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Link
-            to="/dashboard/invoices"
-            className="kazi-action-card flex flex-col items-start p-4 text-left"
-          >
-            <FileText className="mb-3 h-5 w-5 text-accent" />
-            <span className="text-sm font-medium text-foreground">New Invoice</span>
-            <span className="text-xs text-muted-foreground">Create a sales invoice</span>
-          </Link>
+          {isFeatureEnabled("invoices") && (
+            <Link
+              to="/dashboard/invoices"
+              className="kazi-action-card flex flex-col items-start p-4 text-left"
+            >
+              <FileText className="mb-3 h-5 w-5 text-accent" />
+              <span className="text-sm font-medium text-foreground">New Invoice</span>
+              <span className="text-xs text-muted-foreground">Create a sales invoice</span>
+            </Link>
+          )}
           <Link
             to="/dashboard/products"
             className="kazi-action-card flex flex-col items-start p-4 text-left"

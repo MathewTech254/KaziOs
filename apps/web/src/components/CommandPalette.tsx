@@ -1,7 +1,8 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FileText, Package, Receipt, Search, Truck, User, Users, X } from "lucide-react";
 import { api, getApiError } from "../lib/api";
+import { isFeatureEnabled } from "../lib/features";
 
 interface Hit {
   id: string;
@@ -32,14 +33,20 @@ interface SearchResults {
 // They used to point at /products and /invoices, which do not exist: the pages live
 // under /dashboard. Choosing a result navigated to nothing and the router, having no
 // catch all, rendered a blank white page.
-const PAGES = [
+const PAGES: { label: string; to: string }[] = [
   { label: "Go to Dashboard", to: "/dashboard" },
   { label: "Go to Products", to: "/dashboard/products" },
   { label: "Go to Customers", to: "/dashboard/customers" },
-  { label: "Go to Invoices", to: "/dashboard/invoices" },
-  { label: "Go to Payments", to: "/dashboard/payments" },
+  ...(isFeatureEnabled("invoices")
+    ? [{ label: "Go to Invoices", to: "/dashboard/invoices" }]
+    : []),
+  ...(isFeatureEnabled("payments")
+    ? [{ label: "Go to Payments", to: "/dashboard/payments" }]
+    : []),
   { label: "Go to Reports", to: "/dashboard/reports" },
-  { label: "Go to Suppliers and purchase orders", to: "/purchases" },
+  ...(isFeatureEnabled("purchasing")
+    ? [{ label: "Go to Suppliers and purchase orders", to: "/purchases" }]
+    : []),
   { label: "Go to Inventory", to: "/inventory" },
   { label: "Go to Point of sale", to: "/pos" },
   { label: "Go to Settings", to: "/settings" },
@@ -56,14 +63,15 @@ function toHits(results: SearchResults): Hit[] {
       to: "/dashboard/products",
     })
   );
-  (results.suppliers ?? []).forEach(row =>
+  (results.suppliers ?? []).forEach(row => {
+    if (!isFeatureEnabled("purchasing")) return;
     hits.push({
       id: `supplier-${row.id}`,
       label: row.name,
       detail: row.email ? `Supplier Â· ${row.email}` : "Supplier",
       to: "/purchases",
-    })
-  );
+    });
+  });
   (results.customers ?? []).forEach(row =>
     hits.push({
       id: `customer-${row.id}`,
@@ -72,22 +80,24 @@ function toHits(results: SearchResults): Hit[] {
       to: "/dashboard/customers",
     })
   );
-  (results.purchaseOrders ?? []).forEach(row =>
+  (results.purchaseOrders ?? []).forEach(row => {
+    if (!isFeatureEnabled("purchasing")) return;
     hits.push({
       id: `po-${row.id}`,
       label: row.poNumber,
       detail: `Purchase order Â· ${row.supplier.name} Â· ${row.status.toLowerCase()}`,
       to: "/purchases",
-    })
-  );
-  (results.invoices ?? []).forEach(row =>
+    });
+  });
+  (results.invoices ?? []).forEach(row => {
+    if (!isFeatureEnabled("invoices")) return;
     hits.push({
       id: `invoice-${row.id}`,
       label: row.invoiceNumber,
       detail: `Invoice Â· ${row.customer.name} Â· ${row.status.toLowerCase()}`,
       to: "/dashboard/invoices",
-    })
-  );
+    });
+  });
   return hits;
 }
 
