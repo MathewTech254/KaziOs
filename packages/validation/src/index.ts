@@ -329,11 +329,13 @@ export const zPosSaleItemSchema = z.object({
 });
 
 export const zPosPaymentSchema = z.object({
-  provider: z.enum(["PAYSTACK", "MPESA", "BANK", "MANUAL", "CASH", "CHECK"]),
-  methodType: z.enum(["card", "bank_transfer", "mobile_money", "cash", "check", "manual"]),
+  provider: z.enum(["PAYSTACK", "MPESA", "MPESA_MANUAL", "BANK", "MANUAL", "CASH", "CHECK", "CREDIT"]),
+  methodType: z.enum(["card", "bank_transfer", "mobile_money", "cash", "check", "manual", "credit"]),
   amount: z.number().positive("Amount must be positive"),
   tenderedAmount: z.number().nonnegative("Tendered amount cannot be negative").optional(),
   reference: zString(1, 100).optional(),
+  // MPESA_MANUAL requires the M-PESA transaction code sent by the customer.
+  transactionCode: zString(1, 100).optional(),
 });
 
 export const zPosSaleSchema = z.object({

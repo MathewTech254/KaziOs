@@ -542,6 +542,189 @@ describe("/pos/sale characterization", () => {
     expect(lineSum).toBe(56666);
   });
 
+  it("MPESA_MANUAL: requires transaction code, rejects without it", async () => {
+    await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        items: [{ productId, quantity: 1, discountAmount: 0 }],
+        payments: [{ provider: "MPESA_MANUAL", methodType: "manual", amount: 35000, tenderedAmount: 35000 }],
+        idempotencyKey: `char-mpesa-no-code-${Date.now()}`,
+      }))
+      .expect(400);
+  });
+
+  it("MPESA_MANUAL: accepts sale with valid transaction code", async () => {
+    const sale = await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        items: [{ productId, quantity: 1, discountAmount: 0 }],
+        payments: [{ provider: "MPESA_MANUAL", methodType: "manual", amount: 35000, tenderedAmount: 35000, transactionCode: "MPESA123456" }],
+        idempotencyKey: `char-mpesa-ok-${Date.now()}`,
+      }))
+      .expect(201);
+
+    expect(sale.body.data.invoice.total).toBe(35000);
+    expect(sale.body.data.invoice.paidAmount).toBe(35000);
+
+    // providerRef stores the transaction code
+    const payment = await testPrisma.payment.findFirst({
+      where: { invoiceId: sale.body.data.invoice.id },
+    });
+    expect(payment?.providerRef).toBe("MPESA123456");
+  });
+
+  it("MPESA_MANUAL: rejects duplicate transaction code within organization", async () => {
+    // First sale with the code
+    await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        items: [{ productId, quantity: 1, discountAmount: 0 }],
+        payments: [{ provider: "MPESA_MANUAL", methodType: "manual", amount: 35000, tenderedAmount: 35000, transactionCode: "DUP-CODE-001" }],
+        idempotencyKey: `char-mpesa-dup-1-${Date.now()}`,
+      }))
+      .expect(201);
+
+    // Second sale with the same code should be rejected
+    await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        items: [{ productId, quantity: 1, discountAmount: 0 }],
+        payments: [{ provider: "MPESA_MANUAL", methodType: "manual", amount: 35000, tenderedAmount: 35000, transactionCode: "DUP-CODE-001" }],
+        idempotencyKey: `char-mpesa-dup-2-${Date.now()}`,
+      }))
+      .expect(409);
+  });
+
+  it("CREDIT: requires a customer", async () => {
+    await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        customerId: null,
+        items: [{ productId, quantity: 1, discountAmount: 0 }],
+        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
+        idempotencyKey: `char-credit-no-customer-${Date.now()}`,
+      }))
+      .expect(400);
+  });
+
+  it("CREDIT: sale with customer, invoice stays unpaid for credit portion", async () => {
+    // Create a customer
+    const customer = await request(testApp)
+      .post("/api/v1/customers")
+      .set(auth(tenant.token))
+      .send({
+        name: "Credit Customer",
+        phone: "+254700000001",
+        customerType: "INDIVIDUAL",
+      })
+      .expect(201);
+    const customerId = customer.body.data.id;
+
+    const sale = await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        customerId,
+        items: [{ productId, quantity: 1, discountAmount: 0 }],
+        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
+        idempotencyKey: `char-credit-sale-${Date.now()}`,
+      }))
+      .expect(201);
+
+    expect(sale.body.data.invoice.total).toBe(35000);
+    // Credit portion is unpaid: paidAmount is 0 (no settled payments)
+    expect(sale.body.data.invoice.paidAmount).toBe(0);
+    expect(sale.body.data.invoice.status).toBe("SENT");
+
+    // Customer owes the full amount
+    const invoice = await testPrisma.invoice.findUnique({
+      where: { id: sale.body.data.invoice.id },
+    });
+    expect(invoice?.customerId).toBe(customerId);
+    expect(Number(invoice?.total ?? 0) - Number(invoice?.paidAmount ?? 0)).toBe(35000);
+  });
+
+  it("CREDIT: enforces credit limit", async () => {
+    // Create a customer with a low credit limit
+    const customer = await request(testApp)
+      .post("/api/v1/customers")
+      .set(auth(tenant.token))
+      .send({
+        name: "Limited Customer",
+        phone: "+254700000002",
+        customerType: "INDIVIDUAL",
+      })
+      .expect(201);
+    const customerId = customer.body.data.id;
+
+    await testPrisma.customer.update({
+      where: { id: customerId },
+      data: { creditLimit: 10000 }, // KES 100 limit
+    });
+
+    // Sale of 35000 exceeds the 10000 limit
+    await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        customerId,
+        items: [{ productId, quantity: 1, discountAmount: 0 }],
+        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
+        idempotencyKey: `char-credit-limit-${Date.now()}`,
+      }))
+      .expect(409);
+
+    // No invoice was written
+    const count = await testPrisma.invoice.count({
+      where: { organizationId: tenant.organizationId, customerId },
+    });
+    expect(count).toBe(0);
+  });
+
+  it("allowNegativeStock: default false blocks selling more than available", async () => {
+    // Product has 50 units, already sold some. Try to sell 999.
+    await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        items: [{ productId, quantity: 999, discountAmount: 0 }],
+        payments: [{ provider: "CASH", methodType: "cash", amount: 34965000, tenderedAmount: 34965000 }],
+        idempotencyKey: `char-neg-stock-${Date.now()}`,
+      }))
+      .expect(409);
+  });
+
+  it("allowNegativeStock: when enabled, allows selling more than available", async () => {
+    // Enable allowNegativeStock for this organization
+    await testPrisma.setting.upsert({
+      where: { organizationId_key: { organizationId: tenant.organizationId, key: "pos" } },
+      update: { value: { allowNegativeStock: true } },
+      create: { organizationId: tenant.organizationId, key: "pos", value: { allowNegativeStock: true } },
+    });
+
+    // Sell 999 units - should succeed since negative stock is allowed
+    await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set(auth(tenant.token))
+      .send(payloadOverrides({
+        items: [{ productId, quantity: 999, discountAmount: 0 }],
+        payments: [{ provider: "CASH", methodType: "cash", amount: 34965000, tenderedAmount: 34965000 }],
+        idempotencyKey: `char-neg-stock-ok-${Date.now()}`,
+      }))
+      .expect(201);
+
+    // Stock goes negative
+    const inventory = await testPrisma.inventory.findFirst({
+      where: { productId, warehouseId },
+    });
+    expect(inventory?.quantity).toBeLessThan(0);
+  });
+
   afterAll(async () => {
     await cleanupRun();
   });

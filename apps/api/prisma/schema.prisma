@@ -284,6 +284,7 @@ model Customer {
   address      String?
   taxNumber    String?
   customerType String   @default("INDIVIDUAL")
+  creditLimit  Float?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

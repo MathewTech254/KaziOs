@@ -19,13 +19,17 @@ import { confirmMpesaPosPayment, startMpesaPosPayment } from "../services/mpesaP
 
 export const posRouter = Router();
 
-const immediatePaymentMethods = new Set(["CASH", "BANK", "MANUAL", "CHECK"]);
+const immediatePaymentMethods = new Set(["CASH", "BANK", "MANUAL", "CHECK", "MPESA_MANUAL", "CREDIT"]);
 
 /**
  * Two rails record the sale before their money is: a card sale waits for Paystack and an
  * M-PESA sale for Safaricom, so the invoice is written up front unpaid (bar any tender
  * already in hand) and it turns paid only when the provider confirms. Stock still leaves
  * the shelf because the goods do leave the counter the moment the sale is rung up.
+ *
+ * MPESA_MANUAL is a manual code entry: the cashier keys in the M-PESA transaction code
+ * the customer shows them. It is treated as immediate (money is considered in hand once
+ * the code is accepted and deduplicated), but the code itself is the proof of payment.
  */
 const deferredPaymentMethods = new Set(["PAYSTACK", "MPESA"]);
 
@@ -297,6 +301,123 @@ posRouter.post(
       const organization = await prisma.organization.findUnique({ where: { id: organizationId } });
       if (!organization) throw new AppError(404, "Organization not found");
 
+      // POS settings: allowNegativeStock defaults to false. Read from the stored
+      // setting, falling back to the schema default when none is stored for this org.
+      const settingsRow = await prisma.setting.findUnique({
+        where: { organizationId_key: { organizationId, key: "pos" } },
+      });
+      const posSettings: { allowNegativeStock?: boolean } = settingsRow
+        ? (settingsRow.value as Record<string, unknown> | null) ?? {}
+        : {};
+      const allowNegativeStock = posSettings.allowNegativeStock ?? false;
+
+      // --- Payment method validation before the transaction -----------------------
+      const mpesaManualCodes = new Set<string>();
+      let hasCredit = false;
+      let creditCustomerId: string | null = null;
+
+      for (const payment of input.payments) {
+        if (deferredPaymentMethods.has(payment.provider)) {
+          if (payment.methodType !== deferredMethodType[payment.provider])
+            throw new AppError(400, `${payment.provider} payment method is invalid`);
+          continue;
+        }
+        if (!immediatePaymentMethods.has(payment.provider)) {
+          throw new AppError(
+            400,
+            `${payment.provider} payments require server-side verification and are not available at this terminal`
+          );
+        }
+        if (payment.provider === "CASH" && payment.methodType !== "cash")
+          throw new AppError(400, "Cash payment method is invalid");
+
+        if (payment.provider === "MPESA_MANUAL") {
+          if (payment.methodType !== "manual")
+            throw new AppError(400, "MPESA_MANUAL payment method is invalid");
+          if (!payment.transactionCode || payment.transactionCode.trim() === "")
+            throw new AppError(400, "MPESA_MANUAL requires a transaction code");
+          const code = payment.transactionCode.trim();
+          if (mpesaManualCodes.has(code))
+            throw new AppError(400, "Duplicate M-PESA transaction code in this sale");
+          mpesaManualCodes.add(code);
+        }
+
+        if (payment.provider === "CREDIT") {
+          if (payment.methodType !== "credit")
+            throw new AppError(400, "CREDIT payment method is invalid");
+          if (!input.customerId)
+            throw new AppError(400, "CREDIT sales require a customer");
+          hasCredit = true;
+          creditCustomerId = input.customerId;
+        }
+      }
+
+      // Duplicate M-PESA codes across the organization (not just this sale).
+      for (const code of mpesaManualCodes) {
+        const existing = await prisma.payment.findFirst({
+          where: {
+            organizationId,
+            provider: "MPESA_MANUAL",
+            providerRef: code,
+          },
+        });
+        if (existing)
+          throw new AppError(409, `M-PESA transaction code "${code}" was already used`);
+      }
+
+      // Credit limit enforcement for CREDIT sales.
+      if (hasCredit && creditCustomerId) {
+        const customer = await prisma.customer.findFirst({
+          where: { id: creditCustomerId, organizationId },
+        });
+        if (!customer)
+          throw new AppError(400, "Selected customer is not available in this organization");
+
+        const creditLimit = customer.creditLimit ?? null;
+        if (creditLimit !== null) {
+          // Balance owed = unpaid invoice totals minus standalone customer repayments.
+          const [invoices, repayments] = await Promise.all([
+            prisma.invoice.aggregate({
+              where: {
+                customerId: creditCustomerId,
+                organizationId,
+                status: { not: "VOID" },
+              },
+              _sum: { total: true, paidAmount: true },
+            }),
+            prisma.payment.aggregate({
+              where: {
+                customerId: creditCustomerId,
+                organizationId,
+                provider: "CREDIT",
+                invoiceId: null,
+                status: "SUCCESS",
+              },
+              _sum: { amount: true },
+            }),
+          ]);
+
+          const owed =
+            Number(invoices._sum.total ?? 0) - Number(invoices._sum.paidAmount ?? 0);
+          const repaid = Number(repayments._sum.amount ?? 0);
+          const currentBalance = owed - repaid;
+
+          const orderTotalCents = input.payments.reduce(
+            (sum, p) => sum + toCents(p.amount),
+            0
+          );
+          const orderTotal = toCurrency(orderTotalCents);
+
+          if (currentBalance + orderTotal > creditLimit) {
+            throw new AppError(
+              409,
+              `Customer credit limit exceeded: owes KES ${currentBalance.toFixed(2)}, ` +
+                `this sale adds KES ${orderTotal.toFixed(2)}, limit is KES ${creditLimit.toFixed(2)}`
+            );
+          }
+        }
+      }
+
       // Counted against the plan before anything is written, so a business that has reached
       // its monthly allowance is told why and offered the upgrade rather than having a
       // till fail mid market with a generic error.
@@ -472,11 +593,10 @@ posRouter.post(
         deferredPaymentMethods.has(payment.provider)
       );
       // Money actually in hand — every tender whose provider does not still have to
-      // confirm. Computed before the transaction because it seeds the invoice's
-      // paidAmount: the cash half of a split sale is truthfully paid from the first
-      // moment, so the deferred settle only ever adds what is still missing.
+      // confirm. CREDIT is excluded: the money is owed by the customer, not received.
+      // Computed before the transaction because it seeds the invoice's paidAmount.
       const settledPayments = input.payments.filter(
-        payment => !deferredPaymentMethods.has(payment.provider)
+        payment => !deferredPaymentMethods.has(payment.provider) && payment.provider !== "CREDIT"
       );
       const settledCents = settledPayments.reduce(
         (sum, payment) => sum + toCents(payment.amount),
@@ -516,7 +636,7 @@ posRouter.post(
               },
             });
             const available = inventory ? inventory.quantity - inventory.reserved : 0;
-            if (!inventory || available < line.quantity) {
+            if (!inventory || (available < line.quantity && !allowNegativeStock)) {
               throw new AppError(
                 409,
                 `${line.product.name} has only ${available} available in this warehouse`
@@ -526,11 +646,13 @@ posRouter.post(
               where: {
                 productId: line.product.id,
                 warehouseId: warehouse.id,
-                quantity: { gte: line.quantity + inventory.reserved },
+                ...(allowNegativeStock
+                  ? {}
+                  : { quantity: { gte: line.quantity + inventory.reserved } }),
               },
               data: { quantity: { decrement: line.quantity } },
             });
-            if (updated.count !== 1)
+            if (!allowNegativeStock && updated.count !== 1)
               throw new AppError(409, `${line.product.name} stock changed; please review the cart`);
           }
 
@@ -542,7 +664,7 @@ posRouter.post(
               // it took money — but whatever tender IS in hand stays counted, so a split
               // sale reads PARTIALLY_PAID from the first moment and the deferred rail only
               // ever owes the remainder.
-              status: hasDeferredPayment ? (settledCents > 0 ? "PARTIALLY_PAID" : "SENT") : "PAID",
+              status: settledCents >= totalCents ? "PAID" : settledCents > 0 ? "PARTIALLY_PAID" : "SENT",
               issueDate: now,
               dueDate: now,
               subtotal: toCurrency(subtotalCents),
@@ -550,7 +672,7 @@ posRouter.post(
               discountTotal: toCurrency(discountTotalCents),
               total: toCurrency(totalCents),
               currency: organization.currency,
-              paidAmount: hasDeferredPayment ? toCurrency(settledCents) : toCurrency(totalCents),
+              paidAmount: toCurrency(settledCents),
               notes: input.notes || "POS sale",
               organizationId,
               customerId: input.customerId || null,
@@ -587,7 +709,10 @@ posRouter.post(
                 provider: payment.provider,
                 methodType: payment.methodType,
                 status: "SUCCESS",
-                providerRef: payment.reference || null,
+                providerRef:
+                  payment.provider === "MPESA_MANUAL"
+                    ? payment.transactionCode?.trim() || null
+                    : payment.reference || null,
                 notes: "Server-verified POS payment",
                 paidAt: now,
                 organizationId,
