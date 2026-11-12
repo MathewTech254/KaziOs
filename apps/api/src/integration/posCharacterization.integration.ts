@@ -1210,11 +1210,21 @@ describe("/pos/sale characterization", () => {
   let attendantUserId: string;
 
   beforeAll(async () => {
-    // Create an attendant user in the tenant's organization
-    const attendantRole = await testPrisma.role.findFirst({
+    // Create an attendant role if needed (tests use their own tenant)
+    let attendantRole = await testPrisma.role.findFirst({
       where: { organizationId: tenant.organizationId, type: "ATTENDANT" },
     });
-    expect(attendantRole).toBeTruthy();
+    if (!attendantRole) {
+      attendantRole = await testPrisma.role.create({
+        data: {
+          name: "Attendant",
+          type: "ATTENDANT",
+          description: "Can sell but cannot open/close days",
+          permissions: ["pos.sale", "pos.sales.view", "products.view", "inventory.view"],
+          organizationId: tenant.organizationId,
+        },
+      });
+    }
 
     const attendantUser = await testPrisma.user.create({
       data: {
@@ -1231,18 +1241,12 @@ describe("/pos/sale characterization", () => {
       data: { userId: attendantUser.id, roleId: attendantRole!.id },
     });
 
-    // Login as attendant
-    const loginRes = await request(testApp)
-      .post("/api/v1/auth/login")
-      .send({
-        email: attendantUser.email,
-        password: "attendant123",
-      });
     // Login may fail because passwordHash is a placeholder; instead, create a session directly
     const session = await testPrisma.session.create({
       data: {
         userId: attendantUser.id,
         token: `attendant-token-${Date.now()}`,
+        refreshToken: `refresh-${Date.now()}`,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       },
     });
@@ -1275,7 +1279,7 @@ describe("/pos/sale characterization", () => {
 
   it("attendant cannot void sales (invoices.void)", async () => {
     await request(testApp)
-      .post(`/api/v1/pos/sales/${testPrisma.invoice.findFirst ? "test" : "test"}/return`)
+      .post("/api/v1/pos/sales/test-invoice-id/return")
       .set("Authorization", `Bearer ${attendantToken}`)
       .send({ warehouseId })
       .expect(403);
@@ -1318,7 +1322,7 @@ describe("/pos/sale characterization", () => {
       .expect(200);
     const ownerSaleIds = ownerSales.body.data.map((inv: any) => inv.id);
     const attendantSaleIds = mySales.body.data.map((inv: any) => inv.id);
-    expect(ownerSaleIds.some(id => attendantSaleIds.includes(id))).toBe(false);
+    expect(ownerSaleIds.some((id: string) => attendantSaleIds.includes(id))).toBe(false);
   });
 
   afterAll(async () => {

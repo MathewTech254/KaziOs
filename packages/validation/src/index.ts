@@ -842,6 +842,9 @@ export const zUserRoleAssignSchema = z.object({
  * ------------------------------------------------------------------ */
 
 export const SETTING_DEFINITIONS = {
+  onboarding: z.object({
+    completed: z.boolean().default(false),
+  }),
   invoicing: z.object({
     invoicePrefix: zString(1, 10).default("INV"),
     defaultPaymentTermsDays: z.number().int().min(0).max(365).default(14),

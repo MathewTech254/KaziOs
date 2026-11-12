@@ -144,6 +144,114 @@ productRouter.get(
   }
 );
 
+/**
+ * Import products from CSV. Accepts CSV text in the request body with columns:
+ * name,sku,barcode,size,category,costPrice,sellingPrice,minStock,reorderPoint
+ * Only name and sellingPrice are required. costPrice defaults to sellingPrice.
+ */
+productRouter.post(
+  "/import",
+  requireAuth,
+  requirePermission("products.create"),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const organizationId = req.organizationId!;
+
+      // The catalogue is a counted allowance.
+      const entitlements = await getEntitlements(organizationId);
+      await assertWithinLimit(entitlements, LIMIT_KEYS.PRODUCTS);
+
+      const csvText = typeof req.body === "string" ? req.body : req.body.csv || "";
+      if (!csvText.trim()) {
+        throw new AppError(400, "CSV body is required", "CSV_BODY_REQUIRED");
+      }
+
+      const lines = csvText.trim().split(/\r?\n/);
+      if (lines.length < 2) {
+        throw new AppError(400, "CSV must have a header row and at least one data row", "CSV_INVALID");
+      }
+
+      const header = lines[0].split(",").map((h: string) => h.trim().toLowerCase());
+      const colIndex = (name: string) => header.indexOf(name);
+
+      const results = [];
+      const errors = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        const cols = line.split(",");
+        const get = (name: string) => {
+          const idx = colIndex(name);
+          return idx >= 0 ? cols[idx]?.trim() : undefined;
+        };
+
+        const name = get("name");
+        if (!name) {
+          errors.push({ row: i + 1, error: "name is required" });
+          continue;
+        }
+
+        const sellingPriceRaw = get("sellingprice") || get("selling_price") || get("price");
+        const sellingPrice = sellingPriceRaw ? parseFloat(sellingPriceRaw) : undefined;
+        if (!sellingPrice || isNaN(sellingPrice) || sellingPrice <= 0) {
+          errors.push({ row: i + 1, error: "sellingPrice must be a positive number" });
+          continue;
+        }
+
+        const costPriceRaw = get("costprice") || get("cost_price");
+        const costPrice = costPriceRaw ? parseFloat(costPriceRaw) : sellingPrice;
+
+        const minStockRaw = get("minstock") || get("min_stock");
+        const minStock = minStockRaw ? parseInt(minStockRaw, 10) : 0;
+
+        const reorderPointRaw = get("reorderpoint") || get("reorder_point");
+        const reorderPoint = reorderPointRaw ? parseInt(reorderPointRaw, 10) : 0;
+
+        const sku = get("sku") || undefined;
+        const barcode = get("barcode") || undefined;
+        const size = get("size") || undefined;
+        const category = get("category") || undefined;
+
+        const existingSku = sku
+          ? await prisma.product.findFirst({ where: { organizationId, sku } })
+          : null;
+        if (existingSku) {
+          errors.push({ row: i + 1, error: `SKU "${sku}" already exists` });
+          continue;
+        }
+
+        const product = await prisma.product.create({
+          data: {
+            name,
+            sku,
+            barcode,
+            size,
+            category,
+            costPrice,
+            sellingPrice,
+            minStock: isNaN(minStock) ? 0 : minStock,
+            reorderPoint: isNaN(reorderPoint) ? 0 : reorderPoint,
+            isActive: true,
+            productType: "PHYSICAL",
+            organizationId,
+          },
+        });
+        results.push(product);
+      }
+
+      res.status(201).json({
+        data: results,
+        imported: results.length,
+        errors,
+        total: results.length + errors.length,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 productRouter.patch(
   "/:id",
   requireAuth,

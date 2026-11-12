@@ -18,6 +18,7 @@ import { ReceiveStockPage } from "../pages/ReceiveStockPage";
 import { StocktakePage } from "../pages/StocktakePage";
 import { ExpensesPage } from "../pages/ExpensesPage";
 import { ClosingPage } from "../pages/ClosingPage";
+import { OnboardingWizard } from "../pages/OnboardingWizard";
 import { PricingPage } from "../pages/PricingPage";
 import { AssistantPage } from "../pages/AssistantPage";
 import { AuthGuard } from "../components/Guard";
@@ -76,6 +77,15 @@ export const router = createBrowserRouter([
   {
     path: "/register",
     element: <RegisterPage />,
+  },
+  {
+    path: "/onboarding",
+    element: (
+      <AuthGuard>
+        <Layout />
+      </AuthGuard>
+    ),
+    children: [{ index: true, element: <OnboardingWizard /> }],
   },
   {
     path: "/forgot-password",
