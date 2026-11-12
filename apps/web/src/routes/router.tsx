@@ -14,6 +14,8 @@ import { PaymentsPage } from "../pages/PaymentsPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { InventoryPage } from "../pages/InventoryPage";
 import { PurchasingPage } from "../pages/PurchasingPage";
+import { ReceiveStockPage } from "../pages/ReceiveStockPage";
+import { StocktakePage } from "../pages/StocktakePage";
 import { ExpensesPage } from "../pages/ExpensesPage";
 import { ClosingPage } from "../pages/ClosingPage";
 import { PricingPage } from "../pages/PricingPage";
@@ -134,6 +136,38 @@ export const router = createBrowserRouter([
       </AuthGuard>
     ),
     children: [{ index: true, element: <ExpensesPage /> }],
+  },
+  {
+    path: "/stock/receive",
+    element: isFeatureEnabled("stocktake") ? (
+      <AuthGuard>
+        <Layout />
+      </AuthGuard>
+    ) : (
+      <Navigate to="/pos" replace />
+    ),
+    children: [
+      {
+        index: true,
+        element: isFeatureEnabled("stocktake") ? <ReceiveStockPage /> : <Navigate to="/pos" replace />,
+      },
+    ],
+  },
+  {
+    path: "/stocktake",
+    element: isFeatureEnabled("stocktake") ? (
+      <AuthGuard>
+        <Layout />
+      </AuthGuard>
+    ) : (
+      <Navigate to="/pos" replace />
+    ),
+    children: [
+      {
+        index: true,
+        element: isFeatureEnabled("stocktake") ? <StocktakePage /> : <Navigate to="/pos" replace />,
+      },
+    ],
   },
   {
     path: "/closing",

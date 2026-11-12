@@ -1108,6 +1108,103 @@ describe("/pos/sale characterization", () => {
     await testPrisma.product.delete({ where: { id: convProductId } });
   });
 
+  it("receive stock: PURCHASE movement via /inventory/receive", async () => {
+    const receive = await request(testApp)
+      .post("/api/v1/inventory/receive")
+      .set(auth(tenant.token))
+      .send({
+        productId,
+        warehouseId,
+        quantity: 2,
+        unit: "crate",
+        factorToBase: 24,
+        costPrice: 20000,
+        supplierName: "East African Breweries",
+        notes: "Opening delivery",
+      })
+      .expect(201);
+
+    expect(receive.body.data.baseUnits).toBe(48); // 2 crates * 24 bottles
+
+    // Inventory should have 50 + 48 = 98
+    const inventory = await testPrisma.inventory.findFirst({
+      where: { productId, warehouseId },
+    });
+    expect(inventory?.quantity).toBe(98);
+
+    // PURCHASE movement exists
+    const movements = await testPrisma.stockMovement.findMany({
+      where: {
+        organizationId: tenant.organizationId,
+        productId,
+        type: "PURCHASE",
+      },
+    });
+    expect(movements.length).toBeGreaterThanOrEqual(1);
+    expect(movements.find(m => m.reason?.includes("East African Breweries"))).toBeTruthy();
+  });
+
+  it("stocktake: open count, add line, confirm posts ADJUSTMENT movement", async () => {
+    // Open a count
+    const opened = await request(testApp)
+      .post("/api/v1/inventory/stock-counts")
+      .set(auth(tenant.token))
+      .send({ warehouseId, notes: "Monthly stocktake" })
+      .expect(201);
+    const countId = opened.body.data.id;
+    expect(opened.body.data.status).toBe("OPEN");
+
+    // Add a counted line (50 units when expected is 98, so diff = -48)
+    const line = await request(testApp)
+      .post(`/api/v1/inventory/stock-counts/${countId}/lines`)
+      .set(auth(tenant.token))
+      .send({
+        productId,
+        countedQty: 50,
+        notes: "Physical count",
+      })
+      .expect(201);
+    expect(line.body.data.expectedQty).toBe(98);
+    expect(line.body.data.countedQty).toBe(50);
+    expect(line.body.data.diffQty).toBe(-48);
+
+    // Confirm the count - should post ADJUSTMENT movement of -48
+    const confirmed = await request(testApp)
+      .post(`/api/v1/inventory/stock-counts/${countId}/confirm`)
+      .set(auth(tenant.token))
+      .send({ notes: "Confirmed" })
+      .expect(200);
+    expect(confirmed.body.data.status).toBe("CONFIRMED");
+
+    // Inventory should now be 98 - 48 = 50
+    const inventory = await testPrisma.inventory.findFirst({
+      where: { productId, warehouseId },
+    });
+    expect(inventory?.quantity).toBe(50);
+
+    // ADJUSTMENT movement exists
+    const movements = await testPrisma.stockMovement.findMany({
+      where: {
+        organizationId: tenant.organizationId,
+        productId,
+        type: "ADJUSTMENT",
+        reason: { contains: "Stocktake" },
+      },
+    });
+    expect(movements.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("low stock list: products at or below reorder point", async () => {
+    const res = await request(testApp)
+      .get("/api/v1/inventory/low-stock")
+      .set(auth(tenant.token))
+      .expect(200);
+    expect(Array.isArray(res.body.data)).toBe(true);
+    // Product has 50 units, reorderPoint is 5, so not low stock
+    const ourProduct = res.body.data.find((p: { id: string }) => p.id === productId);
+    expect(ourProduct).toBeUndefined();
+  });
+
   afterAll(async () => {
     await cleanupRun();
   });

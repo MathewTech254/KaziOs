@@ -505,6 +505,59 @@ export const zStockMovementQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(200).optional().default(50),
 });
 
+/* ------------------------------------------------------------------ *
+ * Stock control: receive, adjust, stocktake
+ * ------------------------------------------------------------------ */
+
+/** Receive stock from a supplier (writes a PURCHASE movement). */
+export const zStockReceiveSchema = z.object({
+  productId: zUuid,
+  warehouseId: zUuid,
+  quantity: z.number().int().positive("Quantity must be greater than zero"),
+  unit: z.enum(["bottle", "crate", "carton", "case", "other"]).default("bottle"),
+  factorToBase: z.number().int().positive("Conversion factor must be positive").default(1),
+  costPrice: z.number().nonnegative("Cost price cannot be negative"),
+  supplierName: zString(1, 200),
+  receivedAt: z.string().datetime().optional(),
+  notes: zString(0, 500).optional().nullable(),
+});
+
+/** Adjust stock with a required reason (writes an ADJUSTMENT movement). */
+export const zStockAdjustmentSchema = z.object({
+  productId: zUuid,
+  warehouseId: zUuid,
+  quantity: z.number().int().positive("Quantity must be greater than zero"),
+  adjustmentType: z.enum(["INCREASE", "DECREASE"]),
+  reason: z.enum(["damage", "breakage", "expired", "theft", "correction"]),
+  reference: zString(1, 100).optional(),
+});
+
+/** Open a new stocktake count session. */
+export const zStockCountOpenSchema = z.object({
+  warehouseId: zUuid.optional().nullable(),
+  notes: zString(0, 500).optional().nullable(),
+});
+
+/** Add or update a counted line within a stocktake. */
+export const zStockCountLineSchema = z.object({
+  productId: zUuid,
+  countedQty: z.number().nonnegative("Counted quantity cannot be negative"),
+  notes: zString(0, 300).optional().nullable(),
+});
+
+/** Confirm a stocktake and post ADJUSTMENT movements for the deltas. */
+export const zStockCountConfirmSchema = z.object({
+  notes: zString(0, 500).optional().nullable(),
+});
+
+/** Query stock counts. */
+export const zStockCountQuerySchema = z.object({
+  status: z.enum(["ALL", "OPEN", "CONFIRMED", "ABANDONED"]).optional().default("ALL"),
+  warehouseId: zUuid.optional(),
+  page: z.coerce.number().int().positive().optional().default(1),
+  limit: z.coerce.number().int().positive().max(200).optional().default(50),
+});
+
 export const zStockTransferQuerySchema = z.object({
   status: z.enum(["ALL", "PENDING", "COMPLETED", "CANCELLED"]).optional().default("ALL"),
   warehouseId: zUuid.optional(),
@@ -711,6 +764,7 @@ export const PERMISSION_GROUPS = [
     permissions: [
       { key: "inventory.view", label: "View stock levels and movements" },
       { key: "inventory.manage", label: "Adjust stock and transfer between warehouses" },
+      { key: "stocktake.manage", label: "Open, count and confirm stocktakes" },
     ],
   },
   {

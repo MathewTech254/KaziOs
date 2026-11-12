@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   Command,
   Clock,
+  Clipboard,
   FileText,
   LayoutDashboard,
   Moon,
@@ -14,6 +15,7 @@ import {
   ShoppingBag,
   Sparkles,
   Sun,
+  Truck,
   User,
   Users,
   Wallet,
@@ -65,6 +67,10 @@ const NAV_GROUPS: NavGroup[] = (() => {
   const operateItems: { to: string; label: string; icon: React.ElementType }[] = [
     { to: "/dashboard/products", label: "Products", icon: Package },
     { to: "/inventory", label: "Inventory", icon: Warehouse },
+    ...(isFeatureEnabled("stocktake")
+      ? [{ to: "/stocktake", label: "Stocktake", icon: Clipboard }]
+      : []),
+    { to: "/stock/receive", label: "Receive Stock", icon: Truck },
   ];
   if (isFeatureEnabled("purchasing")) {
     operateItems.push({ to: "/purchases", label: "Purchasing", icon: Building2 });
