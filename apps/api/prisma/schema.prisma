@@ -72,6 +72,7 @@ model Organization {
   subscriptionPayments SubscriptionPayment[]
   usageRecords   UsageRecord[]
   entitlementOverrides EntitlementOverride[]
+  productUnits         ProductUnit[]
 }
 
 model User {
@@ -238,6 +239,10 @@ model Product {
   barcode      String?
   name         String
   description  String?
+  // Base sellable unit size, e.g. "750ml", "350ml", "500ml"
+  size         String?
+  // Product category: beer, spirits, wine, soft drinks, other
+  category     String?
   costPrice    Float
   sellingPrice Float
   minStock     Int      @default(0)
@@ -262,8 +267,28 @@ model Product {
   stockMovements    StockMovement[]
   stockTransfers    StockTransfer[]
   productCategories ProductCategory[]
+  productUnits      ProductUnit[]
 
   @@unique([organizationId, sku])
+}
+
+model ProductUnit {
+  id                     String   @id @default(uuid())
+  name                   String
+  factorToBase           Int
+  isDefaultSaleUnit      Boolean  @default(false)
+  isDefaultPurchaseUnit  Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  product     Product @relation(fields: [productId], references: [id])
+  productId   String
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  // One unit name per product
+  @@unique([productId, name])
 }
 
 model Brand {

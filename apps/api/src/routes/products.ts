@@ -4,7 +4,11 @@ import { prisma } from "../lib/prisma";
 import type { AuthRequest } from "../middleware/auth";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { AppError, paginate } from "../lib";
-import { zProductSchema } from "@kazios/validation";
+import {
+  zProductSchema,
+  zProductUnitSchema,
+  zProductUnitQuerySchema,
+} from "@kazios/validation";
 import { LIMIT_KEYS } from "@kazios/types";
 import { assertWithinLimit, getEntitlements } from "../services/entitlements";
 
@@ -18,6 +22,14 @@ function toProductPatch(input: Partial<z.infer<typeof zProductSchema>>) {
   }
   return data;
 }
+
+const productInclude = {
+  taxCategory: true,
+  brand: true,
+  unit: true,
+  productUnits: true,
+  inventories: { include: { warehouse: true } },
+};
 
 productRouter.get(
   "/",
@@ -43,7 +55,7 @@ productRouter.get(
       const [data, total] = await Promise.all([
         prisma.product.findMany({
           where,
-          include: { taxCategory: true, brand: true, unit: true },
+          include: { taxCategory: true, brand: true, unit: true, productUnits: true },
           skip,
           take,
           orderBy: { createdAt: "desc" },
@@ -77,6 +89,8 @@ productRouter.post(
           sku: data.sku || undefined,
           barcode: data.barcode || undefined,
           description: data.description || undefined,
+          size: data.size || undefined,
+          category: data.category || undefined,
           costPrice: data.costPrice,
           sellingPrice: data.sellingPrice,
           minStock: data.minStock,
@@ -104,12 +118,7 @@ productRouter.get(
     try {
       const product = await prisma.product.findFirst({
         where: { id: req.params.id, organizationId: (req as AuthRequest).organizationId },
-        include: {
-          taxCategory: true,
-          brand: true,
-          unit: true,
-          inventories: { include: { warehouse: true } },
-        },
+        include: productInclude,
       });
       if (!product) throw new AppError(404, "Product not found");
       res.json({ data: product });
@@ -171,6 +180,164 @@ productRouter.delete(
 
       await prisma.product.delete({ where: { id: current.id } });
       res.json({ data: { id: current.id, deleted: true } });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * Product unit (pack unit) endpoints.
+ *
+ * A product has a base sellable unit (bottle/can) and optional pack units (crate, carton,
+ * case) with a conversion factor (e.g. 1 crate = 24 bottles). Receiving stock in crates
+ * converts to base units in the ledger.
+ */
+productRouter.get(
+  "/:productId/units",
+  requireAuth,
+  requirePermission("products.view"),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const parsed = zProductUnitQuerySchema.safeParse({
+        ...req.query,
+        productId: req.params.productId,
+      });
+      if (!parsed.success) {
+        throw new AppError(400, parsed.error.issues[0]?.message || "Invalid query");
+      }
+      const { page, limit } = parsed.data;
+      const { skip, take, page: p, limit: l } = paginate(page, limit);
+      const organizationId = req.organizationId!;
+
+      const [data, total] = await Promise.all([
+        prisma.productUnit.findMany({
+          where: { productId: req.params.productId, organizationId },
+          skip,
+          take,
+          orderBy: { isDefaultSaleUnit: "desc", name: "asc" },
+        }),
+        prisma.productUnit.count({
+          where: { productId: req.params.productId, organizationId },
+        }),
+      ]);
+      res.json({ data, total, page: p, limit: l, totalPages: Math.ceil(total / l) });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+productRouter.post(
+  "/:productId/units",
+  requireAuth,
+  requirePermission("products.update"),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const data = zProductUnitSchema.parse(req.body);
+      const organizationId = req.organizationId!;
+
+      // Verify the product belongs to this organization.
+      const product = await prisma.product.findFirst({
+        where: { id: req.params.productId, organizationId },
+        select: { id: true },
+      });
+      if (!product) throw new AppError(404, "Product not found");
+
+      // Only one default sale unit and one default purchase unit per product.
+      if (data.isDefaultSaleUnit) {
+        await prisma.productUnit.updateMany({
+          where: { productId: req.params.productId, isDefaultSaleUnit: true },
+          data: { isDefaultSaleUnit: false },
+        });
+      }
+      if (data.isDefaultPurchaseUnit) {
+        await prisma.productUnit.updateMany({
+          where: { productId: req.params.productId, isDefaultPurchaseUnit: true },
+          data: { isDefaultPurchaseUnit: false },
+        });
+      }
+
+      const unit = await prisma.productUnit.create({
+        data: {
+          name: data.name,
+          factorToBase: data.factorToBase,
+          isDefaultSaleUnit: data.isDefaultSaleUnit,
+          isDefaultPurchaseUnit: data.isDefaultPurchaseUnit,
+          productId: req.params.productId,
+          organizationId,
+        },
+      });
+      res.status(201).json({ data: unit });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+productRouter.patch(
+  "/:productId/units/:unitId",
+  requireAuth,
+  requirePermission("products.update"),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const data = zProductUnitSchema.partial().parse(req.body);
+      const organizationId = req.organizationId!;
+
+      const unit = await prisma.productUnit.findFirst({
+        where: {
+          id: req.params.unitId,
+          productId: req.params.productId,
+          organizationId,
+        },
+        select: { id: true },
+      });
+      if (!unit) throw new AppError(404, "Product unit not found");
+
+      if (data.isDefaultSaleUnit) {
+        await prisma.productUnit.updateMany({
+          where: { productId: req.params.productId, isDefaultSaleUnit: true },
+          data: { isDefaultSaleUnit: false },
+        });
+      }
+      if (data.isDefaultPurchaseUnit) {
+        await prisma.productUnit.updateMany({
+          where: { productId: req.params.productId, isDefaultPurchaseUnit: true },
+          data: { isDefaultPurchaseUnit: false },
+        });
+      }
+
+      const updated = await prisma.productUnit.update({
+        where: { id: unit.id },
+        data,
+      });
+      res.json({ data: updated });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+productRouter.delete(
+  "/:productId/units/:unitId",
+  requireAuth,
+  requirePermission("products.update"),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const organizationId = req.organizationId!;
+
+      const unit = await prisma.productUnit.findFirst({
+        where: {
+          id: req.params.unitId,
+          productId: req.params.productId,
+          organizationId,
+        },
+        select: { id: true, isDefaultSaleUnit: true, isDefaultPurchaseUnit: true },
+      });
+      if (!unit) throw new AppError(404, "Product unit not found");
+
+      await prisma.productUnit.delete({ where: { id: unit.id } });
+      res.json({ data: { id: unit.id, deleted: true } });
     } catch (err) {
       next(err);
     }

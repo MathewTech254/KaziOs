@@ -265,6 +265,8 @@ export const zProductSchema = z.object({
   sku: zString(1, 50).optional().nullable(),
   barcode: zString(1, 50).optional().nullable(),
   description: zString(0, 1000).optional().nullable(),
+  size: zString(1, 50).optional().nullable(),
+  category: z.enum(["beer", "spirits", "wine", "soft drinks", "other"]).optional(),
   costPrice: z.number().positive("Cost price must be positive"),
   sellingPrice: z.number().positive("Selling price must be positive"),
   minStock: z.number().int().nonnegative().default(0),
@@ -275,6 +277,21 @@ export const zProductSchema = z.object({
   unitId: zUuid.optional().nullable(),
   isActive: z.boolean().default(true),
   productType: z.enum(["PHYSICAL", "SERVICE", "DIGITAL"]).default("PHYSICAL"),
+});
+
+export const zProductUnitSchema = z.object({
+  name: zString(1, 50),
+  factorToBase: z.number().int().positive("Factor must be a positive integer"),
+  isDefaultSaleUnit: z.boolean().default(false),
+  isDefaultPurchaseUnit: z.boolean().default(false),
+});
+
+export const zProductUnitUpdateSchema = zProductUnitSchema.partial();
+
+export const zProductUnitQuerySchema = z.object({
+  productId: zUuid,
+  page: z.coerce.number().int().positive().optional().default(1),
+  limit: z.coerce.number().int().positive().max(200).optional().default(50),
 });
 
 export const zBranchSchema = z.object({

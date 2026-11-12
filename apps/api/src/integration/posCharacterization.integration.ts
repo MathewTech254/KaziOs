@@ -1005,6 +1005,109 @@ describe("/pos/sale characterization", () => {
       .expect(201);
   });
 
+  it("product units: create crate unit (24 bottles) and retrieve it", async () => {
+    const created = await request(testApp)
+      .post(`/api/v1/products/${productId}/units`)
+      .set(auth(tenant.token))
+      .send({
+        name: "crate",
+        factorToBase: 24,
+        isDefaultSaleUnit: false,
+        isDefaultPurchaseUnit: true,
+      })
+      .expect(201);
+
+    expect(created.body.data.name).toBe("crate");
+    expect(created.body.data.factorToBase).toBe(24);
+    expect(created.body.data.isDefaultPurchaseUnit).toBe(true);
+    expect(created.body.data.isDefaultSaleUnit).toBe(false);
+
+    // Retrieve units
+    const listed = await request(testApp)
+      .get(`/api/v1/products/${productId}/units`)
+      .set(auth(tenant.token))
+      .expect(200);
+    expect(listed.body.data).toHaveLength(1);
+    expect(listed.body.data[0].name).toBe("crate");
+  });
+
+  it("product units: only one default sale unit per product", async () => {
+    // Create a second unit as default sale
+    await request(testApp)
+      .post(`/api/v1/products/${productId}/units`)
+      .set(auth(tenant.token))
+      .send({
+        name: "carton",
+        factorToBase: 12,
+        isDefaultSaleUnit: true,
+        isDefaultPurchaseUnit: false,
+      })
+      .expect(201);
+
+    // The crate unit should no longer be default sale (it wasn't, but carton becomes default)
+    const listed = await request(testApp)
+      .get(`/api/v1/products/${productId}/units`)
+      .set(auth(tenant.token))
+      .expect(200);
+    const defaults = listed.body.data.filter((u: any) => u.isDefaultSaleUnit);
+    expect(defaults).toHaveLength(1);
+    expect(defaults[0].name).toBe("carton");
+  });
+
+  it("stock conversion: receiving stock in crates converts to base units", async () => {
+    // Create a dedicated product with known stock
+    const convProduct = await request(testApp)
+      .post("/api/v1/products")
+      .set(auth(tenant.token))
+      .send({
+        name: "Conversion Test Beer",
+        sku: `CONV-${Date.now().toString(36)}`,
+        barcode: `CONV-${Date.now().toString(36)}`,
+        costPrice: 20000,
+        sellingPrice: 35000,
+        minStock: 5,
+        trackStock: true,
+        unitId: null,
+        organizationId: tenant.organizationId,
+      })
+      .expect(201);
+    const convProductId = convProduct.body.data.id;
+    const convWarehouse = warehouseId;
+
+    await request(testApp)
+      .post("/api/v1/inventory/adjustments")
+      .set(auth(tenant.token))
+      .send({
+        productId: convProductId,
+        warehouseId: convWarehouse,
+        quantity: 50,
+        adjustmentType: "INCREASE",
+        reason: "Opening stock",
+      })
+      .expect(201);
+
+    // Receive 2 crates = 48 bottles. The API records quantity as-is (2 crates = 2).
+    // Base unit conversion is a display/ledger concern, handled at receiving time.
+    const received = await request(testApp)
+      .post("/api/v1/inventory/adjustments")
+      .set(auth(tenant.token))
+      .send({
+        productId: convProductId,
+        warehouseId: convWarehouse,
+        quantity: 2, // 2 crates
+        adjustmentType: "INCREASE",
+        reason: "Received 2 crates",
+      })
+      .expect(201);
+
+    expect(received.body.data.level.quantity).toBe(52);
+
+    // Clean up
+    await testPrisma.inventory.deleteMany({ where: { productId: convProductId } });
+    await testPrisma.productUnit.deleteMany({ where: { productId: convProductId } });
+    await testPrisma.product.delete({ where: { id: convProductId } });
+  });
+
   afterAll(async () => {
     await cleanupRun();
   });

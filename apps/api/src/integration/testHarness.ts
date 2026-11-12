@@ -165,6 +165,7 @@ export async function cleanupRun(): Promise<void> {
     await tx.account.deleteMany({ where: { organizationId: { in: orgIds } } });
     await tx.taxCategory.deleteMany({ where: { organizationId: { in: orgIds } } });
     await tx.customer.deleteMany({ where: { organizationId: { in: orgIds } } });
+    await tx.productUnit.deleteMany({ where: { organizationId: { in: orgIds } } });
     await tx.product.deleteMany({ where: { organizationId: { in: orgIds } } });
     await tx.warehouse.deleteMany({ where: { organizationId: { in: orgIds } } });
     await tx.branch.deleteMany({ where: { organizationId: { in: orgIds } } });
