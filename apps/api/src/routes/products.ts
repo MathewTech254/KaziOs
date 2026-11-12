@@ -62,7 +62,14 @@ productRouter.get(
         }),
         prisma.product.count({ where }),
       ]);
-      res.json({ data, total, page: p, limit: l, totalPages: Math.ceil(total / l) });
+      // Attendants must not see cost prices — strip costPrice unless the caller is an owner.
+      const isOwner = req.roles?.some(
+        (r: any) => r.role.permissions.includes("*")
+      ) ?? false;
+      const safeData = isOwner
+        ? data
+        : data.map(({ costPrice, ...rest }) => rest);
+      res.json({ data: safeData, total, page: p, limit: l, totalPages: Math.ceil(total / l) });
     } catch (err) {
       next(err);
     }
@@ -114,14 +121,23 @@ productRouter.get(
   "/:id",
   requireAuth,
   requirePermission("products.view"),
-  async (req, res, next) => {
+  async (req: AuthRequest, res, next) => {
     try {
       const product = await prisma.product.findFirst({
-        where: { id: req.params.id, organizationId: (req as AuthRequest).organizationId },
+        where: { id: req.params.id, organizationId: req.organizationId },
         include: productInclude,
       });
       if (!product) throw new AppError(404, "Product not found");
-      res.json({ data: product });
+      // Attendants must not see cost prices.
+      const isOwner = req.roles?.some(
+        (r: any) => r.role.permissions.includes("*")
+      ) ?? false;
+      if (isOwner) {
+        res.json({ data: product });
+      } else {
+        const { costPrice: _cp, ...safeProduct } = product;
+        res.json({ data: safeProduct });
+      }
     } catch (err) {
       next(err);
     }

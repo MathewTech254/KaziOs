@@ -107,6 +107,7 @@ model User {
   closedDayClosings DayClosing[] @relation("DayClosingClosedBy")
   openedStockCounts StockCount[] @relation("StockCountOpenedBy")
   confirmedStockCounts StockCount[] @relation("StockCountConfirmedBy")
+  recordedInvoices Invoice[] @relation("InvoiceRecordedBy")
   // Platform administration is recorded against the user rather than against a business
   // role, so owning a shop can never imply authority over the platform.
   subscriptionEvents SubscriptionEvent[]
@@ -393,6 +394,8 @@ model Invoice {
   items          InvoiceItem[]
   payments       Payment[]
   cardPayments   CardPayment[]
+  recordedById   String?
+  recordedBy     User?         @relation("InvoiceRecordedBy", fields: [recordedById], references: [id])
 }
 
 model InvoiceItem {

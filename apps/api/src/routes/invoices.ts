@@ -20,12 +20,27 @@ export const invoiceRouter = Router();
 invoiceRouter.get(
   "/",
   requireAuth,
-  requirePermission("invoices.view"),
   async (req: AuthRequest, res, next) => {
     try {
       const { page = 1, limit = 50, status, search } = req.query;
       const { skip, take, page: p, limit: l } = paginate(Number(page), Number(limit));
-      const where: any = { organizationId: req.organizationId };
+      const organizationId = req.organizationId;
+      const isOwner = req.roles?.some(
+        (r: any) => r.role.permissions.includes("*")
+      ) ?? false;
+      const isAttendant = req.roles?.some(
+        (r: any) => r.role.permissions.includes("pos.sales.view")
+      ) ?? false;
+
+      if (!isOwner && !isAttendant) {
+        throw new AppError(403, "Insufficient permissions");
+      }
+
+      const where: any = { organizationId };
+      if (isAttendant) {
+        // Attendants only see their own sales.
+        where.recordedById = req.userId;
+      }
       if (status) where.status = String(status);
       if (search) where.customer = { name: { contains: String(search), mode: "insensitive" } };
       const [data, total] = await Promise.all([
@@ -134,11 +149,25 @@ invoiceRouter.post(
 invoiceRouter.get(
   "/:id",
   requireAuth,
-  requirePermission("invoices.view"),
-  async (req, res, next) => {
+  async (req: AuthRequest, res, next) => {
     try {
+      const isOwner = req.roles?.some(
+        (r: any) => r.role.permissions.includes("*")
+      ) ?? false;
+      const isAttendant = req.roles?.some(
+        (r: any) => r.role.permissions.includes("pos.sales.view")
+      ) ?? false;
+
+      if (!isOwner && !isAttendant) {
+        throw new AppError(403, "Insufficient permissions");
+      }
+
+      const where: any = { id: req.params.id, organizationId: req.organizationId };
+      if (isAttendant) {
+        where.recordedById = req.userId;
+      }
       const invoice = await prisma.invoice.findFirst({
-        where: { id: req.params.id, organizationId: (req as AuthRequest).organizationId },
+        where,
         include: {
           customer: true,
           branch: true,

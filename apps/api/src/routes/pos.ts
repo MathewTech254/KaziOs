@@ -98,9 +98,11 @@ function getPaymentMethods() {
   return methods;
 }
 
-async function getReceipt(invoiceId: string, organizationId: string) {
+async function getReceipt(invoiceId: string, organizationId: string, userId?: string) {
+  const where: any = { id: invoiceId, organizationId };
+  if (userId) where.recordedById = userId;
   const invoice = await prisma.invoice.findFirst({
-    where: { id: invoiceId, organizationId },
+    where,
     include: {
       customer: true,
       branch: true,
@@ -179,7 +181,7 @@ posRouter.get(
   "/products",
   requireAuth,
   requirePermission("pos.sale"),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const organizationId = getOrganizationId(req);
       if (!organizationId) throw new AppError(401, "Authentication required");
@@ -258,7 +260,7 @@ posRouter.get(
           : product.inventories[0];
         const quantity = inventory ? inventory.quantity - inventory.reserved : 0;
         const minStock = product.minStock;
-        return {
+        const base = {
           ...product,
           stockQuantity: quantity,
           stockStatus:
@@ -267,6 +269,13 @@ posRouter.get(
           taxRate: product.taxCategory?.rate || 0,
           taxMode: product.taxCategory?.mode || "EXCLUSIVE",
         };
+        // Attendants must not see cost prices.
+        const isOwner = req.roles?.some(
+          (r: any) => r.role.permissions.includes("*")
+        ) ?? false;
+        if (isOwner) return base;
+        const { costPrice: _cp, ...rest } = base;
+        return rest;
       });
 
       res.json({
@@ -744,23 +753,24 @@ posRouter.post(
                   organizationId,
                   customerId: input.customerId || null,
                   branchId: branch.id,
-              idempotencyKey: input.idempotencyKey || null,
-            },
-          });
+                  recordedById: req.userId,
+                  idempotencyKey: input.idempotencyKey || null,
+                },
+              });
 
-          await tx.invoiceItem.createMany({
-            data: lines.map(line => ({
-              invoiceId: invoice.id,
-              productId: line.product.id,
-              description: line.product.name,
-              quantity: line.quantity,
-              unitPrice: toCurrency(line.unitPriceCents),
-              discountAmount: toCurrency(line.discountCents),
-              taxRateId: line.product.taxCategoryId,
-              taxAmount: toCurrency(line.taxCents),
-              lineTotal: toCurrency(line.lineTotalCents),
-            })),
-          });
+              await tx.invoiceItem.createMany({
+                data: lines.map(line => ({
+                  invoiceId: invoice.id,
+                  productId: line.product.id,
+                  description: line.product.name,
+                  quantity: line.quantity,
+                  unitPrice: toCurrency(line.unitPriceCents),
+                  discountAmount: toCurrency(line.discountCents),
+                  taxRateId: line.product.taxCategoryId,
+                  taxAmount: toCurrency(line.taxCents),
+                  lineTotal: toCurrency(line.lineTotalCents),
+                })),
+              });
 
           const referencePrefix = `POS-${Date.now()}-${generateId().slice(0, 8)}`;
           // Only money that is actually in hand is written here (settledPayments was
@@ -976,7 +986,7 @@ posRouter.post(
 posRouter.post(
   "/sales/:id/return",
   requireAuth,
-  requirePermission("pos.sale"),
+  requirePermission("invoices.void"),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const organizationId = getOrganizationId(req);
@@ -1102,11 +1112,20 @@ posRouter.get(
   "/receipt/:invoiceId",
   requireAuth,
   requirePermission("pos.sale"),
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
     try {
       const organizationId = getOrganizationId(req);
       if (!organizationId) throw new AppError(401, "Authentication required");
-      res.json({ data: await getReceipt(req.params.invoiceId, organizationId) });
+      const isOwner = req.roles?.some(
+        (r: any) => r.role.permissions.includes("*")
+      ) ?? false;
+      res.json({
+        data: await getReceipt(
+          req.params.invoiceId,
+          organizationId,
+          isOwner ? undefined : req.userId
+        ),
+      });
     } catch (err) {
       next(err);
     }

@@ -740,6 +740,7 @@ export const PERMISSION_GROUPS = [
     label: "Sales",
     permissions: [
       { key: "pos.sale", label: "Process POS sales" },
+      { key: "pos.sales.view", label: "View own POS sales" },
       { key: "invoices.view", label: "View invoices" },
       { key: "invoices.create", label: "Create invoices" },
       { key: "invoices.send", label: "Send invoices" },

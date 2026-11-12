@@ -391,7 +391,7 @@ async function seedDemoTradingData(orgId: string) {
       name: "Attendant",
       type: "ATTENDANT",
       organizationId: orgId,
-      permissions: ["pos.sale", "products.view", "inventory.view"],
+      permissions: ["pos.sale", "pos.sales.view", "products.view", "inventory.view"],
     },
   });
 

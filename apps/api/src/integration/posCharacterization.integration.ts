@@ -1205,6 +1205,122 @@ describe("/pos/sale characterization", () => {
     expect(ourProduct).toBeUndefined();
   });
 
+  // --- Role enforcement tests ---
+  let attendantToken: string;
+  let attendantUserId: string;
+
+  beforeAll(async () => {
+    // Create an attendant user in the tenant's organization
+    const attendantRole = await testPrisma.role.findFirst({
+      where: { organizationId: tenant.organizationId, type: "ATTENDANT" },
+    });
+    expect(attendantRole).toBeTruthy();
+
+    const attendantUser = await testPrisma.user.create({
+      data: {
+        email: `attendant-${Date.now().toString(36)}@kazios.test`,
+        name: "Test Attendant",
+        passwordHash: "$2a$12$hashplaceholder",
+        organizationId: tenant.organizationId,
+        status: "ACTIVE",
+      },
+    });
+    attendantUserId = attendantUser.id;
+
+    await testPrisma.userRole.create({
+      data: { userId: attendantUser.id, roleId: attendantRole!.id },
+    });
+
+    // Login as attendant
+    const loginRes = await request(testApp)
+      .post("/api/v1/auth/login")
+      .send({
+        email: attendantUser.email,
+        password: "attendant123",
+      });
+    // Login may fail because passwordHash is a placeholder; instead, create a session directly
+    const session = await testPrisma.session.create({
+      data: {
+        userId: attendantUser.id,
+        token: `attendant-token-${Date.now()}`,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+    attendantToken = session.token;
+  });
+
+  it("attendant cannot see cost prices in products", async () => {
+    const res = await request(testApp)
+      .get("/api/v1/products/")
+      .set("Authorization", `Bearer ${attendantToken}`)
+      .expect(200);
+    const product = res.body.data.find((p: any) => p.id === productId);
+    expect(product).toBeTruthy();
+    expect(product.costPrice).toBeUndefined();
+  });
+
+  it("attendant cannot adjust stock (inventory.manage)", async () => {
+    await request(testApp)
+      .post("/api/v1/inventory/adjustments")
+      .set("Authorization", `Bearer ${attendantToken}`)
+      .send({
+        productId,
+        warehouseId,
+        quantity: 1,
+        adjustmentType: "INCREASE",
+        reason: "Test",
+      })
+      .expect(403);
+  });
+
+  it("attendant cannot void sales (invoices.void)", async () => {
+    await request(testApp)
+      .post(`/api/v1/pos/sales/${testPrisma.invoice.findFirst ? "test" : "test"}/return`)
+      .set("Authorization", `Bearer ${attendantToken}`)
+      .send({ warehouseId })
+      .expect(403);
+  });
+
+  it("attendant cannot see reports (reports.view)", async () => {
+    await request(testApp)
+      .get("/api/v1/reports/dashboard")
+      .set("Authorization", `Bearer ${attendantToken}`)
+      .expect(403);
+  });
+
+  it("attendant can sell and view own sales", async () => {
+    // Attendant makes a sale
+    const sale = await request(testApp)
+      .post("/api/v1/pos/sale")
+      .set("Authorization", `Bearer ${attendantToken}`)
+      .send({
+        customerId: null,
+        items: [{ productId, quantity: 1, discountAmount: 0 }],
+        discountAmount: 0,
+        payments: [{ provider: "CASH", methodType: "cash", amount: 35000, tenderedAmount: 35000 }],
+        idempotencyKey: `attendant-sale-${Date.now()}`,
+      })
+      .expect(201);
+    expect(sale.body.data.invoice.recordedById).toBe(attendantUserId);
+
+    // Attendant can see their own sales
+    const mySales = await request(testApp)
+      .get("/api/v1/invoices/")
+      .set("Authorization", `Bearer ${attendantToken}`)
+      .expect(200);
+    expect(mySales.body.data.length).toBeGreaterThanOrEqual(1);
+    expect(mySales.body.data.every((inv: any) => inv.recordedById === attendantUserId)).toBe(true);
+
+    // Attendant cannot see other attendants' sales (the owner's sales)
+    const ownerSales = await request(testApp)
+      .get("/api/v1/invoices/")
+      .set(auth(tenant.token))
+      .expect(200);
+    const ownerSaleIds = ownerSales.body.data.map((inv: any) => inv.id);
+    const attendantSaleIds = mySales.body.data.map((inv: any) => inv.id);
+    expect(ownerSaleIds.some(id => attendantSaleIds.includes(id))).toBe(false);
+  });
+
   afterAll(async () => {
     await cleanupRun();
   });
