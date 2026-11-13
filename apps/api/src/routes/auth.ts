@@ -13,6 +13,7 @@ import {
 } from "@kazios/validation";
 import { sendMail, welcomeEmail, passwordChangedEmail } from "../lib/email";
 import { consumeResetToken, inspectResetToken, issuePasswordReset } from "../lib/passwordReset";
+import { neonSignUp, neonSignIn, neonGetUser } from "../lib/auth-neon";
 
 export const authRouter = Router();
 
@@ -186,7 +187,7 @@ authRouter.post("/register", async (req, res, next) => {
   }
 });
 
-authRouter.post("/login", async (req, res, next) => {
+authRouter.post("/login", async (req: AuthRequest, res, next) => {
   try {
     const data = zLoginSchema.parse(req.body);
     const user = await prisma.user.findUnique({
@@ -238,6 +239,58 @@ authRouter.post("/logout", requireAuth, async (req: AuthRequest, res, next) => {
     next(err);
   }
 });
+
+authRouter.post(
+  "/neon/signup",
+  async (req: AuthRequest, res, next) => {
+    try {
+      const { email, password } = req.body as { email: string; password: string };
+      if (!email || !password) {
+        throw new AppError(400, "Email and password are required", "MISSING_CREDENTIALS");
+      }
+      const result = await neonSignUp(email, password);
+      res.status(201).json({ data: { user: result.user } });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+authRouter.post(
+  "/neon/signin",
+  async (req: AuthRequest, res, next) => {
+    try {
+      const { email, password } = req.body as { email: string; password: string };
+      if (!email || !password) {
+        throw new AppError(400, "Email and password are required", "MISSING_CREDENTIALS");
+      }
+      const result = await neonSignIn(email, password);
+      res.json({ data: { user: result.user, session: result.session } });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+authRouter.get(
+  "/neon/me",
+  requireAuth,
+  async (req: AuthRequest, res, next) => {
+    try {
+      const sessionToken = req.headers["x-session-token"] as string;
+      if (!sessionToken) {
+        throw new AppError(401, "Session token required", "MISSING_SESSION_TOKEN");
+      }
+      const result = await neonGetUser(sessionToken);
+      if (!result) {
+        throw new AppError(404, "User not found", "USER_NOT_FOUND");
+      }
+      res.json({ data: { user: result } });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 authRouter.get("/me", requireAuth, async (req: AuthRequest, res, next) => {
   try {
