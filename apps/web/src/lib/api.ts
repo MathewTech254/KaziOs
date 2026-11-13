@@ -1,12 +1,22 @@
 import axios from "axios";
 
 /**
+ * The API host the web client falls back to when no explicit URL is configured.
+ *
+ * The web is deployed to Cloudflare Pages and the API to Render, which are different
+ * origins. A relative "/api/v1" would hit the Pages origin, where no API is mounted,
+ * so every call 404s (or, worse, returns the SPA shell). When the build is not given
+ * VITE_API_URL, the client therefore targets the deployed API directly.
+ */
+const DEFAULT_API_HOST = "https://kazios.onrender.com";
+
+/**
  * The API is served under /api/v1. A configured host may or may not already include
  * that prefix, so normalise it rather than silently dropping it and 404ing every call.
  */
 function resolveApiBase(configured?: string): string {
   const base = (configured || "").trim().replace(/\/+$/, "");
-  if (!base) return "/api/v1";
+  if (!base) return `${DEFAULT_API_HOST}/api/v1`;
   return /\/api\/v\d+$/i.test(base) ? base : `${base}/api/v1`;
 }
 
