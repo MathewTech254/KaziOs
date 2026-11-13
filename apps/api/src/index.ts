@@ -227,6 +227,7 @@ export function createApp() {
   app.use("/api/v1/webhooks", whatsappWebhookRouter);
 
   app.use("/api/v1/auth", authLimiter);
+  app.use("/api/v1/auth", authRouter);
   app.use("/api/v1", apiLimiter);
 
   // Visiting the API host in a browser should explain itself rather than 404.
