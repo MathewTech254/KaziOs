@@ -19,10 +19,10 @@ import { SettingsBillingPanel } from "../components/SettingsBillingPanel";
 
 const TABS = [
   { id: "organization", label: "Organization", icon: Building2 },
-  { id: "locations", label: "Locations", icon: Warehouse },
   { id: "tax", label: "Tax", icon: Percent },
   { id: "preferences", label: "Preferences", icon: SlidersHorizontal },
   { id: "roles", label: "Roles & permissions", icon: ShieldCheck },
+  { id: "locations", label: "Locations", icon: Warehouse },
   { id: "billing", label: "Billing", icon: CreditCard },
 ] as const;
 

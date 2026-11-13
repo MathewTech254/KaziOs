@@ -80,14 +80,14 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import session from "express-session";
 import rateLimit from "express-rate-limit";
-import { RedisStore } from "connect-redis";
+import { MemoryStore } from "express-session";
 import { prisma } from "./lib/prisma";
 import {
   assertProductionEnv,
   corsOriginWarning,
   mailConfigurationWarning,
 } from "./lib/productionEnv";
-import { redisClient, connectRedis } from "./lib/redis";
+import { connectRedis, getRedis } from "./lib/redis";
 import { startRealtimeSubscriber } from "./lib/realtime";
 import { authRouter } from "./routes/auth";
 import { organizationRouter } from "./routes/organization";
@@ -101,6 +101,7 @@ import { taxCategoryRouter } from "./routes/tax-categories";
 import { userRouter } from "./routes/users";
 import { roleRouter } from "./routes/roles";
 import { posRouter } from "./routes/pos";
+import { dayClosingRouter } from "./routes/day-closings";
 import { cardPaymentRouter, paystackWebhookRouter } from "./routes/card-payments";
 import { mpesaWebhookRouter } from "./routes/mpesa";
 import { planRouter } from "./routes/plans";
@@ -186,7 +187,13 @@ export function createApp() {
   app.use(cookieParser());
   app.use(
     session({
-      store: new (RedisStore as any)({ client: redisClient, ttl: 86400 }),
+      store: (() => {
+        if (getRedis()) {
+          const { RedisStore } = require("connect-redis");
+          return new RedisStore({ client: getRedis(), ttl: 86400 });
+        }
+        return new MemoryStore();
+      })(),
       secret: process.env.SESSION_SECRET || "dev-session-secret-change-in-production-min-32chars",
       resave: false,
       saveUninitialized: false,
@@ -257,6 +264,7 @@ export function createApp() {
   app.use("/api/v1/invoices", invoiceRouter);
   app.use("/api/v1/payments", paymentRouter);
   app.use("/api/v1/reports", reportRouter);
+app.use("/api/v1/day-closings", dayClosingRouter);
   app.use("/api/v1/settings", settingsRouter);
   app.use("/api/v1/tax-categories", taxCategoryRouter);
   app.use("/api/v1/users", userRouter);
@@ -309,9 +317,13 @@ async function start() {
   if (mailWarning) console.warn(`Warning: ${mailWarning}`);
   await connectRedis();
   // Alerts published by the worker, or by another replica, reach this one through
-  // Redis. Started before the server listens so no browser can connect to a process
-  // that is not yet listening for cross process events.
-  startRealtimeSubscriber();
+  // Redis. When Redis is not configured the in-process emitter still delivers to
+  // this replica's own browsers (single-instance SSE); publishing is a no-op.
+  if (getRedis()) {
+    startRealtimeSubscriber();
+  } else {
+    console.log("Redis: disabled, realtime stays in-process (single instance)");
+  }
   await prisma.$connect();
 
   // The features every plan grants, loaded once. Entitlement checks read this on every

@@ -202,7 +202,6 @@ export function DashboardPage() {
             </table>
           </div>
         </div>
-
         <div>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="kazi-section-title">Top Products This Month</h2>

@@ -46,8 +46,8 @@ interface Category {
 interface PaymentMethod {
   id: string;
   label: string;
-  provider: "PAYSTACK" | "MPESA" | "BANK" | "MANUAL" | "CASH" | "CHECK";
-  methodType: "card" | "bank_transfer" | "mobile_money" | "cash" | "check" | "manual";
+  provider: "PAYSTACK" | "MPESA" | "MPESA_MANUAL" | "BANK" | "MANUAL" | "CASH" | "CHECK" | "CREDIT";
+  methodType: "card" | "bank_transfer" | "mobile_money" | "cash" | "check" | "manual" | "credit";
   configured: boolean;
 }
 
@@ -129,12 +129,14 @@ interface PosCustomer {
   name: string;
   phone?: string | null;
   email?: string | null;
+  balanceOwed?: number;
+  creditLimit?: number | null;
 }
 
 // Card and M-PESA are listed because the server verifies them properly: the till records
 // the sale, then Paystack or Safaricom confirms the money before the invoice is ever
 // marked paid. (The name is historical — these are the providers this till may offer.)
-const immediatePaymentProviders = new Set(["CASH", "BANK", "MANUAL", "CHECK", "PAYSTACK", "MPESA"]);
+const immediatePaymentProviders = new Set(["CASH", "BANK", "MANUAL", "CHECK", "PAYSTACK", "MPESA", "MPESA_MANUAL", "CREDIT"]);
 
 function formatMoney(value: number, currency: string): string {
   try {
@@ -184,6 +186,11 @@ export function PosPage() {
   const [customerEmail, setCustomerEmail] = useState("");
   // M-PESA prompts are pushed to a phone number, so the till asks for that up front.
   const [mpesaPhone, setMpesaPhone] = useState("");
+  // MPESA_MANUAL needs the transaction code the customer shows the cashier.
+  const [mpesaTransactionCode, setMpesaTransactionCode] = useState("");
+  // CREDIT sales over the limit need an explicit owner override with a reason.
+  const [creditOverride, setCreditOverride] = useState(false);
+  const [creditOverrideReason, setCreditOverrideReason] = useState("");
   // Null is a walk-in sale, which is the default for ordinary retail. It is stored as a
   // null customer rather than a placeholder "Walk-in Customer" row, because creating one
   // row per anonymous sale would flood the customer table and corrupt every report that
@@ -349,10 +356,18 @@ export function PosPage() {
     };
   }, [customerQuery]);
 
-  const selectCustomer = (next: PosCustomer | null) => {
-    setCustomer(next);
+  const selectCustomer = async (next: PosCustomer | null) => {
+    setCustomer(null);
     setCustomerQuery("");
     setCustomerResults([]);
+    if (!next) return;
+    try {
+      const res = await api.get(`/customers/${next.id}`);
+      const full: PosCustomer = res.data.data;
+      setCustomer(full);
+    } catch {
+      setCustomer(next);
+    }
   };
 
   /**
@@ -507,6 +522,22 @@ export function PosPage() {
       }
     }
 
+    if (selectedPaymentMethod?.provider === "MPESA_MANUAL") {
+      if (!mpesaTransactionCode.trim()) {
+        setError("Enter the M-PESA transaction code");
+        setSubmitting(false);
+        return;
+      }
+    }
+
+    if (selectedPaymentMethod?.provider === "CREDIT") {
+      if (!customer?.id) {
+        setError("Select a customer before selling on credit");
+        setSubmitting(false);
+        return;
+      }
+    }
+
     try {
       const res = await api.post<{
         data: ReceiptData & { requiresCardPayment?: boolean; invoiceId?: string };
@@ -545,6 +576,15 @@ export function PosPage() {
               methodType: selectedPaymentMethod.methodType,
               amount: total,
               ...(isCash ? { tenderedAmount: toCurrency(tender.tenderedCents) } : {}),
+              ...(selectedPaymentMethod.provider === "MPESA_MANUAL"
+                ? { transactionCode: mpesaTransactionCode.trim().toUpperCase() }
+                : {}),
+              ...(selectedPaymentMethod.provider === "CREDIT"
+                ? {
+                    overrideCreditLimit: creditOverride,
+                    overrideCreditLimitReason: creditOverrideReason.trim() || undefined,
+                  }
+                : {}),
               ...(reference.trim() ? { reference: reference.trim() } : {}),
             },
           ];
@@ -638,6 +678,9 @@ export function PosPage() {
     setReference("");
     setNotes("");
     setError("");
+    setMpesaTransactionCode("");
+    setCreditOverride(false);
+    setCreditOverrideReason("");
     // Clears the card and M-PESA banners so the next sale starts from a clean till.
     cardPayment.reset();
     mpesaPayment.reset();
@@ -888,6 +931,14 @@ export function PosPage() {
                 <p className="truncate text-sm font-medium text-foreground">{customer.name}</p>
                 {customer.phone && (
                   <p className="truncate text-xs text-muted-foreground">{customer.phone}</p>
+                )}
+                {customer.balanceOwed !== undefined && customer.balanceOwed > 0 && (
+                  <p className="text-xs font-medium text-danger">
+                    Owes {formatMoney(customer.balanceOwed, context.organization.currency)}
+                    {customer.creditLimit != null && (
+                      <> · limit {formatMoney(customer.creditLimit, context.organization.currency)}</>
+                    )}
+                  </p>
                 )}
               </div>
               <button
@@ -1158,6 +1209,64 @@ export function PosPage() {
               <p className="mt-1.5 text-xs text-muted-foreground">
                 The M-PESA prompt is sent to this number after the sale is recorded. The sale turns
                 paid only when Safaricom confirms the money.
+              </p>
+            </div>
+          )}
+          {selectedPaymentMethod?.provider === "MPESA_MANUAL" && (
+            <div className="mt-3">
+              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                M-PESA transaction code
+              </label>
+              <input
+                type="text"
+                value={mpesaTransactionCode}
+                onChange={event => setMpesaTransactionCode(event.target.value)}
+                placeholder="e.g. MPA123456789"
+                autoComplete="off"
+                className="kazi-input uppercase"
+              />
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                Enter the transaction code exactly as the customer shows it on their phone.
+              </p>
+            </div>
+          )}
+          {selectedPaymentMethod?.provider === "CREDIT" && customer && (
+            <div className="mt-3 rounded-lg border border-border bg-warning/10 p-3">
+              <p className="mb-2 text-xs font-medium text-warning">
+                Customer owes{" "}
+                {formatMoney(customer.balanceOwed ?? 0, context.organization.currency)}
+                {customer.creditLimit != null && (
+                  <> · credit limit {formatMoney(customer.creditLimit, context.organization.currency)}</>
+                )}
+              </p>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={creditOverride}
+                  onChange={event => setCreditOverride(event.target.checked)}
+                  className="w-4 h-4 text-accent"
+                />
+                Override credit limit
+              </label>
+              {creditOverride && (
+                <div className="mt-2">
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                    Reason for override
+                  </label>
+                  <input
+                    value={creditOverrideReason}
+                    onChange={event => setCreditOverrideReason(event.target.value)}
+                    placeholder="Why is this sale allowed over the limit?"
+                    className="kazi-input"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+          {selectedPaymentMethod?.provider === "CREDIT" && !customer && (
+            <div className="mt-3 rounded-lg border border-danger/30 bg-danger/10 p-3">
+              <p className="text-xs text-danger">
+                Select a customer before selling on credit.
               </p>
             </div>
           )}

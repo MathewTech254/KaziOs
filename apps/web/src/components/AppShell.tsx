@@ -3,6 +3,8 @@ import {
   Building2,
   ChevronLeft,
   Command,
+  Clock,
+  Clipboard,
   FileText,
   LayoutDashboard,
   Moon,
@@ -13,6 +15,7 @@ import {
   ShoppingBag,
   Sparkles,
   Sun,
+  Truck,
   User,
   Users,
   Wallet,
@@ -31,18 +34,18 @@ interface NavGroup {
   items: { to: string; label: string; icon: React.ElementType }[];
 }
 
-const NAV_GROUPS: NavGroup[] = [
-  {
+const NAV_GROUPS: NavGroup[] = (() => {
+  const groups: NavGroup[] = [];
+
+  groups.push({
     label: "Overview",
     items: [
       { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      // Shown to everyone; the page itself explains the plan requirement and links to
-      // pricing, the same way the Pricing page does. Hiding it here would only hide it
-      // from people who might upgrade if they knew it existed.
       { to: "/assistant", label: "Ask your business", icon: Sparkles },
     ],
-  },
-  {
+  });
+
+  groups.push({
     label: "Sell",
     items: [
       { to: "/pos", label: "POS", icon: ShoppingBag },
@@ -50,27 +53,34 @@ const NAV_GROUPS: NavGroup[] = [
       { to: "/dashboard/payments", label: "Payments", icon: Receipt },
       { to: "/dashboard/customers", label: "Customers", icon: Users },
     ],
-  },
-  {
-    label: "Operate",
-    items: [
-      { to: "/dashboard/products", label: "Products", icon: Package },
-      { to: "/inventory", label: "Inventory", icon: Warehouse },
-      { to: "/purchases", label: "Purchasing", icon: Building2 },
-    ],
-  },
-  {
-    label: "Finance",
-    items: [
-      { to: "/dashboard/reports", label: "Reports", icon: BarChart3 },
-      { to: "/expenses", label: "Expenses", icon: Wallet },
-    ],
-  },
-  {
+  });
+
+  const operateItems: { to: string; label: string; icon: React.ElementType }[] = [
+    { to: "/dashboard/products", label: "Products", icon: Package },
+    { to: "/inventory", label: "Inventory", icon: Warehouse },
+    { to: "/stocktake", label: "Stocktake", icon: Clipboard },
+    { to: "/stock/receive", label: "Receive Stock", icon: Truck },
+    { to: "/purchases", label: "Purchasing", icon: Building2 },
+  ];
+  groups.push({ label: "Operate", items: operateItems });
+
+  const financeItems: { to: string; label: string; icon: React.ElementType }[] = [
+    { to: "/dashboard/reports", label: "Reports", icon: BarChart3 },
+    { to: "/closing", label: "Daily Closing", icon: Clock },
+    { to: "/expenses", label: "Expenses", icon: Wallet },
+  ];
+  groups.push({ label: "Finance", items: financeItems });
+
+  groups.push({
     label: "Organization",
-    items: [{ to: "/settings", label: "Settings", icon: Settings }],
-  },
-];
+    items: [
+      { to: "/settings", label: "Settings", icon: Settings },
+      { to: "/settings?tab=roles", label: "Users", icon: Users },
+    ],
+  });
+
+  return groups;
+})();
 
 interface AppShellProps {
   collapsed: boolean;

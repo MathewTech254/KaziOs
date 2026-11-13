@@ -1,6 +1,5 @@
 import { createBrowserRouter, Link, useRouteError } from "react-router-dom";
 import { Layout } from "../components/Layout";
-import { LoginPage } from "../pages/LoginPage";
 import { RegisterPage } from "../pages/RegisterPage";
 import { ForgotPasswordPage } from "../pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "../pages/ResetPasswordPage";
@@ -15,7 +14,11 @@ import { PaymentsPage } from "../pages/PaymentsPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { InventoryPage } from "../pages/InventoryPage";
 import { PurchasingPage } from "../pages/PurchasingPage";
+import { ReceiveStockPage } from "../pages/ReceiveStockPage";
+import { StocktakePage } from "../pages/StocktakePage";
 import { ExpensesPage } from "../pages/ExpensesPage";
+import { ClosingPage } from "../pages/ClosingPage";
+import { OnboardingWizard } from "../pages/OnboardingWizard";
 import { PricingPage } from "../pages/PricingPage";
 import { AssistantPage } from "../pages/AssistantPage";
 import { AuthGuard } from "../components/Guard";
@@ -59,8 +62,8 @@ export const router = createBrowserRouter([
     element: <LandingPage />,
   },
   {
-    path: "/login",
-    element: <LoginPage />,
+    path: "/pricing",
+    element: <PricingPage />,
   },
   {
     // Public on purpose: somebody deciding whether to sign up has to be able to read the
@@ -72,6 +75,15 @@ export const router = createBrowserRouter([
   {
     path: "/register",
     element: <RegisterPage />,
+  },
+  {
+    path: "/onboarding",
+    element: (
+      <AuthGuard>
+        <Layout />
+      </AuthGuard>
+    ),
+    children: [{ index: true, element: <OnboardingWizard /> }],
   },
   {
     path: "/forgot-password",
@@ -115,7 +127,12 @@ export const router = createBrowserRouter([
         <Layout />
       </AuthGuard>
     ),
-    children: [{ index: true, element: <PurchasingPage /> }],
+    children: [
+      {
+        index: true,
+        element: <PurchasingPage />,
+      },
+    ],
   },
   {
     path: "/expenses",
@@ -127,13 +144,60 @@ export const router = createBrowserRouter([
     children: [{ index: true, element: <ExpensesPage /> }],
   },
   {
+    path: "/stock/receive",
+    element: (
+      <AuthGuard>
+        <Layout />
+      </AuthGuard>
+    ),
+    children: [
+      {
+        index: true,
+        element: <ReceiveStockPage />,
+      },
+    ],
+  },
+  {
+    path: "/stocktake",
+    element: (
+      <AuthGuard>
+        <Layout />
+      </AuthGuard>
+    ),
+    children: [
+      {
+        index: true,
+        element: <StocktakePage />,
+      },
+    ],
+  },
+  {
+    path: "/closing",
+    element: (
+      <AuthGuard>
+        <Layout />
+      </AuthGuard>
+    ),
+    children: [
+      {
+        index: true,
+        element: <ClosingPage />,
+      },
+    ],
+  },
+  {
     path: "/assistant",
     element: (
       <AuthGuard>
         <Layout />
       </AuthGuard>
     ),
-    children: [{ index: true, element: <AssistantPage /> }],
+    children: [
+      {
+        index: true,
+        element: <AssistantPage />,
+      },
+    ],
   },
   {
     path: "/dashboard",

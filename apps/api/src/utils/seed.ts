@@ -139,150 +139,314 @@ async function seedDemoTradingData(orgId: string) {
   const branch = await prisma.branch.findFirst({ where: { organizationId: orgId } });
   if (!warehouse || !branch) return;
 
-  await prisma.product.createMany({
-    data: [
-      {
-        name: "Maize Flour (2kg)",
-        sku: "MAIZ-001",
-        barcode: "6001000000101",
-        costPrice: 120,
-        sellingPrice: 180,
-        minStock: 20,
-        productType: "PHYSICAL",
-        organizationId: orgId,
-      },
-      {
-        name: "Cooking Oil (500ml)",
-        sku: "OIL-002",
-        barcode: "6001000000117",
-        costPrice: 80,
-        sellingPrice: 130,
-        minStock: 15,
-        productType: "PHYSICAL",
-        organizationId: orgId,
-      },
-      {
-        name: "Sugar (1kg)",
-        sku: "SUG-003",
-        barcode: "6001000000124",
-        costPrice: 90,
-        sellingPrice: 140,
-        minStock: 25,
-        productType: "PHYSICAL",
-        organizationId: orgId,
-      },
-      {
-        name: "Office Printer Paper",
-        sku: "PAP-004",
-        barcode: "6001000000131",
-        costPrice: 2400,
-        sellingPrice: 3200,
-        minStock: 5,
-        productType: "PHYSICAL",
-        organizationId: orgId,
-      },
-      {
-        name: "Web Hosting Service",
-        sku: "WEB-005",
-        barcode: "6001000000148",
-        costPrice: 0,
-        sellingPrice: 1500,
-        minStock: 0,
-        productType: "SERVICE",
-        organizationId: orgId,
-      },
-    ],
-  });
-
-  const createdProducts = await prisma.product.findMany({ where: { organizationId: orgId } });
-  await prisma.customer.createMany({
-    data: [
-      {
-        name: "Acme Ltd",
-        email: "acme@example.com",
-        phone: "+254712345678",
-        customerType: "BUSINESS",
-        organizationId: orgId,
-      },
-      {
-        name: "Mwangi Store",
-        email: "mwangi@example.com",
-        phone: "+254722345678",
-        customerType: "INDIVIDUAL",
-        organizationId: orgId,
-      },
-      {
-        name: "Nairobi Cafe",
-        email: "cafe@example.com",
-        phone: "+254733345678",
-        customerType: "BUSINESS",
-        organizationId: orgId,
-      },
-    ],
-  });
-
-  const createdCustomers = await prisma.customer.findMany({ where: { organizationId: orgId } });
-
-  await prisma.inventory.createMany({
-    data: createdProducts.map((p, i) => ({
-      productId: p.id,
-      warehouseId: warehouse.id,
-      quantity: [50, 30, 40, 8, 100][i] || 10,
-      reserved: 0,
+  // --- Liquor store products: beers, spirits, wines, soft drinks, mixers ---
+  // KES prices, crate (24) and carton (12) pack units, base unit = bottle.
+  const products = [
+    // Beers (crate = 24 bottles)
+    {
+      name: "Tusker Lager",
+      sku: "LQR-BEER-001",
+      barcode: "6001000001001",
+      size: "500ml",
+      category: "beer",
+      costPrice: 180,
+      sellingPrice: 300,
+      minStock: 48,
+      reorderPoint: 24,
+      productType: "PHYSICAL",
       organizationId: orgId,
-    })),
-  });
+      units: [
+        { name: "bottle", factorToBase: 1, isDefaultSaleUnit: true, isDefaultPurchaseUnit: false },
+        { name: "crate", factorToBase: 24, isDefaultSaleUnit: false, isDefaultPurchaseUnit: true },
+      ],
+      stock: 120, // 5 crates
+    },
+    {
+      name: "Whitecap Lager",
+      sku: "LQR-BEER-002",
+      barcode: "6001000001002",
+      size: "500ml",
+      category: "beer",
+      costPrice: 170,
+      sellingPrice: 280,
+      minStock: 48,
+      reorderPoint: 24,
+      productType: "PHYSICAL",
+      organizationId: orgId,
+      units: [
+        { name: "bottle", factorToBase: 1, isDefaultSaleUnit: true, isDefaultPurchaseUnit: false },
+        { name: "crate", factorToBase: 24, isDefaultSaleUnit: false, isDefaultPurchaseUnit: true },
+      ],
+      stock: 24, // low stock (1 crate)
+    },
+    {
+      name: "Guinness Foreign Extra",
+      sku: "LQR-BEER-003",
+      barcode: "6001000001003",
+      size: "330ml",
+      category: "beer",
+      costPrice: 220,
+      sellingPrice: 380,
+      minStock: 24,
+      reorderPoint: 12,
+      productType: "PHYSICAL",
+      organizationId: orgId,
+      units: [
+        { name: "bottle", factorToBase: 1, isDefaultSaleUnit: true, isDefaultPurchaseUnit: false },
+        { name: "crate", factorToBase: 24, isDefaultSaleUnit: false, isDefaultPurchaseUnit: true },
+      ],
+      stock: 0, // out of stock
+    },
+    // Spirits (bottle base, carton = 12 bottles)
+    {
+      name: "Jameson Irish Whiskey",
+      sku: "LQR-SPIRIT-001",
+      barcode: "6001000002001",
+      size: "750ml",
+      category: "spirits",
+      costPrice: 2400,
+      sellingPrice: 3200,
+      minStock: 12,
+      reorderPoint: 6,
+      productType: "PHYSICAL",
+      organizationId: orgId,
+      units: [
+        { name: "bottle", factorToBase: 1, isDefaultSaleUnit: true, isDefaultPurchaseUnit: false },
+        { name: "carton", factorToBase: 12, isDefaultSaleUnit: false, isDefaultPurchaseUnit: true },
+      ],
+      stock: 36, // 3 cartons
+    },
+    {
+      name: "Smirnoff Vodka",
+      sku: "LQR-SPIRIT-002",
+      barcode: "6001000002002",
+      size: "750ml",
+      category: "spirits",
+      costPrice: 1800,
+      sellingPrice: 2500,
+      minStock: 12,
+      reorderPoint: 6,
+      productType: "PHYSICAL",
+      organizationId: orgId,
+      units: [
+        { name: "bottle", factorToBase: 1, isDefaultSaleUnit: true, isDefaultPurchaseUnit: false },
+        { name: "carton", factorToBase: 12, isDefaultSaleUnit: false, isDefaultPurchaseUnit: true },
+      ],
+      stock: 0, // out of stock
+    },
+    {
+      name: "Johnnie Walker Red Label",
+      sku: "LQR-SPIRIT-003",
+      barcode: "6001000002003",
+      size: "750ml",
+      category: "spirits",
+      costPrice: 3200,
+      sellingPrice: 4200,
+      minStock: 6,
+      reorderPoint: 3,
+      productType: "PHYSICAL",
+      organizationId: orgId,
+      units: [
+        { name: "bottle", factorToBase: 1, isDefaultSaleUnit: true, isDefaultPurchaseUnit: false },
+        { name: "carton", factorToBase: 12, isDefaultSaleUnit: false, isDefaultPurchaseUnit: true },
+      ],
+      stock: 6, // at reorder point
+    },
+    // Wines
+    {
+      name: "Seven Sisters Red Wine",
+      sku: "LQR-WINE-001",
+      barcode: "6001000003001",
+      size: "750ml",
+      category: "wine",
+      costPrice: 1400,
+      sellingPrice: 1900,
+      minStock: 12,
+      reorderPoint: 6,
+      productType: "PHYSICAL",
+      organizationId: orgId,
+      units: [
+        { name: "bottle", factorToBase: 1, isDefaultSaleUnit: true, isDefaultPurchaseUnit: false },
+        { name: "carton", factorToBase: 12, isDefaultSaleUnit: false, isDefaultPurchaseUnit: true },
+      ],
+      stock: 24, // 2 cartons
+    },
+    {
+      name: "Seven Sisters White Wine",
+      sku: "LQR-WINE-002",
+      barcode: "6001000003002",
+      size: "750ml",
+      category: "wine",
+      costPrice: 1400,
+      sellingPrice: 1900,
+      minStock: 12,
+      reorderPoint: 6,
+      productType: "PHYSICAL",
+      organizationId: orgId,
+      units: [
+        { name: "bottle", factorToBase: 1, isDefaultSaleUnit: true, isDefaultPurchaseUnit: false },
+        { name: "carton", factorToBase: 12, isDefaultSaleUnit: false, isDefaultPurchaseUnit: true },
+      ],
+      stock: 12, // 1 carton
+    },
+    // Soft drinks and mixers (crate = 24 bottles)
+    {
+      name: "Coca-Cola",
+      sku: "LQR-SODA-001",
+      barcode: "6001000004001",
+      size: "300ml",
+      category: "soft drinks",
+      costPrice: 40,
+      sellingPrice: 80,
+      minStock: 48,
+      reorderPoint: 24,
+      productType: "PHYSICAL",
+      organizationId: orgId,
+      units: [
+        { name: "bottle", factorToBase: 1, isDefaultSaleUnit: true, isDefaultPurchaseUnit: false },
+        { name: "crate", factorToBase: 24, isDefaultSaleUnit: false, isDefaultPurchaseUnit: true },
+      ],
+      stock: 72, // 3 crates
+    },
+    {
+      name: "Sprite",
+      sku: "LQR-SODA-002",
+      barcode: "6001000004002",
+      size: "300ml",
+      category: "soft drinks",
+      costPrice: 40,
+      sellingPrice: 80,
+      minStock: 48,
+      reorderPoint: 24,
+      productType: "PHYSICAL",
+      organizationId: orgId,
+      units: [
+        { name: "bottle", factorToBase: 1, isDefaultSaleUnit: true, isDefaultPurchaseUnit: false },
+        { name: "crate", factorToBase: 24, isDefaultSaleUnit: false, isDefaultPurchaseUnit: true },
+      ],
+      stock: 0, // out of stock
+    },
+    {
+      name: "Club Soda",
+      sku: "LQR-MIXER-001",
+      barcode: "6001000005001",
+      size: "300ml",
+      category: "other",
+      costPrice: 30,
+      sellingPrice: 60,
+      minStock: 24,
+      reorderPoint: 12,
+      productType: "PHYSICAL",
+      organizationId: orgId,
+      units: [
+        { name: "bottle", factorToBase: 1, isDefaultSaleUnit: true, isDefaultPurchaseUnit: false },
+        { name: "crate", factorToBase: 24, isDefaultSaleUnit: false, isDefaultPurchaseUnit: true },
+      ],
+      stock: 48, // 2 crates
+    },
+  ];
 
-  const now = new Date();
-  for (let d = 0; d < 14; d++) {
-    const issueDate = new Date(now);
-    issueDate.setDate(issueDate.getDate() - d);
-    const dueDate = new Date(issueDate);
-    dueDate.setDate(dueDate.getDate() + 14);
-    const cust = createdCustomers[d % createdCustomers.length];
-    const items = [
-      createdProducts[d % createdProducts.length],
-      createdProducts[(d + 1) % createdProducts.length],
-    ];
-    const total = items.reduce((s, p) => s + p.sellingPrice * ((d % 3) + 1), 0);
-    const tax = total * 0.16;
-    const status = d < 3 ? "PAID" : d < 7 ? "SENT" : d < 10 ? "PARTIALLY_PAID" : "DRAFT";
-    const inv = await prisma.invoice.create({
+  // Create products with their units
+  const createdProducts: any[] = [];
+  for (const p of products) {
+    const product = await prisma.product.create({
       data: {
-        invoiceNumber: `INV-${1000 + d}`,
+        name: p.name,
+        sku: p.sku,
+        barcode: p.barcode,
+        size: p.size,
+        category: p.category,
+        costPrice: p.costPrice,
+        sellingPrice: p.sellingPrice,
+        minStock: p.minStock,
+        reorderPoint: p.reorderPoint,
+        isActive: true,
+        productType: p.productType,
         organizationId: orgId,
-        customerId: cust.id,
-        branchId: branch.id,
-        issueDate,
-        dueDate,
-        subtotal: total,
-        taxTotal: tax,
-        discountTotal: 0,
-        total: total + tax,
-        currency: "KES",
-        status,
-        paidAmount:
-          status === "PAID" ? total + tax : status === "PARTIALLY_PAID" ? (total + tax) * 0.5 : 0,
+        productUnits: {
+          create: p.units.map(u => ({
+            ...u,
+            organization: { connect: { id: orgId } },
+          })),
+        },
+      },
+      include: { productUnits: true },
+    });
+    createdProducts.push(product);
+
+    await prisma.inventory.create({
+      data: {
+        productId: product.id,
+        warehouseId: warehouse.id,
+        quantity: p.stock,
+        reserved: 0,
+        organizationId: orgId,
       },
     });
-    if (status === "PAID" || status === "PARTIALLY_PAID") {
-      await prisma.payment.create({
-        data: {
-          reference: `PAY-${1000 + d}`,
-          organizationId: orgId,
-          amount: status === "PAID" ? total + tax : (total + tax) * 0.5,
-          currency: "KES",
-          provider: "MPESA",
-          methodType: "MOBILE_MONEY",
-          status: "SUCCESS",
-          invoiceId: inv.id,
-          customerId: cust.id,
-          branchId: branch.id,
-          paidAt: issueDate,
-        },
-      });
-    }
   }
+
+  // --- Users: 2 attendants, 1 owner (already created in main seed) ---
+  const attendantRole = await prisma.role.create({
+    data: {
+      name: "Attendant",
+      type: "ATTENDANT",
+      organizationId: orgId,
+      permissions: ["pos.sale", "pos.sales.view", "products.view", "inventory.view"],
+    },
+  });
+
+  const attendant1 = await prisma.user.create({
+    data: {
+      email: "attendant1@kazios.dev",
+      passwordHash: await hashPassword("attendant123"),
+      name: "Grace Wanjiku",
+      organizationId: orgId,
+      status: "ACTIVE",
+    },
+  });
+  await prisma.userRole.create({ data: { userId: attendant1.id, roleId: attendantRole.id } });
+
+  const attendant2 = await prisma.user.create({
+    data: {
+      email: "attendant2@kazios.dev",
+      passwordHash: await hashPassword("attendant123"),
+      name: "Peter Otieno",
+      organizationId: orgId,
+      status: "ACTIVE",
+    },
+  });
+  await prisma.userRole.create({ data: { userId: attendant2.id, roleId: attendantRole.id } });
+
+  // --- Credit customers ---
+  const customers = [
+    {
+      name: "Mama Mboga",
+      phone: "+254700000001",
+      customerType: "INDIVIDUAL",
+      creditLimit: 5000,
+      organizationId: orgId,
+    },
+    {
+      name: "Westlands Bar",
+      phone: "+254700000002",
+      customerType: "BUSINESS",
+      creditLimit: 20000,
+      organizationId: orgId,
+    },
+    {
+      name: "Joseph Kimani",
+      phone: "+254700000003",
+      customerType: "INDIVIDUAL",
+      creditLimit: 3000,
+      organizationId: orgId,
+    },
+  ];
+
+  for (const c of customers) {
+    await prisma.customer.create({ data: c });
+  }
+
+  console.log(`Demo data seeded: ${createdProducts.length} products, 2 attendants, 3 credit customers`);
 }
 
 /**

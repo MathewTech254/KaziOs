@@ -147,6 +147,7 @@ export const zCustomerSchema = z.object({
   address: zString(1, 200).optional().nullable(),
   taxNumber: zString(1, 50).optional().nullable(),
   customerType: z.enum(["INDIVIDUAL", "BUSINESS"]).default("INDIVIDUAL"),
+  creditLimit: z.number().nonnegative("Credit limit cannot be negative").optional().nullable(),
 });
 
 export const zSupplierSchema = z.object({
@@ -232,6 +233,27 @@ export const zExpenseVoidSchema = z.object({
   reason: z.string().trim().min(3, "A reason is required to void an expense").max(300),
 });
 
+export const zDayClosingOpenSchema = z.object({
+  // Calendar date in the organization's own timezone, YYYY-MM-DD.
+  date: z.string().trim().min(10, "Date is required").max(10, "Date must be YYYY-MM-DD"),
+});
+
+export const zDayClosingCloseSchema = z.object({
+  date: z.string().trim().min(10, "Date is required").max(10, "Date must be YYYY-MM-DD"),
+  // The owner's physical counts, entered manually at closing.
+  countedCash: z.number().nonnegative("Counted cash cannot be negative"),
+  countedMpesa: z.number().nonnegative("Counted M-PESA cannot be negative"),
+  notes: zString(0, 500).optional().nullable(),
+});
+
+export const zDayClosingQuerySchema = z.object({
+  startDate: zString(1, 10).optional(),
+  endDate: zString(1, 10).optional(),
+  status: z.enum(["OPEN", "CLOSED", "REOPENED"]).optional(),
+  page: z.coerce.number().int().positive().optional().default(1),
+  limit: z.coerce.number().int().positive().max(200).optional().default(50),
+});
+
 export const zSupplierQuerySchema = z.object({
   search: zString(0, 100).optional(),
   page: z.coerce.number().int().positive().optional().default(1),
@@ -243,6 +265,8 @@ export const zProductSchema = z.object({
   sku: zString(1, 50).optional().nullable(),
   barcode: zString(1, 50).optional().nullable(),
   description: zString(0, 1000).optional().nullable(),
+  size: zString(1, 50).optional().nullable(),
+  category: z.enum(["beer", "spirits", "wine", "soft drinks", "other"]).optional(),
   costPrice: z.number().positive("Cost price must be positive"),
   sellingPrice: z.number().positive("Selling price must be positive"),
   minStock: z.number().int().nonnegative().default(0),
@@ -253,6 +277,21 @@ export const zProductSchema = z.object({
   unitId: zUuid.optional().nullable(),
   isActive: z.boolean().default(true),
   productType: z.enum(["PHYSICAL", "SERVICE", "DIGITAL"]).default("PHYSICAL"),
+});
+
+export const zProductUnitSchema = z.object({
+  name: zString(1, 50),
+  factorToBase: z.number().int().positive("Factor must be a positive integer"),
+  isDefaultSaleUnit: z.boolean().default(false),
+  isDefaultPurchaseUnit: z.boolean().default(false),
+});
+
+export const zProductUnitUpdateSchema = zProductUnitSchema.partial();
+
+export const zProductUnitQuerySchema = z.object({
+  productId: zUuid,
+  page: z.coerce.number().int().positive().optional().default(1),
+  limit: z.coerce.number().int().positive().max(200).optional().default(50),
 });
 
 export const zBranchSchema = z.object({
@@ -315,8 +354,8 @@ export const zPaymentSchema = z.object({
   invoiceId: zUuid.optional().nullable(),
   amount: z.number().positive("Amount must be positive"),
   currency: zCurrency,
-  paymentProvider: z.enum(["PAYSTACK", "MPESA", "BANK", "MANUAL", "CASH", "CHECK"]),
-  paymentMethodType: z.enum(["card", "bank_transfer", "mobile_money", "cash", "check", "manual"]),
+  paymentProvider: z.enum(["PAYSTACK", "MPESA", "BANK", "MANUAL", "CASH", "CHECK", "CREDIT"]),
+  paymentMethodType: z.enum(["card", "bank_transfer", "mobile_money", "cash", "check", "manual", "credit"]),
   reference: zString(1, 100).optional().nullable(),
   notes: zString(0, 500).optional().nullable(),
   customerId: zUuid.optional().nullable(),
@@ -329,11 +368,13 @@ export const zPosSaleItemSchema = z.object({
 });
 
 export const zPosPaymentSchema = z.object({
-  provider: z.enum(["PAYSTACK", "MPESA", "BANK", "MANUAL", "CASH", "CHECK"]),
-  methodType: z.enum(["card", "bank_transfer", "mobile_money", "cash", "check", "manual"]),
+  provider: z.enum(["PAYSTACK", "MPESA", "MPESA_MANUAL", "BANK", "MANUAL", "CASH", "CHECK", "CREDIT"]),
+  methodType: z.enum(["card", "bank_transfer", "mobile_money", "cash", "check", "manual", "credit"]),
   amount: z.number().positive("Amount must be positive"),
   tenderedAmount: z.number().nonnegative("Tendered amount cannot be negative").optional(),
   reference: zString(1, 100).optional(),
+  // MPESA_MANUAL requires the M-PESA transaction code sent by the customer.
+  transactionCode: zString(1, 100).optional(),
 });
 
 export const zPosSaleSchema = z.object({
@@ -345,6 +386,9 @@ export const zPosSaleSchema = z.object({
   payments: z.array(zPosPaymentSchema).min(1, "Select a payment method").max(10),
   notes: zString(0, 500).optional().nullable(),
   idempotencyKey: z.string().max(100).optional(),
+  // Owner override for customer credit limit. Requires settings.manage permission.
+  overrideCreditLimit: z.boolean().default(false),
+  overrideCreditLimitReason: zString(1, 500).optional().nullable(),
 });
 
 export const zJournalEntrySchema = z
@@ -457,6 +501,59 @@ export const zStockMovementQuerySchema = z.object({
   type: zStockMovementType.optional(),
   from: z.string().datetime().optional(),
   to: z.string().datetime().optional(),
+  page: z.coerce.number().int().positive().optional().default(1),
+  limit: z.coerce.number().int().positive().max(200).optional().default(50),
+});
+
+/* ------------------------------------------------------------------ *
+ * Stock control: receive, adjust, stocktake
+ * ------------------------------------------------------------------ */
+
+/** Receive stock from a supplier (writes a PURCHASE movement). */
+export const zStockReceiveSchema = z.object({
+  productId: zUuid,
+  warehouseId: zUuid,
+  quantity: z.number().int().positive("Quantity must be greater than zero"),
+  unit: z.enum(["bottle", "crate", "carton", "case", "other"]).default("bottle"),
+  factorToBase: z.number().int().positive("Conversion factor must be positive").default(1),
+  costPrice: z.number().nonnegative("Cost price cannot be negative"),
+  supplierName: zString(1, 200),
+  receivedAt: z.string().datetime().optional(),
+  notes: zString(0, 500).optional().nullable(),
+});
+
+/** Adjust stock with a required reason (writes an ADJUSTMENT movement). */
+export const zStockAdjustmentSchema = z.object({
+  productId: zUuid,
+  warehouseId: zUuid,
+  quantity: z.number().int().positive("Quantity must be greater than zero"),
+  adjustmentType: z.enum(["INCREASE", "DECREASE"]),
+  reason: z.enum(["damage", "breakage", "expired", "theft", "correction"]),
+  reference: zString(1, 100).optional(),
+});
+
+/** Open a new stocktake count session. */
+export const zStockCountOpenSchema = z.object({
+  warehouseId: zUuid.optional().nullable(),
+  notes: zString(0, 500).optional().nullable(),
+});
+
+/** Add or update a counted line within a stocktake. */
+export const zStockCountLineSchema = z.object({
+  productId: zUuid,
+  countedQty: z.number().nonnegative("Counted quantity cannot be negative"),
+  notes: zString(0, 300).optional().nullable(),
+});
+
+/** Confirm a stocktake and post ADJUSTMENT movements for the deltas. */
+export const zStockCountConfirmSchema = z.object({
+  notes: zString(0, 500).optional().nullable(),
+});
+
+/** Query stock counts. */
+export const zStockCountQuerySchema = z.object({
+  status: z.enum(["ALL", "OPEN", "CONFIRMED", "ABANDONED"]).optional().default("ALL"),
+  warehouseId: zUuid.optional(),
   page: z.coerce.number().int().positive().optional().default(1),
   limit: z.coerce.number().int().positive().max(200).optional().default(50),
 });
@@ -643,6 +740,7 @@ export const PERMISSION_GROUPS = [
     label: "Sales",
     permissions: [
       { key: "pos.sale", label: "Process POS sales" },
+      { key: "pos.sales.view", label: "View own POS sales" },
       { key: "invoices.view", label: "View invoices" },
       { key: "invoices.create", label: "Create invoices" },
       { key: "invoices.send", label: "Send invoices" },
@@ -667,6 +765,7 @@ export const PERMISSION_GROUPS = [
     permissions: [
       { key: "inventory.view", label: "View stock levels and movements" },
       { key: "inventory.manage", label: "Adjust stock and transfer between warehouses" },
+      { key: "stocktake.manage", label: "Open, count and confirm stocktakes" },
     ],
   },
   {
@@ -679,6 +778,12 @@ export const PERMISSION_GROUPS = [
   {
     label: "Reports",
     permissions: [{ key: "reports.view", label: "View reports" }],
+  },
+  {
+    label: "Closing",
+    permissions: [
+      { key: "closing.manage", label: "Open and close the trading day" },
+    ],
   },
   {
     // Split into view and manage deliberately. A bookkeeper needs to see what the
@@ -737,6 +842,9 @@ export const zUserRoleAssignSchema = z.object({
  * ------------------------------------------------------------------ */
 
 export const SETTING_DEFINITIONS = {
+  onboarding: z.object({
+    completed: z.boolean().default(false),
+  }),
   invoicing: z.object({
     invoicePrefix: zString(1, 10).default("INV"),
     defaultPaymentTermsDays: z.number().int().min(0).max(365).default(14),

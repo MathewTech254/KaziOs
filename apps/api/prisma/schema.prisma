@@ -54,7 +54,9 @@ model Organization {
   projects       Project[]
   tasks          Task[]
   leads          Lead[]
+  dayClosings    DayClosing[]
   tickets        SupportTicket[]
+  stockCounts    StockCount[]
   /// One business holds at most one subscription, so this is singular rather than a list.
   /// The uniqueness is enforced by the unique index on Subscription.organizationId.
   subscription    Subscription?
@@ -71,6 +73,7 @@ model Organization {
   subscriptionPayments SubscriptionPayment[]
   usageRecords   UsageRecord[]
   entitlementOverrides EntitlementOverride[]
+  productUnits         ProductUnit[]
 }
 
 model User {
@@ -100,6 +103,11 @@ model User {
   // not infer which of the two foreign keys a back reference refers to.
   recordedExpenses Expense[] @relation("ExpenseRecordedBy")
   approvedExpenses Expense[] @relation("ExpenseApprovedBy")
+  openedDayClosings DayClosing[] @relation("DayClosingOpenedBy")
+  closedDayClosings DayClosing[] @relation("DayClosingClosedBy")
+  openedStockCounts StockCount[] @relation("StockCountOpenedBy")
+  confirmedStockCounts StockCount[] @relation("StockCountConfirmedBy")
+  recordedInvoices Invoice[] @relation("InvoiceRecordedBy")
   // Platform administration is recorded against the user rather than against a business
   // role, so owning a shop can never imply authority over the platform.
   subscriptionEvents SubscriptionEvent[]
@@ -188,6 +196,7 @@ model Warehouse {
   destTransfers   StockTransfer[] @relation("stockTransferDest")
   purchaseOrders  PurchaseOrder[]
   userRoles       UserRole[]
+  stockCounts     StockCount[]
 
   @@unique([organizationId, code])
 }
@@ -235,6 +244,10 @@ model Product {
   barcode      String?
   name         String
   description  String?
+  // Base sellable unit size, e.g. "750ml", "350ml", "500ml"
+  size         String?
+  // Product category: beer, spirits, wine, soft drinks, other
+  category     String?
   costPrice    Float
   sellingPrice Float
   minStock     Int      @default(0)
@@ -259,8 +272,29 @@ model Product {
   stockMovements    StockMovement[]
   stockTransfers    StockTransfer[]
   productCategories ProductCategory[]
+  productUnits      ProductUnit[]
+  stockCountLines   StockCountLine[]
 
   @@unique([organizationId, sku])
+}
+
+model ProductUnit {
+  id                     String   @id @default(uuid())
+  name                   String
+  factorToBase           Int
+  isDefaultSaleUnit      Boolean  @default(false)
+  isDefaultPurchaseUnit  Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  product     Product @relation(fields: [productId], references: [id])
+  productId   String
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  // One unit name per product
+  @@unique([productId, name])
 }
 
 model Brand {
@@ -284,6 +318,7 @@ model Customer {
   address      String?
   taxNumber    String?
   customerType String   @default("INDIVIDUAL")
+  creditLimit  Float?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -359,6 +394,8 @@ model Invoice {
   items          InvoiceItem[]
   payments       Payment[]
   cardPayments   CardPayment[]
+  recordedById   String?
+  recordedBy     User?         @relation("InvoiceRecordedBy", fields: [recordedById], references: [id])
 }
 
 model InvoiceItem {
@@ -625,6 +662,37 @@ model Expense {
 
   @@index([organizationId, expenseDate])
   @@index([organizationId, categoryId])
+}
+
+// A single trading day's opening and closing. One row per organization per calendar
+// date. OPEN means the day is trading; CLOSED means attendants cannot start new sales
+// for that date (the owner can reopen). Everything in the closing report is computed
+// from the database on demand; the stored counted_* and difference fields capture the
+// owner's physical count for the nightly reconciliation.
+model DayClosing {
+  id             String   @id @default(uuid())
+  date           String
+  status         String   @default("OPEN") // OPEN | CLOSED | REOPENED
+  openedById     String
+  openedBy       User     @relation("DayClosingOpenedBy", fields: [openedById], references: [id])
+  openedAt       DateTime @default(now())
+  closedById     String?
+  closedBy       User?    @relation("DayClosingClosedBy", fields: [closedById], references: [id])
+  closedAt       DateTime?
+  expectedCash   Float?
+  countedCash    Float?
+  expectedMpesa  Float?
+  countedMpesa   Float?
+  difference     Float?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  @@unique([organizationId, date])
+  @@index([organizationId, status])
 }
 
 model Project {
@@ -1255,4 +1323,65 @@ model PaymentWebhookEvent {
   @@index([event, createdAt])
   @@index([status, createdAt])
   @@index([reference])
+}
+// A single stocktake count session. One count is opened for an organization
+// (and optionally a specific warehouse), products are counted line by line, and
+// the count is either confirmed (posting ADJUSTMENT movements for the delta)
+// or abandoned. Attendants can open and count; only owners can confirm.
+model StockCount {
+  id          String   @id @default(uuid())
+  status      String   @default("OPEN") // OPEN | CONFIRMED | ABANDONED
+  warehouseId String?
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id])
+
+  openedById  String
+  openedBy    User @relation("StockCountOpenedBy", fields: [openedById], references: [id])
+  openedAt    DateTime @default(now())
+
+  confirmedById  String?
+  confirmedBy    User? @relation("StockCountConfirmedBy", fields: [confirmedById], references: [id])
+  confirmedAt    DateTime?
+
+  notes          String?
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  lines          StockCountLine[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([organizationId, status])
+  @@index([warehouseId])
+}
+// A single counted line within a stocktake. Records the expected quantity (from the
+// ledger), the counted quantity (entered by the user), and the difference, both in
+// base units and in shillings (using the product's cost price).
+model StockCountLine {
+  id          String   @id @default(uuid())
+  countId     String
+  count       StockCount @relation(fields: [countId], references: [id])
+
+  productId   String
+  product     Product @relation(fields: [productId], references: [id])
+
+  // What the ledger says should be on hand at count time (base units).
+  expectedQty Decimal @default(0)
+  // What the user physically counted (base units).
+  countedQty  Decimal @default(0)
+  // countedQty - expectedQty, in base units.
+  diffQty     Decimal @default(0)
+  // diffQty * product.costPrice, in minor currency units (cents).
+  diffAmount  Int @default(0)
+
+  // A note specific to this line, e.g. "found behind cooler 3".
+  notes       String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([countId])
+  @@index([productId])
+  @@unique([countId, productId])
 }

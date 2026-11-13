@@ -62,6 +62,50 @@ paymentRouter.post(
   async (req: AuthRequest, res, next) => {
     try {
       const data = zPaymentSchema.parse(req.body);
+
+      // CREDIT payments are manual repayments (cash or M-PESA code) and are
+      // successful immediately — there is no external provider to wait for.
+      const isCreditRepayment =
+        data.paymentProvider === "CREDIT" && data.paymentMethodType === "credit";
+
+      // Reject overpayments: a repayment cannot exceed the customer's current
+      // outstanding balance. Balance = unpaid invoice totals − standalone repayments.
+      // Check BEFORE creating the payment so the payment isn't counted in its own check.
+      if (isCreditRepayment && data.customerId) {
+        const [invoices, repayments] = await Promise.all([
+          prisma.invoice.aggregate({
+            where: {
+              customerId: data.customerId,
+              organizationId: req.organizationId!,
+              status: { not: "VOID" },
+            },
+            _sum: { total: true, paidAmount: true },
+          }),
+          prisma.payment.aggregate({
+            where: {
+              customerId: data.customerId,
+              organizationId: req.organizationId!,
+              provider: "CREDIT",
+              invoiceId: null,
+              status: PaymentStatus.SUCCESS,
+            },
+            _sum: { amount: true },
+          }),
+        ]);
+
+        const owed =
+          Number(invoices._sum.total ?? 0) - Number(invoices._sum.paidAmount ?? 0);
+        const repaid = Number(repayments._sum.amount ?? 0);
+        const currentBalance = owed - repaid;
+
+        if (data.amount > currentBalance) {
+          throw new AppError(
+            400,
+            `Repayment of ${data.currency} ${data.amount.toFixed(2)} exceeds outstanding balance of ${data.currency} ${currentBalance.toFixed(2)}`
+          );
+        }
+      }
+
       const payment = await prisma.payment.create({
         data: {
           reference: data.reference || generateId(),
@@ -70,7 +114,7 @@ paymentRouter.post(
           currency: data.currency,
           provider: data.paymentProvider,
           methodType: data.paymentMethodType,
-          status: PaymentStatus.PENDING,
+          status: isCreditRepayment ? PaymentStatus.SUCCESS : PaymentStatus.PENDING,
           providerRef: data.reference || undefined,
           notes: data.notes || undefined,
           invoiceId: data.invoiceId || undefined,

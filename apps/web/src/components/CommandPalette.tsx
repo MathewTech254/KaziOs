@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FileText, Package, Receipt, Search, Truck, User, Users, X } from "lucide-react";
 import { api, getApiError } from "../lib/api";
@@ -32,13 +32,14 @@ interface SearchResults {
 // They used to point at /products and /invoices, which do not exist: the pages live
 // under /dashboard. Choosing a result navigated to nothing and the router, having no
 // catch all, rendered a blank white page.
-const PAGES = [
+const PAGES: { label: string; to: string }[] = [
   { label: "Go to Dashboard", to: "/dashboard" },
   { label: "Go to Products", to: "/dashboard/products" },
   { label: "Go to Customers", to: "/dashboard/customers" },
   { label: "Go to Invoices", to: "/dashboard/invoices" },
   { label: "Go to Payments", to: "/dashboard/payments" },
   { label: "Go to Reports", to: "/dashboard/reports" },
+  { label: "Go to Suppliers and purchase orders", to: "/purchases" },
   { label: "Go to Suppliers and purchase orders", to: "/purchases" },
   { label: "Go to Inventory", to: "/inventory" },
   { label: "Go to Point of sale", to: "/pos" },

@@ -87,7 +87,7 @@ export function LandingPage() {
                 KaziOS
               </div>
               <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-[.24em] text-[var(--kazi-muted-text)]">
-                Business operating system
+                Stock and sales control for liquor stores. Sell fast, take M-PESA, know your stock every night.
               </div>
             </div>
           </Link>
@@ -96,12 +96,6 @@ export function LandingPage() {
             <span className="hidden text-[var(--kazi-muted-text)] lg:inline">
               Built for the way African businesses operate
             </span>
-            <Link
-              to="/pricing"
-              className="rounded-md px-2 py-2 font-medium text-[var(--kazi-text)] transition-colors hover:text-[var(--kazi-accent-hover)]"
-            >
-              Pricing
-            </Link>
             <Link
               to="/login"
               className="rounded-md px-2 py-2 font-medium text-[var(--kazi-text)] transition-colors hover:text-[var(--kazi-accent-hover)]"
@@ -292,7 +286,7 @@ export function LandingPage() {
       <footer className="border-t border-white/10 bg-[var(--kazi-ink)]">
         <div className="mx-auto flex max-w-[1328px] flex-col gap-3 px-5 py-6 text-xs text-[var(--kazi-muted-text)] sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-14">
           <span>© {new Date().getFullYear()} KaziOS · Built for African businesses.</span>
-          <span>Sales · inventory · customers · invoices · reports</span>
+          <span>Sales · inventory · customers · reports</span>
         </div>
       </footer>
     </div>

@@ -209,9 +209,3 @@ export const isDevelopment = (config: EnvironmentConfig) => config.nodeEnv === N
 
 export const isPaystackConfigured = (config: EnvironmentConfig) =>
   Boolean(config.paystack.secretKey && config.paystack.webhookSecret);
-
-export const isTimsConfigured = (config: EnvironmentConfig) =>
-  Boolean(config.etims.apiUrl && config.etims.clientId && config.etims.clientSecret);
-
-export const isAiConfigured = (config: EnvironmentConfig) =>
-  Boolean(config.ai.provider && config.ai.apiKey);

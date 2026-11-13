@@ -1,4 +1,5 @@
 import { askBusiness, aiAssistantEnabled } from "./aiAssistant";
+import { loadConfig } from "@kazios/config";
 import { runTool } from "./aiTools";
 
 /**
@@ -15,8 +16,7 @@ jest.mock("@kazios/ai", () => ({
 }));
 
 jest.mock("@kazios/config", () => ({
-  isAiConfigured: jest.fn(() => true),
-  loadConfig: jest.fn(() => ({})),
+  loadConfig: jest.fn(() => ({ ai: { apiKey: "test-key" } })),
 }));
 
 jest.mock("./aiTools", () => ({
@@ -54,14 +54,12 @@ jest.mock("../lib/redis", () => ({
 }));
 
 import { chatCompletion, chatJson } from "@kazios/ai";
-import { isAiConfigured } from "@kazios/config";
 import { getRedis } from "../lib/redis";
 
 const ORG = "org-1";
 
 beforeEach(() => {
   jest.clearAllMocks();
-  (isAiConfigured as jest.Mock).mockReturnValue(true);
   redisStore.clear();
 });
 
@@ -135,7 +133,7 @@ describe("askBusiness", () => {
   });
 
   it("returns the general help message when the model is not configured", async () => {
-    (isAiConfigured as jest.Mock).mockReturnValue(false);
+    (loadConfig as jest.Mock).mockReturnValue({} as any);
     (runTool as jest.Mock).mockResolvedValue({
       summary: "You took KES 60.49 across 3 sales today.",
       data: {},
@@ -203,11 +201,11 @@ describe("askBusiness", () => {
 
 describe("aiAssistantEnabled", () => {
   it("reports true when a key is configured", () => {
-    (isAiConfigured as jest.Mock).mockReturnValue(true);
+    (loadConfig as jest.Mock).mockReturnValue({ ai: { apiKey: "key" } } as any);
     expect(aiAssistantEnabled()).toBe(true);
   });
   it("reports false, never throws, when config cannot be read", () => {
-    (isAiConfigured as jest.Mock).mockImplementation(() => {
+    (loadConfig as jest.Mock).mockImplementation(() => {
       throw new Error("no env");
     });
     expect(aiAssistantEnabled()).toBe(false);

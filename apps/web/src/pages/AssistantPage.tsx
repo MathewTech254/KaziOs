@@ -99,8 +99,8 @@ export function AssistantPage() {
           title="The AI assistant is not on your plan"
           message="Upgrade to a plan that includes the AI assistant to ask questions about your sales, stock and customers in plain language."
         />
-        <Link to="/pricing" className="kazi-button-primary mt-2 inline-flex px-4 py-2 text-sm">
-          See plans
+        <Link to="/pos" className="kazi-button-primary mt-2 inline-flex px-4 py-2 text-sm">
+          Go to POS
         </Link>
       </div>
     );

@@ -13,6 +13,8 @@ import { organizationRouter } from "../routes/organization";
 import { userRouter } from "../routes/users";
 import { roleRouter } from "../routes/roles";
 import { cardPaymentRouter, paystackWebhookRouter } from "../routes/card-payments";
+import { paymentRouter } from "../routes/payments";
+import { dayClosingRouter } from "../routes/day-closings";
 import { billingRouter } from "../routes/billing";
 import { planRouter } from "../routes/plans";
 import { platformRouter } from "../routes/platform";
@@ -87,6 +89,8 @@ app.use("/api/v1/expenses", expenseRouter);
 app.use("/api/v1/inventory", inventoryRouter);
 app.use("/api/v1/reports", reportRouter);
 app.use("/api/v1/card-payments", cardPaymentRouter);
+app.use("/api/v1/payments", paymentRouter);
+app.use("/api/v1/day-closings", dayClosingRouter);
 // The webhook carries no session by design, so it is mounted on its own unauthenticated
 // path rather than behind the card payment router's requireAuth.
 app.use("/api/v1/webhooks", paystackWebhookRouter);
@@ -161,9 +165,11 @@ export async function cleanupRun(): Promise<void> {
     await tx.account.deleteMany({ where: { organizationId: { in: orgIds } } });
     await tx.taxCategory.deleteMany({ where: { organizationId: { in: orgIds } } });
     await tx.customer.deleteMany({ where: { organizationId: { in: orgIds } } });
+    await tx.productUnit.deleteMany({ where: { organizationId: { in: orgIds } } });
     await tx.product.deleteMany({ where: { organizationId: { in: orgIds } } });
     await tx.warehouse.deleteMany({ where: { organizationId: { in: orgIds } } });
     await tx.branch.deleteMany({ where: { organizationId: { in: orgIds } } });
+    await tx.dayClosing.deleteMany({ where: { organizationId: { in: orgIds } } });
     await tx.setting.deleteMany({ where: { organizationId: { in: orgIds } } });
     // The subscription tables, in dependency order. Without these a leftover
     // EntitlementOverride or SubscriptionEvent would be found by a later run and quietly
