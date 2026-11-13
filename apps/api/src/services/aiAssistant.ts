@@ -1,5 +1,5 @@
 import { chatCompletion, chatJson } from "@kazios/ai";
-import { isAiConfigured, loadConfig } from "@kazios/config";
+import { loadConfig } from "@kazios/config";
 import { AppError } from "../middleware/errorHandler";
 import { getRedis } from "../lib/redis";
 import { runTool, TOOL_CATALOG, type ToolContext, type ToolParams } from "./aiTools";
@@ -143,7 +143,7 @@ interface RouteDecision {
 /** True when a usable AI key is present, so callers can decide whether to offer the feature. */
 export function aiAssistantEnabled(): boolean {
   try {
-    return isAiConfigured(loadConfig());
+    return Boolean(loadConfig().ai.apiKey);
   } catch {
     return false;
   }

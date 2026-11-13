@@ -87,7 +87,7 @@ import {
   corsOriginWarning,
   mailConfigurationWarning,
 } from "./lib/productionEnv";
-import { connectRedis, redisEnabled, getRedis } from "./lib/redis";
+import { connectRedis, getRedis } from "./lib/redis";
 import { startRealtimeSubscriber } from "./lib/realtime";
 import { authRouter } from "./routes/auth";
 import { organizationRouter } from "./routes/organization";
@@ -188,9 +188,9 @@ export function createApp() {
   app.use(
     session({
       store: (() => {
-        if (redisEnabled && getRedis()) {
+        if (getRedis()) {
           const { RedisStore } = require("connect-redis");
-          return new RedisStore({ client: getRedis()!, ttl: 86400 });
+          return new RedisStore({ client: getRedis(), ttl: 86400 });
         }
         return new MemoryStore();
       })(),
@@ -319,7 +319,7 @@ async function start() {
   // Alerts published by the worker, or by another replica, reach this one through
   // Redis. When Redis is not configured the in-process emitter still delivers to
   // this replica's own browsers (single-instance SSE); publishing is a no-op.
-  if (redisEnabled) {
+  if (getRedis()) {
     startRealtimeSubscriber();
   } else {
     console.log("Redis: disabled, realtime stays in-process (single instance)");

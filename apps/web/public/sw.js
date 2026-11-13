@@ -45,8 +45,11 @@ self.addEventListener("fetch", event => {
     event.respondWith(
       fetch(request)
         .then(response => {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(request, responseClone));
+          // Only cache successful responses (not 206 partial content)
+          if (response.ok && response.status === 200) {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(request, responseClone));
+          }
           return response;
         })
         .catch(() => caches.match(request))
@@ -67,8 +70,11 @@ self.addEventListener("fetch", event => {
     caches.match(request).then(cached => {
       if (cached) return cached;
       return fetch(request).then(response => {
-        const responseClone = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(request, responseClone));
+        // Only cache successful responses
+        if (response.ok && response.status === 200) {
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(request, responseClone));
+        }
         return response;
       }).catch(() => {
         // Offline fallback for images

@@ -22,8 +22,6 @@ import { OnboardingWizard } from "../pages/OnboardingWizard";
 import { PricingPage } from "../pages/PricingPage";
 import { AssistantPage } from "../pages/AssistantPage";
 import { AuthGuard } from "../components/Guard";
-import { isFeatureEnabled } from "../lib/features";
-import { Navigate } from "react-router-dom";
 
 /**
  * Shown for a URL that matches nothing.
@@ -65,7 +63,7 @@ export const router = createBrowserRouter([
   },
   {
     path: "/pricing",
-    element: isFeatureEnabled("billing") ? <PricingPage /> : <Navigate to="/pos" replace />,
+    element: <PricingPage />,
   },
   {
     // Public on purpose: somebody deciding whether to sign up has to be able to read the
@@ -124,17 +122,15 @@ export const router = createBrowserRouter([
   },
   {
     path: "/purchases",
-    element: isFeatureEnabled("purchasing") ? (
+    element: (
       <AuthGuard>
         <Layout />
       </AuthGuard>
-    ) : (
-      <Navigate to="/pos" replace />
     ),
     children: [
       {
         index: true,
-        element: isFeatureEnabled("purchasing") ? <PurchasingPage /> : <Navigate to="/pos" replace />,
+        element: <PurchasingPage />,
       },
     ],
   },
@@ -149,65 +145,57 @@ export const router = createBrowserRouter([
   },
   {
     path: "/stock/receive",
-    element: isFeatureEnabled("stocktake") ? (
+    element: (
       <AuthGuard>
         <Layout />
       </AuthGuard>
-    ) : (
-      <Navigate to="/pos" replace />
     ),
     children: [
       {
         index: true,
-        element: isFeatureEnabled("stocktake") ? <ReceiveStockPage /> : <Navigate to="/pos" replace />,
+        element: <ReceiveStockPage />,
       },
     ],
   },
   {
     path: "/stocktake",
-    element: isFeatureEnabled("stocktake") ? (
+    element: (
       <AuthGuard>
         <Layout />
       </AuthGuard>
-    ) : (
-      <Navigate to="/pos" replace />
     ),
     children: [
       {
         index: true,
-        element: isFeatureEnabled("stocktake") ? <StocktakePage /> : <Navigate to="/pos" replace />,
+        element: <StocktakePage />,
       },
     ],
   },
   {
     path: "/closing",
-    element: isFeatureEnabled("closing") ? (
+    element: (
       <AuthGuard>
         <Layout />
       </AuthGuard>
-    ) : (
-      <Navigate to="/pos" replace />
     ),
     children: [
       {
         index: true,
-        element: isFeatureEnabled("closing") ? <ClosingPage /> : <Navigate to="/pos" replace />,
+        element: <ClosingPage />,
       },
     ],
   },
   {
     path: "/assistant",
-    element: isFeatureEnabled("ai") ? (
+    element: (
       <AuthGuard>
         <Layout />
       </AuthGuard>
-    ) : (
-      <Navigate to="/pos" replace />
     ),
     children: [
       {
         index: true,
-        element: isFeatureEnabled("ai") ? <AssistantPage /> : <Navigate to="/pos" replace />,
+        element: <AssistantPage />,
       },
     ],
   },
@@ -222,9 +210,9 @@ export const router = createBrowserRouter([
       { index: true, element: <DashboardPage /> },
       { path: "products", element: <ProductsPage /> },
       { path: "customers", element: <CustomersPage /> },
-      { path: "invoices", element: isFeatureEnabled("invoices") ? <InvoicesPage /> : <Navigate to="/pos" replace /> },
+      { path: "invoices", element: <InvoicesPage /> },
       { path: "reports", element: <ReportsPage /> },
-      { path: "payments", element: isFeatureEnabled("payments") ? <PaymentsPage /> : <Navigate to="/pos" replace /> },
+      { path: "payments", element: <PaymentsPage /> },
     ],
   },
   {

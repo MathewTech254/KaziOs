@@ -16,15 +16,14 @@ import { SettingsPreferencesPanel } from "../components/SettingsPreferencesPanel
 import { SettingsRolesPanel } from "../components/SettingsRolesPanel";
 import { SettingsUsersPanel } from "../components/SettingsUsersPanel";
 import { SettingsBillingPanel } from "../components/SettingsBillingPanel";
-import { isFeatureEnabled } from "../lib/features";
 
 const TABS = [
   { id: "organization", label: "Organization", icon: Building2 },
   { id: "tax", label: "Tax", icon: Percent },
   { id: "preferences", label: "Preferences", icon: SlidersHorizontal },
   { id: "roles", label: "Roles & permissions", icon: ShieldCheck },
-  ...(isFeatureEnabled("branches") ? [{ id: "locations", label: "Locations", icon: Warehouse }] : []),
-  ...(isFeatureEnabled("billing") ? [{ id: "billing", label: "Billing", icon: CreditCard }] : []),
+  { id: "locations", label: "Locations", icon: Warehouse },
+  { id: "billing", label: "Billing", icon: CreditCard },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];

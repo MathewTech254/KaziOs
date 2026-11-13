@@ -41,37 +41,12 @@ NODE_ENV="production"
 LOG_LEVEL="info"
 ENABLE_REGISTRATION="true"
 ENABLE_DEMO_SEED="false"
-
-# Feature flags (v1 pilot defaults — only the visible surfaces are on)
-FEATURE_DASHBOARD="true"
-FEATURE_POS="true"
-FEATURE_PRODUCTS="true"
-FEATURE_INVENTORY="true"
-FEATURE_CUSTOMERS="true"
-FEATURE_CREDIT="true"
-FEATURE_CLOSING="false"
-FEATURE_REPORTS="true"
-FEATURE_EXPENSES="true"
-FEATURE_SETTINGS="true"
-FEATURE_USERS="true"
-FEATURE_INVOICES="false"
-FEATURE_PAYMENTS="false"
-FEATURE_PURCHASING="false"
-FEATURE_BILLING="false"
-FEATURE_AI="false"
-FEATURE_NOTIFICATIONS="false"
-FEATURE_PLATFORM_ADMIN="false"
-FEATURE_BRANCHES="false"
-FEATURE_ACCOUNTING="false"
-FEATURE_TRANSFERS="false"
-FEATURE_STOCKTAKE="false"
 ```
 
 - `DATABASE_URL` — Neon or Supabase Postgres. Required.
 - `SESSION_SECRET` / `JWT_SECRET` — generate 32+ random characters. Required.
 - `CORS_ORIGIN` — the exact origin of your web app (no trailing slash, never `"*"`). Required in production.
 - `ENABLE_DEMO_SEED` — set `"false"` for the pilot; seed the first shop through onboarding instead.
-- All `FEATURE_*` vars default correctly for v1; list them only to be explicit.
 
 ### Web host (Cloudflare Pages)
 
@@ -80,30 +55,6 @@ Vite variables are baked into the bundle at build time. Set these on the Pages b
 ```bash
 VITE_API_URL="https://your-api.onrender.com/api/v1"
 VITE_API_TIMEOUT_MS="90000"
-
-# Client feature flags (mirror the API flags)
-VITE_FEATURE_DASHBOARD="true"
-VITE_FEATURE_POS="true"
-VITE_FEATURE_PRODUCTS="true"
-VITE_FEATURE_INVENTORY="true"
-VITE_FEATURE_CUSTOMERS="true"
-VITE_FEATURE_CREDIT="true"
-VITE_FEATURE_CLOSING="false"
-VITE_FEATURE_REPORTS="true"
-VITE_FEATURE_EXPENSES="true"
-VITE_FEATURE_SETTINGS="true"
-VITE_FEATURE_USERS="true"
-VITE_FEATURE_INVOICES="false"
-VITE_FEATURE_PAYMENTS="false"
-VITE_FEATURE_PURCHASING="false"
-VITE_FEATURE_BILLING="false"
-VITE_FEATURE_AI="false"
-VITE_FEATURE_NOTIFICATIONS="false"
-VITE_FEATURE_PLATFORM_ADMIN="false"
-VITE_FEATURE_BRANCHES="false"
-VITE_FEATURE_ACCOUNTING="false"
-VITE_FEATURE_TRANSFERS="false"
-VITE_FEATURE_STOCKTAKE="false"
 ```
 
 ## Deployment steps

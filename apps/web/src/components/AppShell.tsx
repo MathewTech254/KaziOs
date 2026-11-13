@@ -28,7 +28,6 @@ import { useTheme } from "../hooks/useTheme";
 import { BrandLogo } from "./BrandLogo";
 import { CommandPalette } from "./CommandPalette";
 import { NotificationBell } from "./NotificationBell";
-import { isFeatureEnabled } from "../lib/features";
 
 interface NavGroup {
   label: string;
@@ -38,66 +37,47 @@ interface NavGroup {
 const NAV_GROUPS: NavGroup[] = (() => {
   const groups: NavGroup[] = [];
 
-  if (isFeatureEnabled("dashboard")) {
-    groups.push({
-      label: "Overview",
-      items: [
-        { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-        // Ask your business is the AI assistant; hidden behind the `ai` flag but the
-        // route and page stay in place so nothing is deleted.
-        ...(isFeatureEnabled("ai")
-          ? [{ to: "/assistant", label: "Ask your business", icon: Sparkles }]
-          : []),
-      ],
-    });
-  }
+  groups.push({
+    label: "Overview",
+    items: [
+      { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { to: "/assistant", label: "Ask your business", icon: Sparkles },
+    ],
+  });
 
-  if (isFeatureEnabled("pos")) {
-    groups.push({
-      label: "Sell",
-      items: [
-        { to: "/pos", label: "POS", icon: ShoppingBag },
-        { to: "/dashboard/invoices", label: "Invoices", icon: FileText },
-        { to: "/dashboard/payments", label: "Payments", icon: Receipt },
-        { to: "/dashboard/customers", label: "Customers", icon: Users },
-      ],
-    });
-  }
+  groups.push({
+    label: "Sell",
+    items: [
+      { to: "/pos", label: "POS", icon: ShoppingBag },
+      { to: "/dashboard/invoices", label: "Invoices", icon: FileText },
+      { to: "/dashboard/payments", label: "Payments", icon: Receipt },
+      { to: "/dashboard/customers", label: "Customers", icon: Users },
+    ],
+  });
 
   const operateItems: { to: string; label: string; icon: React.ElementType }[] = [
     { to: "/dashboard/products", label: "Products", icon: Package },
     { to: "/inventory", label: "Inventory", icon: Warehouse },
-    ...(isFeatureEnabled("stocktake")
-      ? [{ to: "/stocktake", label: "Stocktake", icon: Clipboard }]
-      : []),
+    { to: "/stocktake", label: "Stocktake", icon: Clipboard },
     { to: "/stock/receive", label: "Receive Stock", icon: Truck },
+    { to: "/purchases", label: "Purchasing", icon: Building2 },
   ];
-  if (isFeatureEnabled("purchasing")) {
-    operateItems.push({ to: "/purchases", label: "Purchasing", icon: Building2 });
-  }
   groups.push({ label: "Operate", items: operateItems });
 
   const financeItems: { to: string; label: string; icon: React.ElementType }[] = [
     { to: "/dashboard/reports", label: "Reports", icon: BarChart3 },
-    ...(isFeatureEnabled("closing")
-      ? [{ to: "/closing", label: "Daily Closing", icon: Clock }]
-      : []),
+    { to: "/closing", label: "Daily Closing", icon: Clock },
     { to: "/expenses", label: "Expenses", icon: Wallet },
   ];
   groups.push({ label: "Finance", items: financeItems });
 
-  if (isFeatureEnabled("settings")) {
-    groups.push({
-      label: "Organization",
-      items: [
-        { to: "/settings", label: "Settings", icon: Settings },
-        // User and role management lives inside Settings (Roles & permissions tab).
-        ...(isFeatureEnabled("users")
-          ? [{ to: "/settings?tab=roles", label: "Users", icon: Users }]
-          : []),
-      ],
-    });
-  }
+  groups.push({
+    label: "Organization",
+    items: [
+      { to: "/settings", label: "Settings", icon: Settings },
+      { to: "/settings?tab=roles", label: "Users", icon: Users },
+    ],
+  });
 
   return groups;
 })();
