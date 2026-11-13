@@ -28,6 +28,7 @@
     "@kazios/integrations": "1.0.0",
     "@kazios/types": "1.0.0",
     "@kazios/validation": "1.0.0",
+    "@neon/auth": "^0.8.2",
     "@prisma/client": "^5.22.0",
     "argon2": "^0.40.0",
     "axios": "^1.7.2",

@@ -5,7 +5,6 @@ const STATIC_ASSETS = [
   "/dashboard",
   "/closing",
   "/stocktake",
-  "/stock/receive",
   "/inventory",
   "/products",
   "/customers",
@@ -45,19 +44,28 @@ self.addEventListener("fetch", event => {
     event.respondWith(
       fetch(request)
         .then(response => {
-          // Only cache successful responses (not 206 partial content)
+          // Only cache successful responses (not 206 partial content, not errors)
           if (response.ok && response.status === 200) {
             const responseClone = response.clone();
             caches.open(CACHE_NAME).then(cache => cache.put(request, responseClone));
           }
           return response;
         })
-        .catch(() => caches.match(request))
+        .catch(() => {
+          // Network failed - try cache as fallback
+          return caches.match(request).then(cached => {
+            if (cached) return cached;
+            return new Response(JSON.stringify({ error: "API unavailable" }), {
+              status: 503,
+              headers: { "Content-Type": "application/json" },
+            });
+          });
+        })
     );
     return;
   }
 
-  // For navigation requests, serve cached page or offline fallback
+  // For navigation requests, serve from cache or network
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request).catch(() => caches.match(request)).catch(() => caches.match("/"))
@@ -91,4 +99,17 @@ self.addEventListener("message", event => {
   if (event.data && event.data.type === "SKIP_WAITING") {
     self.skipWaiting();
   }
+});
+
+// Listen for online/offline events
+self.addEventListener("online", () => {
+  self.clients.matchAll().then(clients => {
+    clients.forEach(client => client.postMessage({ type: "ONLINE" }));
+  });
+});
+
+self.addEventListener("offline", () => {
+  self.clients.matchAll().then(clients => {
+    clients.forEach(client => client.postMessage({ type: "OFFLINE" }));
+  });
 });

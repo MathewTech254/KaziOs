@@ -27,3 +27,8 @@ coverage
 tmp/
 check_user.sql
 apps/web/scripts/probe-pos.mjs
+.neon
+
+# Agent Manager worktrees: full working copies of the repo created by the agent
+# manager. Never commit; they would duplicate the entire tree.
+.kilo/
