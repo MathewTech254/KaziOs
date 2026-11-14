@@ -1,0 +1,65 @@
+sku,name,size,quantity_in_base_units,unit_cost
+BWS-001,Tusker Lager,500ml,96,215
+BWS-002,Tusker Lager,330ml,96,160
+BWS-003,Tusker Malt,500ml,60,230
+BWS-004,Tusker Cider,500ml,48,215
+BWS-005,Tusker Lite,500ml,36,225
+BWS-006,White Cap Lager,500ml,60,215
+BWS-007,Pilsner Lager,500ml,48,190
+BWS-008,Balozi Lager,500ml,48,200
+BWS-009,Guinness Stout,500ml,48,240
+BWS-010,Heineken,330ml,48,250
+BWS-011,Castle Lite,330ml,48,190
+BWS-012,Senator Keg,500ml,48,160
+BWS-013,Savanna Dry Cider,330ml,24,230
+BWS-014,Kenya Cane,750ml,36,780
+BWS-015,Kenya Cane,350ml,48,380
+BWS-016,Kenya Cane,250ml,48,270
+BWS-017,Chrome Vodka,750ml,24,780
+BWS-018,Chrome Vodka,250ml,48,260
+BWS-019,Smirnoff Vodka Red,750ml,24,1280
+BWS-020,Smirnoff Vodka Red,350ml,24,640
+BWS-021,Captain Morgan Spiced Gold,750ml,18,1450
+BWS-022,Captain Morgan Spiced Gold,350ml,12,740
+BWS-023,Gilbey's Gin,750ml,18,1250
+BWS-024,Gordon's London Dry Gin,750ml,12,1650
+BWS-025,Hunter's Choice Whisky,750ml,24,880
+BWS-026,Hunter's Choice Whisky,350ml,24,450
+BWS-027,Best Whisky,750ml,24,780
+BWS-028,Best Whisky,250ml,48,260
+BWS-029,Richot Brandy,750ml,18,1050
+BWS-030,Viceroy Brandy,750ml,12,1450
+BWS-031,County Spirit,250ml,72,150
+BWS-032,Bond 7 Whisky,750ml,12,1300
+BWS-033,Johnnie Walker Red Label,750ml,12,2650
+BWS-034,Johnnie Walker Black Label,750ml,6,4100
+BWS-035,Jameson Irish Whiskey,750ml,12,2950
+BWS-036,Jack Daniel's Old No.7,750ml,6,3300
+BWS-037,Famous Grouse,750ml,6,2200
+BWS-038,Black & White Whisky,750ml,12,1500
+BWS-039,Hennessy VS,700ml,4,6200
+BWS-040,Baileys Irish Cream,750ml,6,2300
+BWS-041,Amarula Cream,750ml,6,1850
+BWS-042,Jagermeister,700ml,4,2600
+BWS-043,Four Cousins Sweet Red,750ml,24,950
+BWS-044,Four Cousins Sweet White,750ml,24,950
+BWS-045,Drostdy-Hof Claret Select,750ml,18,850
+BWS-046,Nederburg Cabernet Sauvignon,750ml,12,1500
+BWS-047,Casabuena Red,750ml,12,1250
+BWS-048,Robertson Winery Sweet Rose,750ml,12,1150
+BWS-049,Smirnoff Ice Black,300ml,48,190
+BWS-050,Hunter's Gold,330ml,48,190
+BWS-051,Hunter's Dry,330ml,48,190
+BWS-052,Redd's Premium Cold,330ml,24,190
+BWS-053,Coca-Cola,300ml,96,32
+BWS-054,Fanta Orange,300ml,72,32
+BWS-055,Sprite,300ml,72,32
+BWS-056,Coca-Cola,500ml,48,48
+BWS-057,Novida Pineapple,300ml,48,32
+BWS-058,Krest Bitter Lemon,300ml,48,32
+BWS-059,Schweppes Tonic Water,300ml,48,42
+BWS-060,Soda Water,300ml,48,32
+BWS-061,Minute Maid Mango,400ml,24,60
+BWS-062,Dasani Water,500ml,72,25
+BWS-063,Red Bull Energy,250ml,24,150
+BWS-064,Ice Cubes,1 bag,20,60
