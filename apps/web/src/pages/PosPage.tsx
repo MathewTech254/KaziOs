@@ -1021,8 +1021,12 @@ export function PosPage() {
       </div>
 
       {/* self-start keeps the cart at its own height, and sticky keeps the running total in
-          view while the cashier works down a long product list. */}
-      <aside className="kazi-card flex w-full flex-col gap-4 p-4 lg:sticky lg:top-5 lg:w-[26rem] lg:shrink-0 lg:self-start">
+          view while the cashier works down a long product list. The cap is the point: a
+          sticky box taller than the viewport pins its top and pushes the payment method and
+          the submit button below the fold with no way to reach them, so the cart scrolls
+          itself once its content runs past what is on screen. 6.5rem is the 4rem top bar
+          plus the 1.25rem offset it sticks at. */}
+      <aside className="kazi-card flex w-full flex-col gap-4 p-4 lg:sticky lg:top-5 lg:max-h-[calc(100vh-6.5rem)] lg:w-[26rem] lg:shrink-0 lg:self-start lg:overflow-y-auto">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base font-semibold text-foreground">Current Sale</h2>
@@ -1136,9 +1140,11 @@ export function PosPage() {
           )}
         </div>
 
-        {/* Grows with the lines and scrolls once it reaches the cap. No min-height: an empty
-            or single-line cart should be a small box, not a tall mostly-blank one. */}
-        <div className="flex max-h-[min(24rem,44vh)] flex-col gap-2 overflow-y-auto pr-1">
+        {/* Grows with the lines and never scrolls on its own: the cart is the single scroll
+            container, so there is one scrollbar to reason about and the payment method and
+            submit button are reached the same way as any other part of the sale. No
+            min-height: an empty or single-line cart should be a small box. */}
+        <div className="flex flex-col gap-2">
           {cart.length ? (
             cart.map(line => (
               <div
