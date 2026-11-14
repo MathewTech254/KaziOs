@@ -124,9 +124,7 @@ describe("getAiClient", () => {
 
   it("throws NVIDIA_API_KEY not configured for nvidia with no key", () => {
     process.env.AI_PROVIDER = "nvidia";
-    expect(() => getAiClient()).toThrow(
-      "NVIDIA_API_KEY is not configured"
-    );
+    expect(() => getAiClient()).toThrow("NVIDIA_API_KEY is not configured");
   });
 
   it("creates OpenAI client with AI_API_KEY and no baseURL for openai", () => {

@@ -446,7 +446,9 @@ async function seedDemoTradingData(orgId: string) {
     await prisma.customer.create({ data: c });
   }
 
-  console.log(`Demo data seeded: ${createdProducts.length} products, 2 attendants, 3 credit customers`);
+  console.log(
+    `Demo data seeded: ${createdProducts.length} products, 2 attendants, 3 credit customers`
+  );
 }
 
 /**

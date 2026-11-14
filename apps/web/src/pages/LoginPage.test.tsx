@@ -23,7 +23,9 @@ describe("LoginPage", () => {
   it("renders the sign in form without throwing", () => {
     renderLogin();
 
-    expect(screen.getByRole("heading", { name: /welcome back to your workspace/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /welcome back to your workspace/i })
+    ).toBeInTheDocument();
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign in/i })).toBeInTheDocument();

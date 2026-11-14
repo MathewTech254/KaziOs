@@ -100,9 +100,9 @@ export function publishRealtime<T>(event: Omit<RealtimeEvent<T>, "origin">): voi
   const redis = getRedis();
   if (!redis) return;
   try {
-    redis.publish(CHANNEL, JSON.stringify(enriched)).catch(err =>
-      console.warn("Realtime publish failed:", err.message)
-    );
+    redis
+      .publish(CHANNEL, JSON.stringify(enriched))
+      .catch(err => console.warn("Realtime publish failed:", err.message));
   } catch {
     // Redis being down must never surface as a failed business operation.
   }

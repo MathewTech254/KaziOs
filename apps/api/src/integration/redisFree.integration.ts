@@ -59,17 +59,15 @@ describe("API without Redis", () => {
 
   it("registers a business", async () => {
     const email = `redisfree-${Date.now()}@example.test`;
-    const res = await request(app)
-      .post("/api/v1/auth/register")
-      .send({
-        organizationName: "Redis Free Shop",
-        name: "Owner",
-        email,
-        password: "KaziOS!Integration2026",
-        country: "KE",
-        currency: "KES",
-        timezone: "Africa/Nairobi",
-      });
+    const res = await request(app).post("/api/v1/auth/register").send({
+      organizationName: "Redis Free Shop",
+      name: "Owner",
+      email,
+      password: "KaziOS!Integration2026",
+      country: "KE",
+      currency: "KES",
+      timezone: "Africa/Nairobi",
+    });
     expect(res.status).toBe(201);
     token = res.body.data.token;
     organizationId = res.body.data.organization.id;
@@ -150,7 +148,9 @@ describe("API without Redis", () => {
         customerId: null,
         items: [{ productId, quantity: 3, discountAmount: 0 }],
         discountAmount: 0,
-        payments: [{ provider: "CASH", methodType: "cash", amount: 105000, tenderedAmount: 105000 }],
+        payments: [
+          { provider: "CASH", methodType: "cash", amount: 105000, tenderedAmount: 105000 },
+        ],
         idempotencyKey: `redisfree-sale-${Date.now()}`,
       });
     expect(res.status).toBe(201);
@@ -195,10 +195,7 @@ describe("API without Redis", () => {
     expect(res.body.data.success).toBe(true);
 
     // The revoked token must no longer work.
-    await request(app)
-      .get("/api/v1/customers")
-      .set("Authorization", `Bearer ${token}`)
-      .expect(401);
+    await request(app).get("/api/v1/customers").set("Authorization", `Bearer ${token}`).expect(401);
   });
 
   afterAll(async () => {

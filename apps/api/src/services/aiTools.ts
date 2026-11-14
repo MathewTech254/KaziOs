@@ -396,8 +396,14 @@ async function paymentSummary(ctx: ToolContext, params: ToolParams): Promise<Too
     averageCents,
     byMethod,
     currencies: [...new Set(payments.map(p => p.currency))],
-    firstPayment: count > 0 ? payments.sort((a, b) => a.paidAt!.getTime() - b.paidAt!.getTime())[0].paidAt : null,
-    lastPayment: count > 0 ? payments.sort((a, b) => b.paidAt!.getTime() - a.paidAt!.getTime())[0].paidAt : null,
+    firstPayment:
+      count > 0
+        ? payments.sort((a, b) => a.paidAt!.getTime() - b.paidAt!.getTime())[0].paidAt
+        : null,
+    lastPayment:
+      count > 0
+        ? payments.sort((a, b) => b.paidAt!.getTime() - a.paidAt!.getTime())[0].paidAt
+        : null,
   };
 
   const parts: string[] = [
@@ -785,7 +791,8 @@ const TOOLS: Record<string, ToolFn> = {
 export const TOOL_CATALOG = [
   {
     name: "general",
-    description: "General questions, greetings, or when no specific analytics tool fits. Tells the shop owner what the assistant can do.",
+    description:
+      "General questions, greetings, or when no specific analytics tool fits. Tells the shop owner what the assistant can do.",
     example: "hello, what can you do, help",
     params: "none",
   },
@@ -809,8 +816,10 @@ export const TOOL_CATALOG = [
   },
   {
     name: "lowest_stock",
-    description: "The single product with the lowest on-hand quantity, even if it's above its reorder level",
-    example: "which product has the lowest stock, lowest quantity, product with minimum stock, deepest stock",
+    description:
+      "The single product with the lowest on-hand quantity, even if it's above its reorder level",
+    example:
+      "which product has the lowest stock, lowest quantity, product with minimum stock, deepest stock",
     params: "none",
   },
   {
@@ -834,7 +843,8 @@ export const TOOL_CATALOG = [
   {
     name: "payment_summary",
     description: "Summarize payments received: total, count, average, and method breakdown",
-    example: "summarize payments made, payment summary, payments received this month, total payments today",
+    example:
+      "summarize payments made, payment summary, payments received this month, total payments today",
     params: "period",
   },
   {

@@ -4,11 +4,7 @@ import { prisma } from "../lib/prisma";
 import type { AuthRequest } from "../middleware/auth";
 import { requireAuth, requirePermission } from "../middleware/auth";
 import { AppError, paginate } from "../lib";
-import {
-  zProductSchema,
-  zProductUnitSchema,
-  zProductUnitQuerySchema,
-} from "@kazios/validation";
+import { zProductSchema, zProductUnitSchema, zProductUnitQuerySchema } from "@kazios/validation";
 import { LIMIT_KEYS } from "@kazios/types";
 import { assertWithinLimit, getEntitlements } from "../services/entitlements";
 
@@ -63,12 +59,8 @@ productRouter.get(
         prisma.product.count({ where }),
       ]);
       // Attendants must not see cost prices — strip costPrice unless the caller is an owner.
-      const isOwner = req.roles?.some(
-        (r: any) => r.role.permissions.includes("*")
-      ) ?? false;
-      const safeData = isOwner
-        ? data
-        : data.map(({ costPrice, ...rest }) => rest);
+      const isOwner = req.roles?.some((r: any) => r.role.permissions.includes("*")) ?? false;
+      const safeData = isOwner ? data : data.map(({ costPrice, ...rest }) => rest);
       res.json({ data: safeData, total, page: p, limit: l, totalPages: Math.ceil(total / l) });
     } catch (err) {
       next(err);
@@ -129,9 +121,7 @@ productRouter.get(
       });
       if (!product) throw new AppError(404, "Product not found");
       // Attendants must not see cost prices.
-      const isOwner = req.roles?.some(
-        (r: any) => r.role.permissions.includes("*")
-      ) ?? false;
+      const isOwner = req.roles?.some((r: any) => r.role.permissions.includes("*")) ?? false;
       if (isOwner) {
         res.json({ data: product });
       } else {
@@ -168,7 +158,11 @@ productRouter.post(
 
       const lines = csvText.trim().split(/\r?\n/);
       if (lines.length < 2) {
-        throw new AppError(400, "CSV must have a header row and at least one data row", "CSV_INVALID");
+        throw new AppError(
+          400,
+          "CSV must have a header row and at least one data row",
+          "CSV_INVALID"
+        );
       }
 
       const header = lines[0].split(",").map((h: string) => h.trim().toLowerCase());

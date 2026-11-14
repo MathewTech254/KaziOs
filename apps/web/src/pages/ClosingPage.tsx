@@ -139,9 +139,7 @@ export function ClosingPage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="kazi-page-title">Daily Closing</h1>
-          <p className="kazi-page-subtitle">
-            Nightly closing report for the trading day
-          </p>
+          <p className="kazi-page-subtitle">Nightly closing report for the trading day</p>
         </div>
         <div className="flex items-end gap-2">
           <input
@@ -189,8 +187,8 @@ export function ClosingPage() {
                   {isNotOpened
                     ? "The day has not been opened yet."
                     : isOpen
-                    ? "The day is open for trading."
-                    : "The day is closed. Attendants cannot start new sales."}
+                      ? "The day is open for trading."
+                      : "The day is closed. Attendants cannot start new sales."}
                 </p>
               </div>
               <div className="flex gap-2">
@@ -207,7 +205,7 @@ export function ClosingPage() {
                   <>
                     <button
                       type="button"
-                      onClick={() => (document.getElementById("close-form")?.scrollIntoView())}
+                      onClick={() => document.getElementById("close-form")?.scrollIntoView()}
                       className="kazi-button-outline px-4 py-2 text-sm"
                     >
                       Close Day
@@ -233,8 +231,8 @@ export function ClosingPage() {
                   Close Day
                 </h3>
                 <p className="mb-3 text-sm text-muted-foreground">
-                  Enter the physical count from the till and M-PESA. The difference is
-                  computed automatically.
+                  Enter the physical count from the till and M-PESA. The difference is computed
+                  automatically.
                 </p>
                 <form
                   onSubmit={e => {
@@ -300,10 +298,7 @@ export function ClosingPage() {
                     />
                   </div>
                   <div className="col-span-3">
-                    <button
-                      type="submit"
-                      className="kazi-button-primary px-4 py-2"
-                    >
+                    <button type="submit" className="kazi-button-primary px-4 py-2">
                       Close Day
                     </button>
                   </div>
@@ -326,9 +321,7 @@ export function ClosingPage() {
             </div>
             <div className="kazi-stat-card">
               <p className="kazi-stat-label">M-PESA</p>
-              <p className="kazi-stat-value mt-1">
-                {formatMoney(r.totals.mpesaSales, currency)}
-              </p>
+              <p className="kazi-stat-value mt-1">{formatMoney(r.totals.mpesaSales, currency)}</p>
             </div>
             <div className="kazi-stat-card">
               <p className="kazi-stat-label">Credit</p>
@@ -350,17 +343,13 @@ export function ClosingPage() {
             </div>
             <div className="kazi-stat-card">
               <p className="kazi-stat-label">Net</p>
-              <p className="kazi-stat-value mt-1">
-                {formatMoney(r.totals.net, currency)}
-              </p>
+              <p className="kazi-stat-value mt-1">{formatMoney(r.totals.net, currency)}</p>
             </div>
           </div>
 
           {/* Per-attendant */}
           <div className="kazi-card p-4">
-            <h2 className="mb-3 text-lg font-semibold text-foreground">
-              Per Attendant
-            </h2>
+            <h2 className="mb-3 text-lg font-semibold text-foreground">Per Attendant</h2>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-border">
                 <thead className="bg-surface-muted">
@@ -392,7 +381,10 @@ export function ClosingPage() {
                   ))}
                   {!r.perAttendant.length && (
                     <tr>
-                      <td className="px-6 py-4 text-center text-sm text-muted-foreground" colSpan={3}>
+                      <td
+                        className="px-6 py-4 text-center text-sm text-muted-foreground"
+                        colSpan={3}
+                      >
                         No sales recorded
                       </td>
                     </tr>
@@ -429,12 +421,8 @@ export function ClosingPage() {
                       <td className="px-6 py-4 text-sm font-medium text-foreground">
                         {item.productName}
                       </td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">
-                        {item.sku || "-"}
-                      </td>
-                      <td className="px-6 py-4 text-right text-sm">
-                        {item.quantity}
-                      </td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground">{item.sku || "-"}</td>
+                      <td className="px-6 py-4 text-right text-sm">{item.quantity}</td>
                       <td className="px-6 py-4 text-right text-sm">
                         {formatMoney(item.lineTotal, currency)}
                       </td>
@@ -442,7 +430,10 @@ export function ClosingPage() {
                   ))}
                   {!r.itemsSold.length && (
                     <tr>
-                      <td className="px-6 py-4 text-center text-sm text-muted-foreground" colSpan={4}>
+                      <td
+                        className="px-6 py-4 text-center text-sm text-muted-foreground"
+                        colSpan={4}
+                      >
                         No items sold
                       </td>
                     </tr>
@@ -479,14 +470,15 @@ export function ClosingPage() {
                       <td className="px-6 py-4 text-right text-sm">
                         {formatMoney(e.amount, currency)}
                       </td>
-                      <td className="px-6 py-4 text-sm text-muted-foreground">
-                        {e.notes || "-"}
-                      </td>
+                      <td className="px-6 py-4 text-sm text-muted-foreground">{e.notes || "-"}</td>
                     </tr>
                   ))}
                   {!r.expenses.length && (
                     <tr>
-                      <td className="px-6 py-4 text-center text-sm text-muted-foreground" colSpan={3}>
+                      <td
+                        className="px-6 py-4 text-center text-sm text-muted-foreground"
+                        colSpan={3}
+                      >
                         No expenses recorded
                       </td>
                     </tr>
@@ -500,18 +492,12 @@ export function ClosingPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="kazi-card p-4">
               <h2 className="mb-3 text-lg font-semibold text-foreground">Low Stock</h2>
-              <p className="kazi-stat-value text-xl text-warning">
-                {r.lowStock} items
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Items at or below reorder level
-              </p>
+              <p className="kazi-stat-value text-xl text-warning">{r.lowStock} items</p>
+              <p className="mt-1 text-xs text-muted-foreground">Items at or below reorder level</p>
             </div>
             <div className="kazi-card p-4">
               <h2 className="mb-3 text-lg font-semibold text-foreground">Stock Shortages</h2>
-              <p className="kazi-stat-value text-xl text-danger">
-                {r.stockShortages}
-              </p>
+              <p className="kazi-stat-value text-xl text-danger">{r.stockShortages}</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 Adjustments recorded as damage, breakage, expired, or theft
               </p>

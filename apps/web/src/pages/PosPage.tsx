@@ -136,7 +136,16 @@ interface PosCustomer {
 // Card and M-PESA are listed because the server verifies them properly: the till records
 // the sale, then Paystack or Safaricom confirms the money before the invoice is ever
 // marked paid. (The name is historical — these are the providers this till may offer.)
-const immediatePaymentProviders = new Set(["CASH", "BANK", "MANUAL", "CHECK", "PAYSTACK", "MPESA", "MPESA_MANUAL", "CREDIT"]);
+const immediatePaymentProviders = new Set([
+  "CASH",
+  "BANK",
+  "MANUAL",
+  "CHECK",
+  "PAYSTACK",
+  "MPESA",
+  "MPESA_MANUAL",
+  "CREDIT",
+]);
 
 function formatMoney(value: number, currency: string): string {
   try {
@@ -1041,7 +1050,10 @@ export function PosPage() {
                   <p className="text-xs font-medium text-danger">
                     Owes {formatMoney(customer.balanceOwed, context.organization.currency)}
                     {customer.creditLimit != null && (
-                      <> · limit {formatMoney(customer.creditLimit, context.organization.currency)}</>
+                      <>
+                        {" "}
+                        · limit {formatMoney(customer.creditLimit, context.organization.currency)}
+                      </>
                     )}
                   </p>
                 )}
@@ -1341,7 +1353,11 @@ export function PosPage() {
                 Customer owes{" "}
                 {formatMoney(customer.balanceOwed ?? 0, context.organization.currency)}
                 {customer.creditLimit != null && (
-                  <> · credit limit {formatMoney(customer.creditLimit, context.organization.currency)}</>
+                  <>
+                    {" "}
+                    · credit limit{" "}
+                    {formatMoney(customer.creditLimit, context.organization.currency)}
+                  </>
                 )}
               </p>
               <label className="mb-1 block text-xs font-medium text-muted-foreground flex items-center gap-2">
@@ -1370,9 +1386,7 @@ export function PosPage() {
           )}
           {selectedPaymentMethod?.provider === "CREDIT" && !customer && (
             <div className="mt-3 rounded-lg border border-danger/30 bg-danger/10 p-3">
-              <p className="text-xs text-danger">
-                Select a customer before selling on credit.
-              </p>
+              <p className="text-xs text-danger">Select a customer before selling on credit.</p>
             </div>
           )}
         </div>

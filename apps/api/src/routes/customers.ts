@@ -76,7 +76,11 @@ customerRouter.get(
       // Balance owed = unpaid invoice totals − standalone customer repayments.
       // Last purchase date = most recent non-void invoice date.
       const customersWithBalance = data.map(customer => {
-        const invoices = customer.invoices as { total: number; paidAmount: number; createdAt: Date }[];
+        const invoices = customer.invoices as {
+          total: number;
+          paidAmount: number;
+          createdAt: Date;
+        }[];
         const owed = invoices.reduce(
           (sum, inv) => sum + Number(inv.total) - Number(inv.paidAmount),
           0

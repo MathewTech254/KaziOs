@@ -234,9 +234,7 @@ export function CustomersPage() {
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-sm text-muted-foreground">
-                Credit limit (KES)
-              </label>
+              <label className="mb-1 block text-sm text-muted-foreground">Credit limit (KES)</label>
               <input
                 type="number"
                 min="0"
@@ -251,9 +249,7 @@ export function CustomersPage() {
               </p>
             </div>
           </div>
-          {error && (
-            <p className="mt-3 text-sm text-danger">{error}</p>
-          )}
+          {error && <p className="mt-3 text-sm text-danger">{error}</p>}
           <button type="submit" className="kazi-button-primary mt-4 px-4 text-sm">
             Save customer
           </button>
@@ -301,12 +297,8 @@ export function CustomersPage() {
           <tbody className="divide-y divide-border">
             {sortedCustomers.map(c => (
               <tr key={c.id} className="hover:bg-surface-muted/50">
-                <td className="px-6 py-4 text-sm font-medium text-foreground">
-                  {c.name}
-                </td>
-                <td className="px-6 py-4 text-sm text-muted-foreground">
-                  {c.phone || "-"}
-                </td>
+                <td className="px-6 py-4 text-sm font-medium text-foreground">{c.name}</td>
+                <td className="px-6 py-4 text-sm text-muted-foreground">{c.phone || "-"}</td>
                 <td className="px-6 py-4 text-sm font-medium">
                   {c.balanceOwed > 0 ? (
                     <span className="text-danger">{formatMoney(c.balanceOwed, "KES")}</span>
@@ -360,8 +352,7 @@ export function CustomersPage() {
                     setPaymentForm({
                       ...paymentForm,
                       paymentProvider: e.target.value,
-                      paymentMethodType:
-                        e.target.value === "CREDIT" ? "credit" : "cash",
+                      paymentMethodType: e.target.value === "CREDIT" ? "credit" : "cash",
                     })
                   }
                   className="kazi-input"

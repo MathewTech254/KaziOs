@@ -96,8 +96,8 @@ export function ReceiveStockPage() {
         <div>
           <h1 className="kazi-page-title">Receive Stock</h1>
           <p className="kazi-page-subtitle">
-            Receive stock from a supplier. Every receipt writes a PURCHASE movement to
-            the stock ledger.
+            Receive stock from a supplier. Every receipt writes a PURCHASE movement to the stock
+            ledger.
           </p>
         </div>
         <button
@@ -110,12 +110,18 @@ export function ReceiveStockPage() {
       </div>
 
       {error && (
-        <div role="alert" className="mb-4 rounded-lg border border-danger/30 bg-danger/10 p-4 text-sm text-danger">
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-danger/30 bg-danger/10 p-4 text-sm text-danger"
+        >
           {error}
         </div>
       )}
       {success && (
-        <div role="status" className="mb-4 rounded-lg border border-success/30 bg-success/10 p-4 text-sm text-success">
+        <div
+          role="status"
+          className="mb-4 rounded-lg border border-success/30 bg-success/10 p-4 text-sm text-success"
+        >
           {success}
         </div>
       )}
@@ -125,9 +131,7 @@ export function ReceiveStockPage() {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           <div className="col-span-1 sm:col-span-2 lg:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-muted-foreground">
-              Supplier
-            </label>
+            <label className="mb-1 block text-sm font-medium text-muted-foreground">Supplier</label>
             <input
               type="text"
               value={form.supplierName}
@@ -153,9 +157,7 @@ export function ReceiveStockPage() {
           </div>
 
           <div className="sm:col-span-2 lg:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-muted-foreground">
-              Product
-            </label>
+            <label className="mb-1 block text-sm font-medium text-muted-foreground">Product</label>
             <div className="relative">
               <input
                 type="text"
@@ -174,8 +176,8 @@ export function ReceiveStockPage() {
                 <div className="mt-2 p-3 rounded-lg border border-border bg-surface-muted">
                   <p className="text-sm font-medium text-foreground">{selectedProduct.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    SKU: {selectedProduct.sku || "—"} &nbsp;|&nbsp;
-                    Base price: {formatMoney(selectedProduct.costPrice, "KES")}
+                    SKU: {selectedProduct.sku || "—"} &nbsp;|&nbsp; Base price:{" "}
+                    {formatMoney(selectedProduct.costPrice, "KES")}
                   </p>
                 </div>
               )}
@@ -207,9 +209,7 @@ export function ReceiveStockPage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-muted-foreground">
-              Unit
-            </label>
+            <label className="mb-1 block text-sm font-medium text-muted-foreground">Unit</label>
             <input
               type="text"
               value={form.unit}
@@ -268,9 +268,7 @@ export function ReceiveStockPage() {
           </div>
 
           <div className="col-span-1 sm:col-span-2 lg:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-muted-foreground">
-              Notes
-            </label>
+            <label className="mb-1 block text-sm font-medium text-muted-foreground">Notes</label>
             <input
               type="text"
               value={form.notes}
@@ -292,8 +290,8 @@ export function ReceiveStockPage() {
         </div>
 
         <p className="mt-4 text-xs text-muted-foreground">
-          Stock is received in the unit you select and converted to base units
-          (bottles) in the ledger. Example: 2 crates of 24 = 48 base units.
+          Stock is received in the unit you select and converted to base units (bottles) in the
+          ledger. Example: 2 crates of 24 = 48 base units.
         </p>
       </form>
     </div>

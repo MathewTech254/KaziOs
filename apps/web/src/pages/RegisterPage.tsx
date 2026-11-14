@@ -30,8 +30,8 @@ export function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-const { register } = useAuth();
-const navigate = useNavigate();
+  const { register } = useAuth();
+  const navigate = useNavigate();
 
   const passwordRequirements = [
     { met: form.password.length >= 8, label: "At least 8 characters" },

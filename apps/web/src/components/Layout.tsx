@@ -5,7 +5,9 @@ import { AppSidebar, TopBar, QuickActionsFab } from "./AppShell";
 
 export function Layout() {
   const [collapsed, setCollapsed] = useState(false);
-  const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator !== "undefined" ? navigator.onLine : true
+  );
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);

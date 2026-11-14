@@ -75,7 +75,7 @@ export function normalizeQuestion(question: string): string {
   q = q.replace(/\s+/g, " ");
   q = q
     .split(" ")
-    .map((w) => TYPO_MAP[w] ?? w)
+    .map(w => TYPO_MAP[w] ?? w)
     .join(" ");
   q = q
     .replace(/\bthis week\b/g, "this_week")
@@ -98,15 +98,39 @@ function keywordRoute(question: string): RouteDecision | null {
 
   const patterns: Array<[RegExp, RouteDecision]> = [
     [/\b(low|running.?out|reorder|need.?stock|stock.?level)\b/, { tool: "low_stock", params: {} }],
-    [/\b(who.?owes|unpaid|outstanding|debt|money.?owed|owes.?me)\b/, { tool: "who_owes", params: {} }],
+    [
+      /\b(who.?owes|unpaid|outstanding|debt|money.?owed|owes.?me)\b/,
+      { tool: "who_owes", params: {} },
+    ],
     [/\b(lowest|deepest|minimum|top.?down)\b/, { tool: "lowest_stock", params: {} }],
-    [/\b(top.?product|best.?selling|best.?product|top.?selling)\b/, { tool: "top_products", params: { limit: 5 } }],
-    [/\b(slow.?mover|not.?selling|stale.?stock|dead.?stock)\b/, { tool: "slow_movers", params: { days: 30 } }],
-    [/\b(summariz|total|payment|receiv\w*)\b/i, { tool: "payment_summary", params: { period: "today" } }],
-    [/\b(cash|till|money.?collected|payments.?received)\b/, { tool: "cash_position", params: { period: "today" } }],
-    [/\b(expense|spending|spent|where.?did.?money.?go)\b/, { tool: "expense_summary", params: { period: "today" } }],
-    [/\b(branch.?stock|stock.?by.?branch|inventory.?by.?location)\b/, { tool: "branch_stock", params: {} }],
-    [/\b(sales|revenue|income|sold|how.?much.?sell|how.?much.?sale)\b/, { tool: "sales_summary", params: { period: "today" } }],
+    [
+      /\b(top.?product|best.?selling|best.?product|top.?selling)\b/,
+      { tool: "top_products", params: { limit: 5 } },
+    ],
+    [
+      /\b(slow.?mover|not.?selling|stale.?stock|dead.?stock)\b/,
+      { tool: "slow_movers", params: { days: 30 } },
+    ],
+    [
+      /\b(summariz|total|payment|receiv\w*)\b/i,
+      { tool: "payment_summary", params: { period: "today" } },
+    ],
+    [
+      /\b(cash|till|money.?collected|payments.?received)\b/,
+      { tool: "cash_position", params: { period: "today" } },
+    ],
+    [
+      /\b(expense|spending|spent|where.?did.?money.?go)\b/,
+      { tool: "expense_summary", params: { period: "today" } },
+    ],
+    [
+      /\b(branch.?stock|stock.?by.?branch|inventory.?by.?location)\b/,
+      { tool: "branch_stock", params: {} },
+    ],
+    [
+      /\b(sales|revenue|income|sold|how.?much.?sell|how.?much.?sale)\b/,
+      { tool: "sales_summary", params: { period: "today" } },
+    ],
   ];
 
   for (const [regex, decision] of patterns) {
@@ -151,13 +175,13 @@ export function aiAssistantEnabled(): boolean {
 
 function routingSystemPrompt(history?: ConversationTurn[]): string {
   const catalog = TOOL_CATALOG.map(
-    (t) => `- ${t.name}: ${t.description}. Example: "${t.example}". params: ${t.params}`,
+    t => `- ${t.name}: ${t.description}. Example: "${t.example}". params: ${t.params}`
   ).join("\n");
   const historySection = history?.length
     ? [
         "",
         "Recent conversation:",
-        ...history.map((h) => `User: ${h.question}\nAssistant: ${h.answer}`),
+        ...history.map(h => `User: ${h.question}\nAssistant: ${h.answer}`),
       ]
     : [];
   return [
@@ -168,10 +192,10 @@ function routingSystemPrompt(history?: ConversationTurn[]): string {
     catalog,
     "",
     "There is also a special tool called `general`. Use it when the question is a greeting,",
-    "a general \"what can you do\" question, or when no analytics tool fits the question.",
+    'a general "what can you do" question, or when no analytics tool fits the question.',
     "general needs no params.",
     "",
-    "Respond as JSON only: {\"tool\": string, \"params\": object}.",
+    'Respond as JSON only: {"tool": string, "params": object}.',
     "Rules:",
     "- Choose the single best tool for the question. If nothing fits, use `general`.",
     "- Do not default every question to sales_summary. Read the question carefully.",
@@ -205,7 +229,7 @@ async function routeQuestion(
       ],
       temperature: 0,
     });
-    const known = TOOL_CATALOG.some((t) => t.name === decision?.tool);
+    const known = TOOL_CATALOG.some(t => t.name === decision?.tool);
     if (!decision || !known) return fallback;
     return { tool: decision.tool, params: decision.params || {} };
   } catch {
@@ -287,7 +311,7 @@ export async function askBusiness(
   // forcing an irrelevant sales figure.
   if (route.tool === "general") {
     const answer =
-      "I can help you with sales, top products, low stock, who owes you money, slow movers, cash position, expenses and branch stock. Try asking something like \"how much did we sell today?\" or \"what am I running low on?\".";
+      'I can help you with sales, top products, low stock, who owes you money, slow movers, cash position, expenses and branch stock. Try asking something like "how much did we sell today?" or "what am I running low on?".';
     const assistantAnswer: AssistantAnswer = {
       question: trimmed,
       tool: "general",

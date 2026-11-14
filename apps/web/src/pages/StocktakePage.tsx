@@ -146,12 +146,18 @@ export function StocktakePage() {
       </div>
 
       {error && (
-        <div role="alert" className="mb-4 rounded-lg border border-danger/30 bg-danger/10 p-4 text-sm text-danger">
+        <div
+          role="alert"
+          className="mb-4 rounded-lg border border-danger/30 bg-danger/10 p-4 text-sm text-danger"
+        >
           {error}
         </div>
       )}
       {success && (
-        <div role="status" className="mb-4 rounded-lg border border-success/30 bg-success/10 p-4 text-sm text-success">
+        <div
+          role="status"
+          className="mb-4 rounded-lg border border-success/30 bg-success/10 p-4 text-sm text-success"
+        >
           {success}
         </div>
       )}
@@ -175,9 +181,7 @@ export function StocktakePage() {
                       : "border-border hover:bg-surface-muted/50"
                   }`}
                 >
-                  <p className="text-sm font-medium text-foreground">
-                    Count {c.id.slice(0, 8)}
-                  </p>
+                  <p className="text-sm font-medium text-foreground">Count {c.id.slice(0, 8)}</p>
                   <p className="text-xs text-muted-foreground">
                     {c.status} &middot; {c.lines.length} lines
                   </p>
@@ -202,8 +206,8 @@ export function StocktakePage() {
                     Count {selectedCount.id.slice(0, 8)}
                   </h2>
                   <p className="text-xs text-muted-foreground">
-                    Status: {selectedCount.status} &middot;
-                    Opened by {selectedCount.openedBy.name} &middot;
+                    Status: {selectedCount.status} &middot; Opened by {selectedCount.openedBy.name}{" "}
+                    &middot;
                     {selectedCount.warehouse ? `Warehouse: ${selectedCount.warehouse.name}` : ""}
                   </p>
                 </div>
@@ -282,9 +286,7 @@ export function StocktakePage() {
                       Add line
                     </button>
                   </form>
-                  {error && (
-                    <p className="mt-2 text-xs text-danger">{error}</p>
-                  )}
+                  {error && <p className="mt-2 text-xs text-danger">{error}</p>}
                 </div>
               )}
 
@@ -317,10 +319,17 @@ export function StocktakePage() {
                         </td>
                         <td className="px-4 py-3 text-right text-sm">{line.expectedQty}</td>
                         <td className="px-4 py-3 text-right text-sm">{line.countedQty}</td>
-                        <td className={`px-4 py-3 text-right text-sm ${
-                          line.diffQty > 0 ? "text-success" : line.diffQty < 0 ? "text-danger" : "text-muted-foreground"
-                        }`}>
-                          {line.diffQty > 0 ? "+" : ""}{line.diffQty}
+                        <td
+                          className={`px-4 py-3 text-right text-sm ${
+                            line.diffQty > 0
+                              ? "text-success"
+                              : line.diffQty < 0
+                                ? "text-danger"
+                                : "text-muted-foreground"
+                          }`}
+                        >
+                          {line.diffQty > 0 ? "+" : ""}
+                          {line.diffQty}
                         </td>
                         <td className="px-4 py-3 text-right text-sm">
                           {formatMoney(line.diffAmount / 100, "KES")}
@@ -329,7 +338,10 @@ export function StocktakePage() {
                     ))}
                     {selectedCount.lines.length === 0 && (
                       <tr>
-                        <td className="px-4 py-4 text-center text-sm text-muted-foreground" colSpan={5}>
+                        <td
+                          className="px-4 py-4 text-center text-sm text-muted-foreground"
+                          colSpan={5}
+                        >
                           No counted lines yet. Add products above.
                         </td>
                       </tr>
@@ -341,8 +353,8 @@ export function StocktakePage() {
               {selectedCount.status === "CONFIRMED" && (
                 <div className="mt-4 p-4 rounded-lg border border-success/30 bg-success/10">
                   <p className="text-sm text-success">
-                    Count confirmed. ADJUSTMENT movements have been posted to the stock
-                    ledger for each line's difference.
+                    Count confirmed. ADJUSTMENT movements have been posted to the stock ledger for
+                    each line's difference.
                   </p>
                 </div>
               )}

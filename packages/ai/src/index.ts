@@ -17,9 +17,7 @@ const NVIDIA_DEFAULT_MODEL = "nvidia/nemotron-4-340b-reward";
 export function resolveProvider(): AIProvider {
   const raw = process.env.AI_PROVIDER || "openai";
   if (raw !== "openai" && raw !== "nvidia") {
-    throw new Error(
-      `Unsupported AI_PROVIDER "${raw}". Use "openai" or "nvidia".`
-    );
+    throw new Error(`Unsupported AI_PROVIDER "${raw}". Use "openai" or "nvidia".`);
   }
   return raw;
 }

@@ -80,17 +80,9 @@ function loadWorker(options: { cached?: string[]; networkFails?: boolean } = {})
     clients: { claim: () => {}, matchAll: async () => [] },
   };
 
-  const source = fs.readFileSync(
-    path.join(__dirname, "..", "public", "sw.js"),
-    "utf8"
-  );
+  const source = fs.readFileSync(path.join(__dirname, "..", "public", "sw.js"), "utf8");
   // The worker is a classic script that reads these as globals.
-  new Function("self", "caches", "fetch", "Response", source)(
-    self,
-    caches,
-    fetch,
-    FakeResponse
-  );
+  new Function("self", "caches", "fetch", "Response", source)(self, caches, fetch, FakeResponse);
 
   return {
     listeners,
@@ -132,9 +124,7 @@ describe("service worker fetch handler", () => {
 
   it("answers an uncached asset instead of resolving to undefined", async () => {
     const worker = loadWorker();
-    const response = await worker.respondsWith(
-      request("https://kazios.pages.dev/assets/index.js")
-    );
+    const response = await worker.respondsWith(request("https://kazios.pages.dev/assets/index.js"));
 
     expect(response).toBeInstanceOf(FakeResponse);
   });

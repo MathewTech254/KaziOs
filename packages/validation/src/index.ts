@@ -355,7 +355,15 @@ export const zPaymentSchema = z.object({
   amount: z.number().positive("Amount must be positive"),
   currency: zCurrency,
   paymentProvider: z.enum(["PAYSTACK", "MPESA", "BANK", "MANUAL", "CASH", "CHECK", "CREDIT"]),
-  paymentMethodType: z.enum(["card", "bank_transfer", "mobile_money", "cash", "check", "manual", "credit"]),
+  paymentMethodType: z.enum([
+    "card",
+    "bank_transfer",
+    "mobile_money",
+    "cash",
+    "check",
+    "manual",
+    "credit",
+  ]),
   reference: zString(1, 100).optional().nullable(),
   notes: zString(0, 500).optional().nullable(),
   customerId: zUuid.optional().nullable(),
@@ -368,8 +376,25 @@ export const zPosSaleItemSchema = z.object({
 });
 
 export const zPosPaymentSchema = z.object({
-  provider: z.enum(["PAYSTACK", "MPESA", "MPESA_MANUAL", "BANK", "MANUAL", "CASH", "CHECK", "CREDIT"]),
-  methodType: z.enum(["card", "bank_transfer", "mobile_money", "cash", "check", "manual", "credit"]),
+  provider: z.enum([
+    "PAYSTACK",
+    "MPESA",
+    "MPESA_MANUAL",
+    "BANK",
+    "MANUAL",
+    "CASH",
+    "CHECK",
+    "CREDIT",
+  ]),
+  methodType: z.enum([
+    "card",
+    "bank_transfer",
+    "mobile_money",
+    "cash",
+    "check",
+    "manual",
+    "credit",
+  ]),
   amount: z.number().positive("Amount must be positive"),
   tenderedAmount: z.number().nonnegative("Tendered amount cannot be negative").optional(),
   reference: zString(1, 100).optional(),
@@ -781,9 +806,7 @@ export const PERMISSION_GROUPS = [
   },
   {
     label: "Closing",
-    permissions: [
-      { key: "closing.manage", label: "Open and close the trading day" },
-    ],
+    permissions: [{ key: "closing.manage", label: "Open and close the trading day" }],
   },
   {
     // Split into view and manage deliberately. A bookkeeper needs to see what the

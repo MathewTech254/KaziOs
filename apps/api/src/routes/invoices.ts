@@ -19,69 +19,62 @@ const InvoiceStatus = {
 
 export const invoiceRouter = Router();
 
-invoiceRouter.get(
-  "/",
-  requireAuth,
-  async (req: AuthRequest, res, next) => {
-    try {
-      const { page = 1, limit = 50, status, search } = req.query;
-      const { skip, take, page: p, limit: l } = paginate(Number(page), Number(limit));
-      const organizationId = req.organizationId;
-      const isOwner = req.roles?.some(
-        (r: any) => r.role.permissions.includes("*")
-      ) ?? false;
-      const isAttendant = req.roles?.some(
-        (r: any) => r.role.permissions.includes("pos.sales.view")
-      ) ?? false;
+invoiceRouter.get("/", requireAuth, async (req: AuthRequest, res, next) => {
+  try {
+    const { page = 1, limit = 50, status, search } = req.query;
+    const { skip, take, page: p, limit: l } = paginate(Number(page), Number(limit));
+    const organizationId = req.organizationId;
+    const isOwner = req.roles?.some((r: any) => r.role.permissions.includes("*")) ?? false;
+    const isAttendant =
+      req.roles?.some((r: any) => r.role.permissions.includes("pos.sales.view")) ?? false;
 
-      if (!isOwner && !isAttendant) {
-        throw new AppError(403, "Insufficient permissions");
-      }
-
-      const where: any = { organizationId };
-      if (isAttendant) {
-        // Attendants only see their own sales.
-        where.recordedById = req.userId;
-      }
-      if (status) where.status = String(status);
-      // A return has to find the sale by the number printed on the receipt, not only by
-      // the customer: the person at the counter is holding paper, not a name.
-      if (search) {
-        const term = String(search);
-        where.OR = [
-          { customer: { name: { contains: term, mode: "insensitive" } } },
-          { invoiceNumber: { contains: term, mode: "insensitive" } },
-        ];
-      }
-      // The returns screen asks for this: a sale that is already void, or was never rung
-      // up, has nothing to give back, and listing it only invites a 409.
-      if (req.query.returnable === "true") {
-        where.status = { notIn: [InvoiceStatus.VOID, InvoiceStatus.DRAFT] };
-      }
-      const [data, total] = await Promise.all([
-        prisma.invoice.findMany({
-          where,
-          include: {
-            customer: true,
-            branch: true,
-            items: true,
-            payments: true,
-            // The KRA side travels with the invoice: a business that has to show which
-            // invoices are filed should not have to open each one to find out.
-            etims: true,
-          },
-          skip,
-          take,
-          orderBy: { createdAt: "desc" },
-        }),
-        prisma.invoice.count({ where }),
-      ]);
-      res.json({ data, total, page: p, limit: l, totalPages: Math.ceil(total / l) });
-    } catch (err) {
-      next(err);
+    if (!isOwner && !isAttendant) {
+      throw new AppError(403, "Insufficient permissions");
     }
+
+    const where: any = { organizationId };
+    if (isAttendant) {
+      // Attendants only see their own sales.
+      where.recordedById = req.userId;
+    }
+    if (status) where.status = String(status);
+    // A return has to find the sale by the number printed on the receipt, not only by
+    // the customer: the person at the counter is holding paper, not a name.
+    if (search) {
+      const term = String(search);
+      where.OR = [
+        { customer: { name: { contains: term, mode: "insensitive" } } },
+        { invoiceNumber: { contains: term, mode: "insensitive" } },
+      ];
+    }
+    // The returns screen asks for this: a sale that is already void, or was never rung
+    // up, has nothing to give back, and listing it only invites a 409.
+    if (req.query.returnable === "true") {
+      where.status = { notIn: [InvoiceStatus.VOID, InvoiceStatus.DRAFT] };
+    }
+    const [data, total] = await Promise.all([
+      prisma.invoice.findMany({
+        where,
+        include: {
+          customer: true,
+          branch: true,
+          items: true,
+          payments: true,
+          // The KRA side travels with the invoice: a business that has to show which
+          // invoices are filed should not have to open each one to find out.
+          etims: true,
+        },
+        skip,
+        take,
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.invoice.count({ where }),
+    ]);
+    res.json({ data, total, page: p, limit: l, totalPages: Math.ceil(total / l) });
+  } catch (err) {
+    next(err);
   }
-);
+});
 
 invoiceRouter.post(
   "/",
@@ -169,42 +162,35 @@ invoiceRouter.post(
   }
 );
 
-invoiceRouter.get(
-  "/:id",
-  requireAuth,
-  async (req: AuthRequest, res, next) => {
-    try {
-      const isOwner = req.roles?.some(
-        (r: any) => r.role.permissions.includes("*")
-      ) ?? false;
-      const isAttendant = req.roles?.some(
-        (r: any) => r.role.permissions.includes("pos.sales.view")
-      ) ?? false;
+invoiceRouter.get("/:id", requireAuth, async (req: AuthRequest, res, next) => {
+  try {
+    const isOwner = req.roles?.some((r: any) => r.role.permissions.includes("*")) ?? false;
+    const isAttendant =
+      req.roles?.some((r: any) => r.role.permissions.includes("pos.sales.view")) ?? false;
 
-      if (!isOwner && !isAttendant) {
-        throw new AppError(403, "Insufficient permissions");
-      }
-
-      const where: any = { id: req.params.id, organizationId: req.organizationId };
-      if (isAttendant) {
-        where.recordedById = req.userId;
-      }
-      const invoice = await prisma.invoice.findFirst({
-        where,
-        include: {
-          customer: true,
-          branch: true,
-          items: { include: { product: true, taxCategory: true } },
-          payments: true,
-        },
-      });
-      if (!invoice) throw new AppError(404, "Invoice not found");
-      res.json({ data: invoice });
-    } catch (err) {
-      next(err);
+    if (!isOwner && !isAttendant) {
+      throw new AppError(403, "Insufficient permissions");
     }
+
+    const where: any = { id: req.params.id, organizationId: req.organizationId };
+    if (isAttendant) {
+      where.recordedById = req.userId;
+    }
+    const invoice = await prisma.invoice.findFirst({
+      where,
+      include: {
+        customer: true,
+        branch: true,
+        items: { include: { product: true, taxCategory: true } },
+        payments: true,
+      },
+    });
+    if (!invoice) throw new AppError(404, "Invoice not found");
+    res.json({ data: invoice });
+  } catch (err) {
+    next(err);
   }
-);
+});
 
 invoiceRouter.post(
   "/:id/send",

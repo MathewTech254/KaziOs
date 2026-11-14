@@ -93,8 +93,7 @@ paymentRouter.post(
           }),
         ]);
 
-        const owed =
-          Number(invoices._sum.total ?? 0) - Number(invoices._sum.paidAmount ?? 0);
+        const owed = Number(invoices._sum.total ?? 0) - Number(invoices._sum.paidAmount ?? 0);
         const repaid = Number(repayments._sum.amount ?? 0);
         const currentBalance = owed - repaid;
 

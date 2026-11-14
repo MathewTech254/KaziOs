@@ -937,20 +937,17 @@ inventoryRouter.post(
       for (const line of count.lines) {
         const deltaQty = Number(line.diffQty.toFixed(4));
         if (deltaQty !== 0) {
-          await applyStockChange(
-            prisma,
-            {
-              organizationId,
-              productId: line.productId,
-              warehouseId: count.warehouseId || "",
-              branchId: warehouse?.branchId ?? null,
-              delta: deltaQty,
-              type: "ADJUSTMENT",
-              reason: `Stocktake: ${line.product.name} ${Number(line.diffQty) > 0 ? "surplus" : "shortage"}`,
-              reference: `COUNT-${count.id.slice(0, 8)}`,
-              productName: line.product.name,
-            }
-          );
+          await applyStockChange(prisma, {
+            organizationId,
+            productId: line.productId,
+            warehouseId: count.warehouseId || "",
+            branchId: warehouse?.branchId ?? null,
+            delta: deltaQty,
+            type: "ADJUSTMENT",
+            reason: `Stocktake: ${line.product.name} ${Number(line.diffQty) > 0 ? "surplus" : "shortage"}`,
+            reference: `COUNT-${count.id.slice(0, 8)}`,
+            productName: line.product.name,
+          });
         }
       }
 

@@ -68,7 +68,11 @@ export {
   recordManualEtims,
 } from "./services/etims/outbox";
 export { getEtimsClient } from "./services/etims/client";
-export { buildEtimsEnvelope, type EtimsEnvelope, type EtimsEnvelopeInput } from "./services/etims/envelope";
+export {
+  buildEtimsEnvelope,
+  type EtimsEnvelope,
+  type EtimsEnvelopeInput,
+} from "./services/etims/envelope";
 export {
   openCheckout,
   confirmCheckout,
@@ -274,7 +278,7 @@ export function createApp() {
   app.use("/api/v1/invoices", invoiceRouter);
   app.use("/api/v1/payments", paymentRouter);
   app.use("/api/v1/reports", reportRouter);
-app.use("/api/v1/day-closings", dayClosingRouter);
+  app.use("/api/v1/day-closings", dayClosingRouter);
   app.use("/api/v1/settings", settingsRouter);
   app.use("/api/v1/tax-categories", taxCategoryRouter);
   app.use("/api/v1/users", userRouter);

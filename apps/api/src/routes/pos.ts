@@ -21,7 +21,14 @@ import { confirmMpesaPosPayment, startMpesaPosPayment } from "../services/mpesaP
 
 export const posRouter = Router();
 
-const immediatePaymentMethods = new Set(["CASH", "BANK", "MANUAL", "CHECK", "MPESA_MANUAL", "CREDIT"]);
+const immediatePaymentMethods = new Set([
+  "CASH",
+  "BANK",
+  "MANUAL",
+  "CHECK",
+  "MPESA_MANUAL",
+  "CREDIT",
+]);
 
 /**
  * Two rails record the sale before their money is: a card sale waits for Paystack and an
@@ -271,9 +278,7 @@ posRouter.get(
           taxMode: product.taxCategory?.mode || "EXCLUSIVE",
         };
         // Attendants must not see cost prices.
-        const isOwner = req.roles?.some(
-          (r: any) => r.role.permissions.includes("*")
-        ) ?? false;
+        const isOwner = req.roles?.some((r: any) => r.role.permissions.includes("*")) ?? false;
         if (isOwner) return base;
         const { costPrice: _cp, ...rest } = base;
         return rest;
@@ -322,8 +327,7 @@ posRouter.post(
         day: "2-digit",
         hour12: false,
       }).formatToParts(new Date());
-      const get = (type: string) =>
-        Number(todayParts.find(p => p.type === type)?.value);
+      const get = (type: string) => Number(todayParts.find(p => p.type === type)?.value);
       const today = `${get("year")}-${String(get("month")).padStart(2, "0")}-${String(
         get("day")
       ).padStart(2, "0")}`;
@@ -334,8 +338,7 @@ posRouter.post(
       const isOwnerOrClosingManager =
         req.roles?.some(
           (r: any) =>
-            r.role.permissions.includes("*") ||
-            r.role.permissions.includes("closing.manage")
+            r.role.permissions.includes("*") || r.role.permissions.includes("closing.manage")
         ) ?? false;
       if (dayClosing && dayClosing.status === "CLOSED" && !isOwnerOrClosingManager) {
         throw new AppError(
@@ -350,7 +353,7 @@ posRouter.post(
         where: { organizationId_key: { organizationId, key: "pos" } },
       });
       const posSettings: { allowNegativeStock?: boolean } = settingsRow
-        ? (settingsRow.value as Record<string, unknown> | null) ?? {}
+        ? ((settingsRow.value as Record<string, unknown> | null) ?? {})
         : {};
       const allowNegativeStock = posSettings.allowNegativeStock ?? false;
 
@@ -391,8 +394,7 @@ posRouter.post(
         if (payment.provider === "CREDIT") {
           if (payment.methodType !== "credit")
             throw new AppError(400, "CREDIT payment method is invalid");
-          if (!input.customerId)
-            throw new AppError(400, "CREDIT sales require a customer");
+          if (!input.customerId) throw new AppError(400, "CREDIT sales require a customer");
           hasCredit = true;
           creditCustomerId = input.customerId;
         }
@@ -407,8 +409,7 @@ posRouter.post(
             providerRef: code,
           },
         });
-        if (existing)
-          throw new AppError(409, `M-PESA transaction code "${code}" was already used`);
+        if (existing) throw new AppError(409, `M-PESA transaction code "${code}" was already used`);
       }
 
       // Credit limit enforcement for CREDIT sales.
@@ -443,15 +444,11 @@ posRouter.post(
             }),
           ]);
 
-          const owed =
-            Number(invoices._sum.total ?? 0) - Number(invoices._sum.paidAmount ?? 0);
+          const owed = Number(invoices._sum.total ?? 0) - Number(invoices._sum.paidAmount ?? 0);
           const repaid = Number(repayments._sum.amount ?? 0);
           const currentBalance = owed - repaid;
 
-          const orderTotalCents = input.payments.reduce(
-            (sum, p) => sum + toCents(p.amount),
-            0
-          );
+          const orderTotalCents = input.payments.reduce((sum, p) => sum + toCents(p.amount), 0);
           const orderTotal = toCurrency(orderTotalCents);
 
           if (currentBalance + orderTotal > creditLimit) {
@@ -714,7 +711,10 @@ posRouter.post(
                   continue;
                 const inventory = await tx.inventory.findUnique({
                   where: {
-                    productId_warehouseId: { productId: line.product.id, warehouseId: warehouse.id },
+                    productId_warehouseId: {
+                      productId: line.product.id,
+                      warehouseId: warehouse.id,
+                    },
                   },
                 });
                 const available = inventory ? inventory.quantity - inventory.reserved : 0;
@@ -735,13 +735,21 @@ posRouter.post(
                   data: { quantity: { decrement: line.quantity } },
                 });
                 if (!allowNegativeStock && updated.count !== 1)
-                  throw new AppError(409, `${line.product.name} stock changed; please review the cart`);
+                  throw new AppError(
+                    409,
+                    `${line.product.name} stock changed; please review the cart`
+                  );
               }
 
               const invoice = await tx.invoice.create({
                 data: {
                   invoiceNumber,
-                  status: settledCents >= totalCents ? "PAID" : settledCents > 0 ? "PARTIALLY_PAID" : "SENT",
+                  status:
+                    settledCents >= totalCents
+                      ? "PAID"
+                      : settledCents > 0
+                        ? "PARTIALLY_PAID"
+                        : "SENT",
                   issueDate: now,
                   dueDate: now,
                   subtotal: toCurrency(subtotalCents),
@@ -773,151 +781,151 @@ posRouter.post(
                 })),
               });
 
-          const referencePrefix = `POS-${Date.now()}-${generateId().slice(0, 8)}`;
-          // Only money that is actually in hand is written here (settledPayments was
-          // decided above, before the invoice took its opening paidAmount). A deferred
-          // payment is left out entirely; it is recorded by the verified confirm path
-          // once Paystack or Safaricom says the money moved.
-          if (settledPayments.length) {
-            await tx.payment.createMany({
-              data: settledPayments.map((payment, index) => ({
-                reference: `${referencePrefix}-${index + 1}`,
-                amount: toCurrency(toCents(payment.amount)),
-                currency: organization.currency,
-                provider: payment.provider,
-                methodType: payment.methodType,
-                status: "SUCCESS",
-                providerRef:
-                  payment.provider === "MPESA_MANUAL"
-                    ? payment.transactionCode?.trim() || null
-                    : payment.reference || null,
-                notes: "Server-verified POS payment",
-                paidAt: now,
-                organizationId,
-                invoiceId: invoice.id,
-                customerId: input.customerId || null,
-                branchId: branch.id,
-              })),
-            });
-          }
+              const referencePrefix = `POS-${Date.now()}-${generateId().slice(0, 8)}`;
+              // Only money that is actually in hand is written here (settledPayments was
+              // decided above, before the invoice took its opening paidAmount). A deferred
+              // payment is left out entirely; it is recorded by the verified confirm path
+              // once Paystack or Safaricom says the money moved.
+              if (settledPayments.length) {
+                await tx.payment.createMany({
+                  data: settledPayments.map((payment, index) => ({
+                    reference: `${referencePrefix}-${index + 1}`,
+                    amount: toCurrency(toCents(payment.amount)),
+                    currency: organization.currency,
+                    provider: payment.provider,
+                    methodType: payment.methodType,
+                    status: "SUCCESS",
+                    providerRef:
+                      payment.provider === "MPESA_MANUAL"
+                        ? payment.transactionCode?.trim() || null
+                        : payment.reference || null,
+                    notes: "Server-verified POS payment",
+                    paidAt: now,
+                    organizationId,
+                    invoiceId: invoice.id,
+                    customerId: input.customerId || null,
+                    branchId: branch.id,
+                  })),
+                });
+              }
 
-          const movementLines = lines.filter(
-            line =>
-              line.product.trackStock &&
-              line.product.productType !== "SERVICE" &&
-              line.product.productType !== "DIGITAL"
+              const movementLines = lines.filter(
+                line =>
+                  line.product.trackStock &&
+                  line.product.productType !== "SERVICE" &&
+                  line.product.productType !== "DIGITAL"
+              );
+              if (movementLines.length) {
+                await tx.stockMovement.createMany({
+                  data: movementLines.map(line => ({
+                    type: "SALE",
+                    quantity: -line.quantity,
+                    reason: "POS sale",
+                    reference: invoice.invoiceNumber,
+                    organizationId,
+                    productId: line.product.id,
+                    warehouseId: warehouse.id,
+                    branchId: branch.id,
+                  })),
+                });
+              }
+
+              const accountByCode = new Map<string, string>();
+              const getAccount = async (code: string, name: string, type: string) => {
+                const existing = accountByCode.get(code);
+                if (existing) return existing;
+                const account = await tx.account.upsert({
+                  where: { organizationId_code: { organizationId, code } },
+                  update: {},
+                  create: { organizationId, code, name, type, isSystem: true },
+                });
+                accountByCode.set(code, account.id);
+                return account.id;
+              };
+
+              const cashAccountId = input.payments.every(payment => payment.provider === "BANK")
+                ? await getAccount("1100", "Bank", "ASSET")
+                : await getAccount("1000", "Cash", "ASSET");
+              const revenueAccountId = await getAccount("4000", "Sales Revenue", "REVENUE");
+              const journalLines: {
+                accountId: string;
+                description: string;
+                debit: number;
+                credit: number;
+              }[] = [
+                {
+                  accountId: cashAccountId,
+                  description: `POS sale ${invoice.invoiceNumber}`,
+                  debit: toCurrency(totalCents),
+                  credit: 0,
+                },
+                {
+                  accountId: revenueAccountId,
+                  description: `POS revenue ${invoice.invoiceNumber}`,
+                  debit: 0,
+                  credit: toCurrency(subtotalCents),
+                },
+              ];
+              if (taxTotalCents) {
+                const taxAccountId = await getAccount("2100", "Tax Payable", "LIABILITY");
+                journalLines.push({
+                  accountId: taxAccountId,
+                  description: `POS tax ${invoice.invoiceNumber}`,
+                  debit: 0,
+                  credit: toCurrency(taxTotalCents),
+                });
+              }
+              if (costTotalCents) {
+                const cogsAccountId = await getAccount("5000", "Cost of Goods Sold", "EXPENSE");
+                const inventoryAccountId = await getAccount("1200", "Inventory Asset", "ASSET");
+                journalLines.push({
+                  accountId: cogsAccountId,
+                  description: `POS cost of goods ${invoice.invoiceNumber}`,
+                  debit: toCurrency(costTotalCents),
+                  credit: 0,
+                });
+                journalLines.push({
+                  accountId: inventoryAccountId,
+                  description: `POS inventory relief ${invoice.invoiceNumber}`,
+                  debit: 0,
+                  credit: toCurrency(costTotalCents),
+                });
+              }
+
+              await tx.journalEntry.create({
+                data: {
+                  reference: `JE-${generateId()}`,
+                  description: `POS sale ${invoice.invoiceNumber}`,
+                  journalDate: now,
+                  status: "POSTED",
+                  organizationId,
+                  lines: { create: journalLines },
+                },
+              });
+
+              return tx.invoice.findUnique({
+                where: { id: invoice.id },
+                include: {
+                  customer: true,
+                  branch: true,
+                  items: { include: { product: true, taxCategory: true } },
+                  payments: true,
+                },
+              });
+            },
+            { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
           );
-          if (movementLines.length) {
-            await tx.stockMovement.createMany({
-              data: movementLines.map(line => ({
-                type: "SALE",
-                quantity: -line.quantity,
-                reason: "POS sale",
-                reference: invoice.invoiceNumber,
-                organizationId,
-                productId: line.product.id,
-                warehouseId: warehouse.id,
-                branchId: branch.id,
-              })),
-            });
-          }
+          break; // success, exit retry loop
+        } catch (err: any) {
+          // Prisma P2034 = Serializable transaction aborted due to concurrent write.
+          // Retry once so the till doesn't fail a customer's purchase under contention.
+          if (err.code === "P2034" && attempt === 0) continue;
+          // Any other error (insufficient stock, credit limit, etc.) is re-thrown as-is.
+          throw err;
+        }
+      }
 
-          const accountByCode = new Map<string, string>();
-          const getAccount = async (code: string, name: string, type: string) => {
-            const existing = accountByCode.get(code);
-            if (existing) return existing;
-            const account = await tx.account.upsert({
-              where: { organizationId_code: { organizationId, code } },
-              update: {},
-              create: { organizationId, code, name, type, isSystem: true },
-            });
-            accountByCode.set(code, account.id);
-            return account.id;
-          };
-
-          const cashAccountId = input.payments.every(payment => payment.provider === "BANK")
-            ? await getAccount("1100", "Bank", "ASSET")
-            : await getAccount("1000", "Cash", "ASSET");
-          const revenueAccountId = await getAccount("4000", "Sales Revenue", "REVENUE");
-          const journalLines: {
-            accountId: string;
-            description: string;
-            debit: number;
-            credit: number;
-          }[] = [
-            {
-              accountId: cashAccountId,
-              description: `POS sale ${invoice.invoiceNumber}`,
-              debit: toCurrency(totalCents),
-              credit: 0,
-            },
-            {
-              accountId: revenueAccountId,
-              description: `POS revenue ${invoice.invoiceNumber}`,
-              debit: 0,
-              credit: toCurrency(subtotalCents),
-            },
-          ];
-          if (taxTotalCents) {
-            const taxAccountId = await getAccount("2100", "Tax Payable", "LIABILITY");
-            journalLines.push({
-              accountId: taxAccountId,
-              description: `POS tax ${invoice.invoiceNumber}`,
-              debit: 0,
-              credit: toCurrency(taxTotalCents),
-            });
-          }
-          if (costTotalCents) {
-            const cogsAccountId = await getAccount("5000", "Cost of Goods Sold", "EXPENSE");
-            const inventoryAccountId = await getAccount("1200", "Inventory Asset", "ASSET");
-            journalLines.push({
-              accountId: cogsAccountId,
-              description: `POS cost of goods ${invoice.invoiceNumber}`,
-              debit: toCurrency(costTotalCents),
-              credit: 0,
-            });
-            journalLines.push({
-              accountId: inventoryAccountId,
-              description: `POS inventory relief ${invoice.invoiceNumber}`,
-              debit: 0,
-              credit: toCurrency(costTotalCents),
-            });
-          }
-
-          await tx.journalEntry.create({
-            data: {
-              reference: `JE-${generateId()}`,
-              description: `POS sale ${invoice.invoiceNumber}`,
-              journalDate: now,
-              status: "POSTED",
-              organizationId,
-              lines: { create: journalLines },
-            },
-          });
-
-          return tx.invoice.findUnique({
-            where: { id: invoice.id },
-            include: {
-              customer: true,
-              branch: true,
-              items: { include: { product: true, taxCategory: true } },
-              payments: true,
-            },
-          });
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
-      );
-      break; // success, exit retry loop
-    } catch (err: any) {
-      // Prisma P2034 = Serializable transaction aborted due to concurrent write.
-      // Retry once so the till doesn't fail a customer's purchase under contention.
-      if (err.code === "P2034" && attempt === 0) continue;
-      // Any other error (insufficient stock, credit limit, etc.) is re-thrown as-is.
-      throw err;
-    }
-  }
-
-  if (!result) throw new AppError(500, "Sale could not be completed");
+      if (!result) throw new AppError(500, "Sale could not be completed");
 
       // The till that rang the sale already knows about it, so the alert goes to everyone
       // else who can see reporting. An owner watching the dashboard sees the shop taking
@@ -1040,7 +1048,8 @@ posRouter.post(
         organizationId,
         permission: "reports.view",
         title: "Sale returned",
-        body: `${invoice.invoiceNumber} returned to ${result.warehouse.name}` +
+        body:
+          `${invoice.invoiceNumber} returned to ${result.warehouse.name}` +
           (restoredCount ? ` — ${restoredCount} unit(s) back on the shelf` : ""),
         type: "warning",
         link: "/dashboard/invoices",
@@ -1118,10 +1127,7 @@ posRouter.post(
         ) ?? false;
       const isOwnSale = !!invoice.recordedById && invoice.recordedById === getUserId(req);
       if (!isManager && !isOwnSale)
-        throw new AppError(
-          403,
-          "Only the cashier who rang this sale, or a manager, can cancel it"
-        );
+        throw new AppError(403, "Only the cashier who rang this sale, or a manager, can cancel it");
 
       if (invoice.paidAmount > 0)
         throw new AppError(
@@ -1163,9 +1169,7 @@ posRouter.get(
     try {
       const organizationId = getOrganizationId(req);
       if (!organizationId) throw new AppError(401, "Authentication required");
-      const isOwner = req.roles?.some(
-        (r: any) => r.role.permissions.includes("*")
-      ) ?? false;
+      const isOwner = req.roles?.some((r: any) => r.role.permissions.includes("*")) ?? false;
       res.json({
         data: await getReceipt(
           req.params.invoiceId,

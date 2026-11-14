@@ -41,9 +41,7 @@ function payloadOverrides(overrides: Record<string, unknown>): Record<string, un
     customerId: null,
     items: [],
     discountAmount: 0,
-    payments: [
-      { provider: "CASH", methodType: "cash", amount: 0, tenderedAmount: 0 },
-    ],
+    payments: [{ provider: "CASH", methodType: "cash", amount: 0, tenderedAmount: 0 }],
     idempotencyKey: `char-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     ...overrides,
   };
@@ -56,9 +54,7 @@ describe("/pos/sale characterization", () => {
 
   beforeAll(async () => {
     tenant = await createTenant("poschar");
-    const context = await request(testApp)
-      .get("/api/v1/pos/context")
-      .set(auth(tenant.token));
+    const context = await request(testApp).get("/api/v1/pos/context").set(auth(tenant.token));
     const branch = context.body.data.branches.find((b: { isMain: boolean }) => b.isMain);
     warehouseId = context.body.data.warehouses.find(
       (w: { branchId: string }) => w.branchId === branch.id
@@ -96,10 +92,14 @@ describe("/pos/sale characterization", () => {
     const sale = await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        items: [{ productId, quantity: 3, discountAmount: 0 }],
-        payments: [{ provider: "CASH", methodType: "cash", amount: 105000, tenderedAmount: 105000 }],
-      }))
+      .send(
+        payloadOverrides({
+          items: [{ productId, quantity: 3, discountAmount: 0 }],
+          payments: [
+            { provider: "CASH", methodType: "cash", amount: 105000, tenderedAmount: 105000 },
+          ],
+        })
+      )
       .expect(201);
 
     const invoiceId = sale.body.data.invoice.id;
@@ -150,11 +150,15 @@ describe("/pos/sale characterization", () => {
     const res = await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        items: [{ productId, quantity: 999, discountAmount: 0 }],
-        payments: [{ provider: "CASH", methodType: "cash", amount: 34965000, tenderedAmount: 34965000 }],
-        idempotencyKey: `char-neg-stock-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          items: [{ productId, quantity: 999, discountAmount: 0 }],
+          payments: [
+            { provider: "CASH", methodType: "cash", amount: 34965000, tenderedAmount: 34965000 },
+          ],
+          idempotencyKey: `char-neg-stock-${Date.now()}`,
+        })
+      )
       .expect(409);
 
     expect(res.body.error).toContain("available");
@@ -183,10 +187,14 @@ describe("/pos/sale characterization", () => {
     const sale = await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        items: [{ productId, quantity: 2, discountAmount: 0 }],
-        payments: [{ provider: "CASH", methodType: "cash", amount: 70000, tenderedAmount: 70000 }],
-      }))
+      .send(
+        payloadOverrides({
+          items: [{ productId, quantity: 2, discountAmount: 0 }],
+          payments: [
+            { provider: "CASH", methodType: "cash", amount: 70000, tenderedAmount: 70000 },
+          ],
+        })
+      )
       .expect(201);
 
     expect(sale.body.data.invoice.total).toBe(70000);
@@ -204,10 +212,14 @@ describe("/pos/sale characterization", () => {
     const sale = await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "CASH", methodType: "cash", amount: 35000, tenderedAmount: 50000 }],
-      }))
+      .send(
+        payloadOverrides({
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            { provider: "CASH", methodType: "cash", amount: 35000, tenderedAmount: 50000 },
+          ],
+        })
+      )
       .expect(201);
 
     expect(sale.body.data.invoice.total).toBe(35000);
@@ -218,10 +230,12 @@ describe("/pos/sale characterization", () => {
     await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "CASH", methodType: "cash", amount: 1000, tenderedAmount: 1000 }],
-      }))
+      .send(
+        payloadOverrides({
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [{ provider: "CASH", methodType: "cash", amount: 1000, tenderedAmount: 1000 }],
+        })
+      )
       .expect(400);
   });
 
@@ -229,10 +243,14 @@ describe("/pos/sale characterization", () => {
     const sale = await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "CASH", methodType: "cash", amount: 35000, tenderedAmount: 35000 }],
-      }))
+      .send(
+        payloadOverrides({
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            { provider: "CASH", methodType: "cash", amount: 35000, tenderedAmount: 35000 },
+          ],
+        })
+      )
       .expect(201);
     const invoiceId = sale.body.data.invoice.id;
 
@@ -271,19 +289,20 @@ describe("/pos/sale characterization", () => {
     const cashierToken = login.body.data.token;
 
     // /pos/context requires pos.sale
-    await request(testApp)
-      .get("/api/v1/pos/context")
-      .set(auth(cashierToken))
-      .expect(403);
+    await request(testApp).get("/api/v1/pos/context").set(auth(cashierToken)).expect(403);
 
     // /pos/sale requires pos.sale
     await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(cashierToken))
-      .send(payloadOverrides({
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "CASH", methodType: "cash", amount: 35000, tenderedAmount: 35000 }],
-      }))
+      .send(
+        payloadOverrides({
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            { provider: "CASH", methodType: "cash", amount: 35000, tenderedAmount: 35000 },
+          ],
+        })
+      )
       .expect(403);
 
     // Nothing was written
@@ -298,11 +317,15 @@ describe("/pos/sale characterization", () => {
     const sale = await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        items: [{ productId, quantity: 2, discountAmount: 0 }],
-        payments: [{ provider: "CASH", methodType: "cash", amount: 70000, tenderedAmount: 70000 }],
-        idempotencyKey: `char-return-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          items: [{ productId, quantity: 2, discountAmount: 0 }],
+          payments: [
+            { provider: "CASH", methodType: "cash", amount: 70000, tenderedAmount: 70000 },
+          ],
+          idempotencyKey: `char-return-${Date.now()}`,
+        })
+      )
       .expect(201);
     const invoiceId = sale.body.data.invoice.id;
 
@@ -330,7 +353,9 @@ describe("/pos/sale characterization", () => {
       where: { organizationId: tenant.organizationId, type: "RETURN" },
     });
     expect(movements.length).toBeGreaterThanOrEqual(1);
-    const returnMovement = movements.find(m => m.reference === sale.body.data.invoice.invoiceNumber);
+    const returnMovement = movements.find(
+      m => m.reference === sale.body.data.invoice.invoiceNumber
+    );
     expect(returnMovement).toBeTruthy();
     expect(returnMovement!.quantity).toBe(2);
 
@@ -343,11 +368,15 @@ describe("/pos/sale characterization", () => {
     const sale = await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "CASH", methodType: "cash", amount: 35000, tenderedAmount: 35000 }],
-        idempotencyKey: `char-dblreturn-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            { provider: "CASH", methodType: "cash", amount: 35000, tenderedAmount: 35000 },
+          ],
+          idempotencyKey: `char-dblreturn-${Date.now()}`,
+        })
+      )
       .expect(201);
     const invoiceId = sale.body.data.invoice.id;
 
@@ -450,11 +479,15 @@ describe("/pos/sale characterization", () => {
     const sale = await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        items: [{ productId, quantity: 4, discountAmount: 0 }],
-        payments: [{ provider: "CASH", methodType: "cash", amount: 140000, tenderedAmount: 140000 }],
-        idempotencyKey: `char-ledger-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          items: [{ productId, quantity: 4, discountAmount: 0 }],
+          payments: [
+            { provider: "CASH", methodType: "cash", amount: 140000, tenderedAmount: 140000 },
+          ],
+          idempotencyKey: `char-ledger-${Date.now()}`,
+        })
+      )
       .expect(201);
 
     const after = await testPrisma.inventory.findFirst({
@@ -509,26 +542,42 @@ describe("/pos/sale characterization", () => {
     await request(testApp)
       .post("/api/v1/inventory/adjustments")
       .set(auth(tenant.token))
-      .send({ productId: p1.body.data.id, warehouseId, quantity: 10, adjustmentType: "INCREASE", reason: "stock" })
+      .send({
+        productId: p1.body.data.id,
+        warehouseId,
+        quantity: 10,
+        adjustmentType: "INCREASE",
+        reason: "stock",
+      })
       .expect(201);
     await request(testApp)
       .post("/api/v1/inventory/adjustments")
       .set(auth(tenant.token))
-      .send({ productId: p2.body.data.id, warehouseId, quantity: 10, adjustmentType: "INCREASE", reason: "stock" })
+      .send({
+        productId: p2.body.data.id,
+        warehouseId,
+        quantity: 10,
+        adjustmentType: "INCREASE",
+        reason: "stock",
+      })
       .expect(201);
 
     const sale = await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        items: [
-          { productId: p1.body.data.id, quantity: 1, discountAmount: 0 },
-          { productId: p2.body.data.id, quantity: 1, discountAmount: 0 },
-        ],
-        discountAmount: 10000,
-        payments: [{ provider: "CASH", methodType: "cash", amount: 56666, tenderedAmount: 56666 }],
-        idempotencyKey: `char-round-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          items: [
+            { productId: p1.body.data.id, quantity: 1, discountAmount: 0 },
+            { productId: p2.body.data.id, quantity: 1, discountAmount: 0 },
+          ],
+          discountAmount: 10000,
+          payments: [
+            { provider: "CASH", methodType: "cash", amount: 56666, tenderedAmount: 56666 },
+          ],
+          idempotencyKey: `char-round-${Date.now()}`,
+        })
+      )
       .expect(201);
 
     // Total = 33333 + 33333 - 10000 = 56666
@@ -547,11 +596,20 @@ describe("/pos/sale characterization", () => {
     await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "MPESA_MANUAL", methodType: "manual", amount: 35000, tenderedAmount: 35000 }],
-        idempotencyKey: `char-mpesa-no-code-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            {
+              provider: "MPESA_MANUAL",
+              methodType: "manual",
+              amount: 35000,
+              tenderedAmount: 35000,
+            },
+          ],
+          idempotencyKey: `char-mpesa-no-code-${Date.now()}`,
+        })
+      )
       .expect(400);
   });
 
@@ -559,11 +617,21 @@ describe("/pos/sale characterization", () => {
     const sale = await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "MPESA_MANUAL", methodType: "manual", amount: 35000, tenderedAmount: 35000, transactionCode: "MPESA123456" }],
-        idempotencyKey: `char-mpesa-ok-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            {
+              provider: "MPESA_MANUAL",
+              methodType: "manual",
+              amount: 35000,
+              tenderedAmount: 35000,
+              transactionCode: "MPESA123456",
+            },
+          ],
+          idempotencyKey: `char-mpesa-ok-${Date.now()}`,
+        })
+      )
       .expect(201);
 
     expect(sale.body.data.invoice.total).toBe(35000);
@@ -581,22 +649,42 @@ describe("/pos/sale characterization", () => {
     await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "MPESA_MANUAL", methodType: "manual", amount: 35000, tenderedAmount: 35000, transactionCode: "DUP-CODE-001" }],
-        idempotencyKey: `char-mpesa-dup-1-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            {
+              provider: "MPESA_MANUAL",
+              methodType: "manual",
+              amount: 35000,
+              tenderedAmount: 35000,
+              transactionCode: "DUP-CODE-001",
+            },
+          ],
+          idempotencyKey: `char-mpesa-dup-1-${Date.now()}`,
+        })
+      )
       .expect(201);
 
     // Second sale with the same code should be rejected
     await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "MPESA_MANUAL", methodType: "manual", amount: 35000, tenderedAmount: 35000, transactionCode: "DUP-CODE-001" }],
-        idempotencyKey: `char-mpesa-dup-2-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            {
+              provider: "MPESA_MANUAL",
+              methodType: "manual",
+              amount: 35000,
+              tenderedAmount: 35000,
+              transactionCode: "DUP-CODE-001",
+            },
+          ],
+          idempotencyKey: `char-mpesa-dup-2-${Date.now()}`,
+        })
+      )
       .expect(409);
   });
 
@@ -604,12 +692,16 @@ describe("/pos/sale characterization", () => {
     await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        customerId: null,
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
-        idempotencyKey: `char-credit-no-customer-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          customerId: null,
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            { provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 },
+          ],
+          idempotencyKey: `char-credit-no-customer-${Date.now()}`,
+        })
+      )
       .expect(400);
   });
 
@@ -629,12 +721,16 @@ describe("/pos/sale characterization", () => {
     const sale = await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        customerId,
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
-        idempotencyKey: `char-credit-sale-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          customerId,
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            { provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 },
+          ],
+          idempotencyKey: `char-credit-sale-${Date.now()}`,
+        })
+      )
       .expect(201);
 
     expect(sale.body.data.invoice.total).toBe(35000);
@@ -672,12 +768,16 @@ describe("/pos/sale characterization", () => {
     await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        customerId,
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
-        idempotencyKey: `char-credit-limit-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          customerId,
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            { provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 },
+          ],
+          idempotencyKey: `char-credit-limit-${Date.now()}`,
+        })
+      )
       .expect(409);
 
     // No invoice was written
@@ -692,11 +792,15 @@ describe("/pos/sale characterization", () => {
     await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        items: [{ productId, quantity: 999, discountAmount: 0 }],
-        payments: [{ provider: "CASH", methodType: "cash", amount: 34965000, tenderedAmount: 34965000 }],
-        idempotencyKey: `char-neg-stock-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          items: [{ productId, quantity: 999, discountAmount: 0 }],
+          payments: [
+            { provider: "CASH", methodType: "cash", amount: 34965000, tenderedAmount: 34965000 },
+          ],
+          idempotencyKey: `char-neg-stock-${Date.now()}`,
+        })
+      )
       .expect(409);
   });
 
@@ -705,18 +809,26 @@ describe("/pos/sale characterization", () => {
     await testPrisma.setting.upsert({
       where: { organizationId_key: { organizationId: tenant.organizationId, key: "pos" } },
       update: { value: { allowNegativeStock: true } },
-      create: { organizationId: tenant.organizationId, key: "pos", value: { allowNegativeStock: true } },
+      create: {
+        organizationId: tenant.organizationId,
+        key: "pos",
+        value: { allowNegativeStock: true },
+      },
     });
 
     // Sell 999 units - should succeed since negative stock is allowed
     await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        items: [{ productId, quantity: 999, discountAmount: 0 }],
-        payments: [{ provider: "CASH", methodType: "cash", amount: 34965000, tenderedAmount: 34965000 }],
-        idempotencyKey: `char-neg-stock-ok-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          items: [{ productId, quantity: 999, discountAmount: 0 }],
+          payments: [
+            { provider: "CASH", methodType: "cash", amount: 34965000, tenderedAmount: 34965000 },
+          ],
+          idempotencyKey: `char-neg-stock-ok-${Date.now()}`,
+        })
+      )
       .expect(201);
 
     // Stock goes negative
@@ -748,12 +860,16 @@ describe("/pos/sale characterization", () => {
     await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        customerId,
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
-        idempotencyKey: `char-repay-full-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          customerId,
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            { provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 },
+          ],
+          idempotencyKey: `char-repay-full-${Date.now()}`,
+        })
+      )
       .expect(201);
 
     // Verify the invoice was created with the customer and correct balance
@@ -785,12 +901,16 @@ describe("/pos/sale characterization", () => {
     await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        customerId,
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
-        idempotencyKey: `char-repay-full-2-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          customerId,
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            { provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 },
+          ],
+          idempotencyKey: `char-repay-full-2-${Date.now()}`,
+        })
+      )
       .expect(201);
   });
 
@@ -815,12 +935,16 @@ describe("/pos/sale characterization", () => {
     await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        customerId,
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
-        idempotencyKey: `char-repay-partial-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          customerId,
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            { provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 },
+          ],
+          idempotencyKey: `char-repay-partial-${Date.now()}`,
+        })
+      )
       .expect(201);
 
     // Partial repayment of 10000 - balance should now be 25000
@@ -842,12 +966,16 @@ describe("/pos/sale characterization", () => {
     await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        customerId,
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
-        idempotencyKey: `char-repay-partial-2-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          customerId,
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            { provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 },
+          ],
+          idempotencyKey: `char-repay-partial-2-${Date.now()}`,
+        })
+      )
       .expect(201);
   });
 
@@ -873,12 +1001,16 @@ describe("/pos/sale characterization", () => {
       await request(testApp)
         .post("/api/v1/pos/sale")
         .set(auth(tenant.token))
-        .send(payloadOverrides({
-          customerId,
-          items: [{ productId, quantity: 1, discountAmount: 0 }],
-          payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
-          idempotencyKey: `char-repay-multi-${i}-${Date.now()}`,
-        }))
+        .send(
+          payloadOverrides({
+            customerId,
+            items: [{ productId, quantity: 1, discountAmount: 0 }],
+            payments: [
+              { provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 },
+            ],
+            idempotencyKey: `char-repay-multi-${i}-${Date.now()}`,
+          })
+        )
         .expect(201);
     }
 
@@ -901,12 +1033,16 @@ describe("/pos/sale characterization", () => {
     await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        customerId,
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
-        idempotencyKey: `char-repay-multi-2-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          customerId,
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            { provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 },
+          ],
+          idempotencyKey: `char-repay-multi-2-${Date.now()}`,
+        })
+      )
       .expect(201);
   });
 
@@ -931,12 +1067,16 @@ describe("/pos/sale characterization", () => {
     await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        customerId,
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
-        idempotencyKey: `char-repay-over-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          customerId,
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            { provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 },
+          ],
+          idempotencyKey: `char-repay-over-${Date.now()}`,
+        })
+      )
       .expect(201);
 
     // Try to overpay 60000 (more than the 35000 owed) - rejected
@@ -976,12 +1116,16 @@ describe("/pos/sale characterization", () => {
     const sale = await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        customerId,
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
-        idempotencyKey: `char-repay-return-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          customerId,
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            { provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 },
+          ],
+          idempotencyKey: `char-repay-return-${Date.now()}`,
+        })
+      )
       .expect(201);
     const invoiceId = sale.body.data.invoice.id;
 
@@ -996,12 +1140,16 @@ describe("/pos/sale characterization", () => {
     await request(testApp)
       .post("/api/v1/pos/sale")
       .set(auth(tenant.token))
-      .send(payloadOverrides({
-        customerId,
-        items: [{ productId, quantity: 1, discountAmount: 0 }],
-        payments: [{ provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 }],
-        idempotencyKey: `char-repay-return-2-${Date.now()}`,
-      }))
+      .send(
+        payloadOverrides({
+          customerId,
+          items: [{ productId, quantity: 1, discountAmount: 0 }],
+          payments: [
+            { provider: "CREDIT", methodType: "credit", amount: 35000, tenderedAmount: 35000 },
+          ],
+          idempotencyKey: `char-repay-return-2-${Date.now()}`,
+        })
+      )
       .expect(201);
   });
 
@@ -1329,4 +1477,3 @@ describe("/pos/sale characterization", () => {
     await cleanupRun();
   });
 });
-

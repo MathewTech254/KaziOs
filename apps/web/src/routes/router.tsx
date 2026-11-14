@@ -87,190 +87,192 @@ function RouteError() {
   );
 }
 
-export const router = createBrowserRouter([
-  {
-    // Sign in has to be reachable: the guard sends every signed out visitor here, the
-    // 401 handler in the API client sends them here, and the landing, pricing, register
-    // and reset pages all link to it. Without this entry every one of those paths fell
-    // through to the catch all and rendered "Something went wrong".
-    path: "/login",
-    element: <LoginPage />,
-  },
-  {
-    path: "/",
-    element: <LandingPage />,
-  },
-  {
-    path: "/pricing",
-    element: <PricingPage />,
-  },
-  {
-    // Public on purpose: somebody deciding whether to sign up has to be able to read the
-    // prices without creating an account first. The page works signed out, and shows the
-    // signed in business their current plan when there is one.
-    path: "/pricing",
-    element: <PricingPage />,
-  },
-  {
-    path: "/register",
-    element: <RegisterPage />,
-  },
-  {
-    path: "/onboarding",
-    element: (
-      <AuthGuard>
-        <Layout />
-      </AuthGuard>
-    ),
-    children: [{ index: true, element: <OnboardingWizard /> }],
-  },
-  {
-    path: "/forgot-password",
-    element: <ForgotPasswordPage />,
-  },
-  {
-    path: "/reset-password",
-    element: <ResetPasswordPage />,
-  },
-  {
-    path: "/pos",
-    element: (
-      <AuthGuard>
-        <Layout />
-      </AuthGuard>
-    ),
-    children: [{ index: true, element: <PosPage /> }],
-  },
-  {
-    // Its own route rather than a tab on the invoices list: a return is found by receipt
-    // number from a piece of paper, which is a different job from reading the invoice book.
-    path: "/returns",
-    element: (
-      <AuthGuard>
-        <Layout />
-      </AuthGuard>
-    ),
-    children: [{ index: true, element: <ReturnsPage /> }],
-  },
-  {
-    path: "/settings",
-    element: (
-      <AuthGuard>
-        <Layout />
-      </AuthGuard>
-    ),
-    children: [{ index: true, element: <SettingsPage /> }],
-  },
-  {
-    path: "/inventory",
-    element: (
-      <AuthGuard>
-        <Layout />
-      </AuthGuard>
-    ),
-    children: [{ index: true, element: <InventoryPage /> }],
-  },
-  {
-    path: "/purchases",
-    element: (
-      <AuthGuard>
-        <Layout />
-      </AuthGuard>
-    ),
-    children: [
-      {
-        index: true,
-        element: <PurchasingPage />,
-      },
-    ],
-  },
-  {
-    path: "/expenses",
-    element: (
-      <AuthGuard>
-        <Layout />
-      </AuthGuard>
-    ),
-    children: [{ index: true, element: <ExpensesPage /> }],
-  },
-  {
-    path: "/stock/receive",
-    element: (
-      <AuthGuard>
-        <Layout />
-      </AuthGuard>
-    ),
-    children: [
-      {
-        index: true,
-        element: <ReceiveStockPage />,
-      },
-    ],
-  },
-  {
-    path: "/stocktake",
-    element: (
-      <AuthGuard>
-        <Layout />
-      </AuthGuard>
-    ),
-    children: [
-      {
-        index: true,
-        element: <StocktakePage />,
-      },
-    ],
-  },
-  {
-    path: "/closing",
-    element: (
-      <AuthGuard>
-        <Layout />
-      </AuthGuard>
-    ),
-    children: [
-      {
-        index: true,
-        element: <ClosingPage />,
-      },
-    ],
-  },
-  {
-    path: "/assistant",
-    element: (
-      <AuthGuard>
-        <Layout />
-      </AuthGuard>
-    ),
-    children: [
-      {
-        index: true,
-        element: <AssistantPage />,
-      },
-    ],
-  },
-  {
-    path: "/dashboard",
-    element: (
-      <AuthGuard>
-        <Layout />
-      </AuthGuard>
-    ),
-    children: [
-      { index: true, element: <DashboardPage /> },
-      { path: "products", element: <ProductsPage /> },
-      { path: "customers", element: <CustomersPage /> },
-      { path: "invoices", element: <InvoicesPage /> },
-      { path: "reports", element: <ReportsPage /> },
-      { path: "payments", element: <PaymentsPage /> },
-    ],
-  },
-  {
-    // The catch all. It sits last so every real route above still wins, and it means
-    // an unknown address explains itself instead of rendering nothing at all.
-    path: "*",
-    element: <NotFound />,
-  },
-  // Every route gets the same boundary, so a page that throws while rendering reports
-  // itself rather than being mistaken for a missing address.
-].map(route => ({ errorElement: <RouteError />, ...route })));
+export const router = createBrowserRouter(
+  [
+    {
+      // Sign in has to be reachable: the guard sends every signed out visitor here, the
+      // 401 handler in the API client sends them here, and the landing, pricing, register
+      // and reset pages all link to it. Without this entry every one of those paths fell
+      // through to the catch all and rendered "Something went wrong".
+      path: "/login",
+      element: <LoginPage />,
+    },
+    {
+      path: "/",
+      element: <LandingPage />,
+    },
+    {
+      path: "/pricing",
+      element: <PricingPage />,
+    },
+    {
+      // Public on purpose: somebody deciding whether to sign up has to be able to read the
+      // prices without creating an account first. The page works signed out, and shows the
+      // signed in business their current plan when there is one.
+      path: "/pricing",
+      element: <PricingPage />,
+    },
+    {
+      path: "/register",
+      element: <RegisterPage />,
+    },
+    {
+      path: "/onboarding",
+      element: (
+        <AuthGuard>
+          <Layout />
+        </AuthGuard>
+      ),
+      children: [{ index: true, element: <OnboardingWizard /> }],
+    },
+    {
+      path: "/forgot-password",
+      element: <ForgotPasswordPage />,
+    },
+    {
+      path: "/reset-password",
+      element: <ResetPasswordPage />,
+    },
+    {
+      path: "/pos",
+      element: (
+        <AuthGuard>
+          <Layout />
+        </AuthGuard>
+      ),
+      children: [{ index: true, element: <PosPage /> }],
+    },
+    {
+      // Its own route rather than a tab on the invoices list: a return is found by receipt
+      // number from a piece of paper, which is a different job from reading the invoice book.
+      path: "/returns",
+      element: (
+        <AuthGuard>
+          <Layout />
+        </AuthGuard>
+      ),
+      children: [{ index: true, element: <ReturnsPage /> }],
+    },
+    {
+      path: "/settings",
+      element: (
+        <AuthGuard>
+          <Layout />
+        </AuthGuard>
+      ),
+      children: [{ index: true, element: <SettingsPage /> }],
+    },
+    {
+      path: "/inventory",
+      element: (
+        <AuthGuard>
+          <Layout />
+        </AuthGuard>
+      ),
+      children: [{ index: true, element: <InventoryPage /> }],
+    },
+    {
+      path: "/purchases",
+      element: (
+        <AuthGuard>
+          <Layout />
+        </AuthGuard>
+      ),
+      children: [
+        {
+          index: true,
+          element: <PurchasingPage />,
+        },
+      ],
+    },
+    {
+      path: "/expenses",
+      element: (
+        <AuthGuard>
+          <Layout />
+        </AuthGuard>
+      ),
+      children: [{ index: true, element: <ExpensesPage /> }],
+    },
+    {
+      path: "/stock/receive",
+      element: (
+        <AuthGuard>
+          <Layout />
+        </AuthGuard>
+      ),
+      children: [
+        {
+          index: true,
+          element: <ReceiveStockPage />,
+        },
+      ],
+    },
+    {
+      path: "/stocktake",
+      element: (
+        <AuthGuard>
+          <Layout />
+        </AuthGuard>
+      ),
+      children: [
+        {
+          index: true,
+          element: <StocktakePage />,
+        },
+      ],
+    },
+    {
+      path: "/closing",
+      element: (
+        <AuthGuard>
+          <Layout />
+        </AuthGuard>
+      ),
+      children: [
+        {
+          index: true,
+          element: <ClosingPage />,
+        },
+      ],
+    },
+    {
+      path: "/assistant",
+      element: (
+        <AuthGuard>
+          <Layout />
+        </AuthGuard>
+      ),
+      children: [
+        {
+          index: true,
+          element: <AssistantPage />,
+        },
+      ],
+    },
+    {
+      path: "/dashboard",
+      element: (
+        <AuthGuard>
+          <Layout />
+        </AuthGuard>
+      ),
+      children: [
+        { index: true, element: <DashboardPage /> },
+        { path: "products", element: <ProductsPage /> },
+        { path: "customers", element: <CustomersPage /> },
+        { path: "invoices", element: <InvoicesPage /> },
+        { path: "reports", element: <ReportsPage /> },
+        { path: "payments", element: <PaymentsPage /> },
+      ],
+    },
+    {
+      // The catch all. It sits last so every real route above still wins, and it means
+      // an unknown address explains itself instead of rendering nothing at all.
+      path: "*",
+      element: <NotFound />,
+    },
+    // Every route gets the same boundary, so a page that throws while rendering reports
+    // itself rather than being mistaken for a missing address.
+  ].map(route => ({ errorElement: <RouteError />, ...route }))
+);

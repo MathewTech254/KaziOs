@@ -38,7 +38,18 @@ export function OnboardingWizard() {
   const [error, setError] = useState("");
 
   // Products step state
-  const [products, setProducts] = useState<Array<{ id: string; name: string; sku: string | null; costPrice: number; sellingPrice: number; minStock: number; reorderPoint: number; category: string | null }>>([]);
+  const [products, setProducts] = useState<
+    Array<{
+      id: string;
+      name: string;
+      sku: string | null;
+      costPrice: number;
+      sellingPrice: number;
+      minStock: number;
+      reorderPoint: number;
+      category: string | null;
+    }>
+  >([]);
   const [productForm, setProductForm] = useState<ProductForm>({
     name: "",
     sku: "",
@@ -51,14 +62,20 @@ export function OnboardingWizard() {
     reorderPoint: "0",
   });
   const [csvImporting, setCsvImporting] = useState(false);
-  const [csvImportResult, setCsvImportResult] = useState<{ imported: number; total: number; errors: Array<{ row: number; error: string }> } | null>(null);
+  const [csvImportResult, setCsvImportResult] = useState<{
+    imported: number;
+    total: number;
+    errors: Array<{ row: number; error: string }>;
+  } | null>(null);
 
   // Stock step state
   const [stockForms, setStockForms] = useState<Map<string, string>>(new Map());
   const [stockSaving, setStockSaving] = useState(false);
 
   // Attendants step state
-  const [attendants, setAttendants] = useState<Array<{ id: string; name: string; email: string }>>([]);
+  const [attendants, setAttendants] = useState<Array<{ id: string; name: string; email: string }>>(
+    []
+  );
   const [attendantForm, setAttendantForm] = useState<AttendantForm>({
     name: "",
     email: "",
@@ -67,7 +84,8 @@ export function OnboardingWizard() {
   });
   const [attendantSaving, setAttendantSaving] = useState(false);
 
-const progress = step === "products" ? 33 : step === "stock" ? 66 : step === "attendants" ? 90 : 100;
+  const progress =
+    step === "products" ? 33 : step === "stock" ? 66 : step === "attendants" ? 90 : 100;
 
   useEffect(() => {
     // Check if onboarding already complete - redirect to dashboard
@@ -217,7 +235,10 @@ const progress = step === "products" ? 33 : step === "stock" ? 66 : step === "at
         password: attendantForm.password,
         roleId: attendantRole.id,
       });
-      setAttendants(prev => [...prev, { id: `att-${Date.now()}`, name: attendantForm.name, email: attendantForm.email }]);
+      setAttendants(prev => [
+        ...prev,
+        { id: `att-${Date.now()}`, name: attendantForm.name, email: attendantForm.email },
+      ]);
       setAttendantForm({ name: "", email: "", phone: "", password: "" });
     } catch (err: any) {
       setError(getApiError(err));
@@ -247,7 +268,10 @@ const progress = step === "products" ? 33 : step === "stock" ? 66 : step === "at
             <span className="text-sm font-medium tracking-[.05em]">KaziOS</span>
           </Link>
           <nav className="flex items-center gap-6 text-sm sm:gap-8 hidden md:flex">
-            <Link to="/" className="text-[var(--kazi-muted-text)] hover:text-[var(--kazi-accent)] transition-colors">
+            <Link
+              to="/"
+              className="text-[var(--kazi-muted-text)] hover:text-[var(--kazi-accent)] transition-colors"
+            >
               Back home
             </Link>
           </nav>
@@ -262,11 +286,12 @@ const progress = step === "products" ? 33 : step === "stock" ? 66 : step === "at
               Setting up your shop
             </span>
             <div className="flex-1 h-[4px] bg-[var(--kazi-border)] rounded-full overflow-hidden">
-              <div className={`h-full bg-[var(--kazi-accent)] rounded-full transition-all duration-300`} style={{ width: `${progress}%` }} />
+              <div
+                className={`h-full bg-[var(--kazi-accent)] rounded-full transition-all duration-300`}
+                style={{ width: `${progress}%` }}
+              />
             </div>
-            <span className="text-[10px] font-semibold text-[var(--kazi-accent)]">
-              {progress}%
-            </span>
+            <span className="text-[10px] font-semibold text-[var(--kazi-accent)]">{progress}%</span>
           </div>
           <div className="flex gap-2">
             {["products", "stock", "attendants", "done"].map((s, i) => (
@@ -276,8 +301,8 @@ const progress = step === "products" ? 33 : step === "stock" ? 66 : step === "at
                   step === s
                     ? "bg-[var(--kazi-accent)] text-white"
                     : step === "done" && i < 3
-                    ? "bg-[var(--kazi-success)/10] text-[var(--kazi-success)]"
-                    : "bg-[var(--kazi-surface)] text-[var(--kazi-muted-text)]"
+                      ? "bg-[var(--kazi-success)/10] text-[var(--kazi-success)]"
+                      : "bg-[var(--kazi-surface)] text-[var(--kazi-muted-text)]"
                 }`}
               >
                 {step === s || (step === "done" && i < 3) ? (
@@ -292,7 +317,10 @@ const progress = step === "products" ? 33 : step === "stock" ? 66 : step === "at
         </div>
 
         {error && (
-          <div role="alert" className="mb-6 rounded-lg border border-amber-500/50 bg-amber-900/30 p-4 text-sm text-amber-200">
+          <div
+            role="alert"
+            className="mb-6 rounded-lg border border-amber-500/50 bg-amber-900/30 p-4 text-sm text-amber-200"
+          >
             {error}
           </div>
         )}
@@ -300,36 +328,50 @@ const progress = step === "products" ? 33 : step === "stock" ? 66 : step === "at
         {step === "products" && (
           <section className="mb-8">
             <div className="mb-6">
-              <h2 className="text-lg font-semibold text-[var(--kazi-display-text)]">Add your first products</h2>
+              <h2 className="text-lg font-semibold text-[var(--kazi-display-text)]">
+                Add your first products
+              </h2>
               <p className="mt-1 text-sm text-[var(--kazi-muted-text)]">
-                Add the drinks you sell. You can add them one at a time or import many from a CSV file.
+                Add the drinks you sell. You can add them one at a time or import many from a CSV
+                file.
               </p>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
               {/* Manual add form */}
               <div className="kazi-card p-6">
-                <h3 className="mb-4 text-sm font-semibold text-[var(--kazi-display-text)] uppercase tracking-[.1em]">Add product</h3>
+                <h3 className="mb-4 text-sm font-semibold text-[var(--kazi-display-text)] uppercase tracking-[.1em]">
+                  Add product
+                </h3>
                 <form onSubmit={addProduct} className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="col-span-2">
-                      <label className="mb-1 block text-xs font-medium text-[var(--kazi-muted-text)]">Product name</label>
+                      <label className="mb-1 block text-xs font-medium text-[var(--kazi-muted-text)]">
+                        Product name
+                      </label>
                       <input
                         value={productForm.name}
                         onChange={e => setProductForm({ ...productForm, name: e.target.value })}
-                        className="kazi-input" placeholder="e.g. Tusker Lager 500ml" required
+                        className="kazi-input"
+                        placeholder="e.g. Tusker Lager 500ml"
+                        required
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-[var(--kazi-muted-text)]">SKU</label>
+                      <label className="mb-1 block text-xs font-medium text-[var(--kazi-muted-text)]">
+                        SKU
+                      </label>
                       <input
                         value={productForm.sku}
                         onChange={e => setProductForm({ ...productForm, sku: e.target.value })}
-                        className="kazi-input" placeholder="e.g. TUSK-500"
+                        className="kazi-input"
+                        placeholder="e.g. TUSK-500"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-[var(--kazi-muted-text)]">Category</label>
+                      <label className="mb-1 block text-xs font-medium text-[var(--kazi-muted-text)]">
+                        Category
+                      </label>
                       <select
                         value={productForm.category}
                         onChange={e => setProductForm({ ...productForm, category: e.target.value })}
@@ -344,24 +386,33 @@ const progress = step === "products" ? 33 : step === "stock" ? 66 : step === "at
                       </select>
                     </div>
                     <div className="col-span-2">
-                      <label className="mb-1 block text-xs font-medium text-[var(--kazi-muted-text)]">Selling price (KES)</label>
+                      <label className="mb-1 block text-xs font-medium text-[var(--kazi-muted-text)]">
+                        Selling price (KES)
+                      </label>
                       <input
                         type="number"
                         min="0"
                         step="0.01"
                         value={productForm.sellingPrice}
-                        onChange={e => setProductForm({ ...productForm, sellingPrice: e.target.value })}
-                        className="kazi-input" required
+                        onChange={e =>
+                          setProductForm({ ...productForm, sellingPrice: e.target.value })
+                        }
+                        className="kazi-input"
+                        required
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-medium text-[var(--kazi-muted-text)]">Cost price (KES)</label>
+                      <label className="mb-1 block text-xs font-medium text-[var(--kazi-muted-text)]">
+                        Cost price (KES)
+                      </label>
                       <input
                         type="number"
                         min="0"
                         step="0.01"
                         value={productForm.costPrice}
-                        onChange={e => setProductForm({ ...productForm, costPrice: e.target.value })}
+                        onChange={e =>
+                          setProductForm({ ...productForm, costPrice: e.target.value })
+                        }
                         className="kazi-input"
                       />
                     </div>
@@ -378,23 +429,28 @@ const progress = step === "products" ? 33 : step === "stock" ? 66 : step === "at
 
               {/* CSV import */}
               <div className="kazi-card p-6">
-                <h3 className="mb-4 text-sm font-semibold text-[var(--kazi-display-text)] uppercase tracking-[.1em]">Import from CSV</h3>
+                <h3 className="mb-4 text-sm font-semibold text-[var(--kazi-display-text)] uppercase tracking-[.1em]">
+                  Import from CSV
+                </h3>
                 <p className="mb-3 text-xs text-[var(--kazi-muted-text)]">
-                  CSV columns: name, sku, barcode, size, category, costPrice, sellingPrice, minStock, reorderPoint
+                  CSV columns: name, sku, barcode, size, category, costPrice, sellingPrice,
+                  minStock, reorderPoint
                 </p>
                 <form onSubmit={importCsv} className="space-y-3">
-                  <label className="block text-xs font-medium text-[var(--kazi-muted-text)]">CSV file</label>
-                    <input
-                      type="file"
-                      accept=".csv"
-                      onChange={e => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          importCsvFile(file);
-                        }
-                      }}
-                      className="kazi-input"
-                    />
+                  <label className="block text-xs font-medium text-[var(--kazi-muted-text)]">
+                    CSV file
+                  </label>
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        importCsvFile(file);
+                      }
+                    }}
+                    className="kazi-input"
+                  />
                   {csvImportResult && (
                     <div className="kazi-card p-3 bg-[var(--kazi-surface)]">
                       <p className="text-sm text-[var(--kazi-text)]">
@@ -403,7 +459,9 @@ const progress = step === "products" ? 33 : step === "stock" ? 66 : step === "at
                       {csvImportResult.errors.length > 0 && (
                         <ul className="mt-2 text-xs text-[var(--kazi-text-error)] space-y-1">
                           {csvImportResult.errors.map(err => (
-                            <li key={`${err.row}-${err.error}`}>Row {err.row}: {err.error}</li>
+                            <li key={`${err.row}-${err.error}`}>
+                              Row {err.row}: {err.error}
+                            </li>
                           ))}
                         </ul>
                       )}
@@ -422,22 +480,34 @@ const progress = step === "products" ? 33 : step === "stock" ? 66 : step === "at
 
             {products.length > 0 && (
               <div className="mt-6 kazi-card p-4">
-                <h3 className="mb-3 text-sm font-semibold text-[var(--kazi-display-text)] uppercase tracking-[.1em]">Products added</h3>
+                <h3 className="mb-3 text-sm font-semibold text-[var(--kazi-display-text)] uppercase tracking-[.1em]">
+                  Products added
+                </h3>
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-[var(--kazi-border)]">
                     <thead>
                       <tr>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-[var(--kazi-muted-text)]">Name</th>
-                        <th className="px-3 py-2 text-right text-xs font-medium text-[var(--kazi-muted-text)]">Price</th>
-                        <th className="px-3 py-2 text-right text-xs font-medium text-[var(--kazi-muted-text)]">Category</th>
+                        <th className="px-3 py-2 text-left text-xs font-medium text-[var(--kazi-muted-text)]">
+                          Name
+                        </th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-[var(--kazi-muted-text)]">
+                          Price
+                        </th>
+                        <th className="px-3 py-2 text-right text-xs font-medium text-[var(--kazi-muted-text)]">
+                          Category
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {products.map(p => (
                         <tr key={p.id} className="hover:bg-[var(--kazi-surface)]/50">
                           <td className="px-3 py-2 text-sm text-[var(--kazi-text)]">{p.name}</td>
-                          <td className="px-3 py-2 text-right text-sm text-[var(--kazi-text)]">KES {p.sellingPrice}</td>
-                          <td className="px-3 py-2 text-right text-sm text-[var(--kazi-muted-text)]">{p.category || "-"}</td>
+                          <td className="px-3 py-2 text-right text-sm text-[var(--kazi-text)]">
+                            KES {p.sellingPrice}
+                          </td>
+                          <td className="px-3 py-2 text-right text-sm text-[var(--kazi-muted-text)]">
+                            {p.category || "-"}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -461,10 +531,12 @@ const progress = step === "products" ? 33 : step === "stock" ? 66 : step === "at
         {step === "stock" && (
           <section className="mb-8">
             <div className="mb-6">
-              <h2 className="text-lg font-semibold text-[var(--kazi-display-text)]">Set opening stock</h2>
+              <h2 className="text-lg font-semibold text-[var(--kazi-display-text)]">
+                Set opening stock
+              </h2>
               <p className="mt-1 text-sm text-[var(--kazi-muted-text)]">
-                Enter how many units of each product you currently have in stock. This creates
-                the opening stock ledger entry so your stock is accurate from day one.
+                Enter how many units of each product you currently have in stock. This creates the
+                opening stock ledger entry so your stock is accurate from day one.
               </p>
             </div>
 
@@ -485,8 +557,12 @@ const progress = step === "products" ? 33 : step === "stock" ? 66 : step === "at
                     <table className="min-w-full divide-y divide-[var(--kazi-border)]">
                       <thead>
                         <tr>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-[var(--kazi-muted-text)]">Product</th>
-                          <th className="px-3 py-2 text-right text-xs font-medium text-[var(--kazi-muted-text)]">Opening stock (units)</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-[var(--kazi-muted-text)]">
+                            Product
+                          </th>
+                          <th className="px-3 py-2 text-right text-xs font-medium text-[var(--kazi-muted-text)]">
+                            Opening stock (units)
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -531,49 +607,70 @@ const progress = step === "products" ? 33 : step === "stock" ? 66 : step === "at
         {step === "attendants" && (
           <section className="mb-8">
             <div className="mb-6">
-              <h2 className="text-lg font-semibold text-[var(--kazi-display-text)]">Add attendants</h2>
+              <h2 className="text-lg font-semibold text-[var(--kazi-display-text)]">
+                Add attendants
+              </h2>
               <p className="mt-1 text-sm text-[var(--kazi-muted-text)]">
-                Add the people who will work the till. Attendants can sell and view stock,
-                but cannot see cost prices, adjust stock, or void sales.
+                Add the people who will work the till. Attendants can sell and view stock, but
+                cannot see cost prices, adjust stock, or void sales.
               </p>
             </div>
 
             <div className="kazi-card p-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <form onSubmit={addAttendant} className="space-y-4">
-                  <h3 className="mb-4 text-sm font-semibold text-[var(--kazi-display-text)] uppercase tracking-[.1em]">Add attendant</h3>
+                  <h3 className="mb-4 text-sm font-semibold text-[var(--kazi-display-text)] uppercase tracking-[.1em]">
+                    Add attendant
+                  </h3>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-[var(--kazi-muted-text)]">Full name</label>
+                    <label className="mb-1 block text-xs font-medium text-[var(--kazi-muted-text)]">
+                      Full name
+                    </label>
                     <input
                       value={attendantForm.name}
                       onChange={e => setAttendantForm({ ...attendantForm, name: e.target.value })}
-                      className="kazi-input" placeholder="e.g. Grace Wanjiku" required
+                      className="kazi-input"
+                      placeholder="e.g. Grace Wanjiku"
+                      required
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-medium text-[var(--kazi-muted-text)]">Email</label>
+                    <label className="mb-1 block text-xs font-medium text-[var(--kazi-muted-text)]">
+                      Email
+                    </label>
                     <input
                       type="email"
                       value={attendantForm.email}
                       onChange={e => setAttendantForm({ ...attendantForm, email: e.target.value })}
-                      className="kazi-input" placeholder="e.g. grace@shop.com" required
+                      className="kazi-input"
+                      placeholder="e.g. grace@shop.com"
+                      required
                     />
                   </div>
                   <div className="col-span-2">
-                    <label className="mb-1 block text-xs font-medium text-[var(--kazi-muted-text)]">Phone</label>
+                    <label className="mb-1 block text-xs font-medium text-[var(--kazi-muted-text)]">
+                      Phone
+                    </label>
                     <input
                       value={attendantForm.phone}
                       onChange={e => setAttendantForm({ ...attendantForm, phone: e.target.value })}
-                      className="kazi-input" placeholder="e.g. +254700000000"
+                      className="kazi-input"
+                      placeholder="e.g. +254700000000"
                     />
                   </div>
                   <div className="col-span-2">
-                    <label className="mb-1 block text-xs font-medium text-[var(--kazi-muted-text)]">Password</label>
+                    <label className="mb-1 block text-xs font-medium text-[var(--kazi-muted-text)]">
+                      Password
+                    </label>
                     <input
                       type="password"
                       value={attendantForm.password}
-                      onChange={e => setAttendantForm({ ...attendantForm, password: e.target.value })}
-                      className="kazi-input" placeholder="••••••••" required
+                      onChange={e =>
+                        setAttendantForm({ ...attendantForm, password: e.target.value })
+                      }
+                      className="kazi-input"
+                      placeholder="••••••••"
+                      required
                     />
                   </div>
                   <button
@@ -587,10 +684,15 @@ const progress = step === "products" ? 33 : step === "stock" ? 66 : step === "at
 
                 {attendants.length > 0 && (
                   <div className="col-span-2">
-                    <h3 className="mb-3 text-sm font-semibold text-[var(--kazi-display-text)] uppercase tracking-[.1em]">Attendants added</h3>
+                    <h3 className="mb-3 text-sm font-semibold text-[var(--kazi-display-text)] uppercase tracking-[.1em]">
+                      Attendants added
+                    </h3>
                     <div className="space-y-2">
                       {attendants.map(a => (
-                        <div key={a.email} className="flex items-center justify-between px-3 py-2 rounded-lg border border-[var(--kazi-border)] bg-[var(--kazi-surface)]">
+                        <div
+                          key={a.email}
+                          className="flex items-center justify-between px-3 py-2 rounded-lg border border-[var(--kazi-border)] bg-[var(--kazi-surface)]"
+                        >
                           <span className="text-sm text-[var(--kazi-text)]">{a.name}</span>
                           <span className="text-xs text-[var(--kazi-muted-text)]">{a.email}</span>
                         </div>
@@ -618,16 +720,15 @@ const progress = step === "products" ? 33 : step === "stock" ? 66 : step === "at
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--kazi-success)/10] text-[var(--kazi-success)] mx-auto mb-4">
               <CheckCircle className="h-8 w-8" />
             </div>
-            <h2 className="text-xl font-semibold text-[var(--kazi-display-text)]">You're ready to sell!</h2>
+            <h2 className="text-xl font-semibold text-[var(--kazi-display-text)]">
+              You're ready to sell!
+            </h2>
             <p className="mt-2 text-sm text-[var(--kazi-muted-text)]">
               Your shop is set up with products, opening stock, and attendants. Head to the POS to
               start selling.
             </p>
             <div className="mt-6 flex justify-center">
-              <button
-                onClick={() => navigate("/pos")}
-                className="kazi-button-primary px-8 py-2.5"
-              >
+              <button onClick={() => navigate("/pos")} className="kazi-button-primary px-8 py-2.5">
                 Go to POS
               </button>
             </div>

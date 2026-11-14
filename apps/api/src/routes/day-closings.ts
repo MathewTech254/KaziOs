@@ -316,9 +316,7 @@ dayClosingRouter.get(
         _sum: { quantity: true, lineTotal: true },
       });
 
-      const soldProductIds = itemsSold
-        .map((r: any) => r.productId)
-        .filter(Boolean);
+      const soldProductIds = itemsSold.map((r: any) => r.productId).filter(Boolean);
       const soldProducts =
         soldProductIds.length > 0
           ? await prisma.product.findMany({
@@ -338,10 +336,7 @@ dayClosingRouter.get(
         select: { id: true, vendorName: true, amount: true, notes: true, createdAt: true },
       });
 
-      const totalExpenses = expenses.reduce(
-        (sum, e) => sum + Number(e.amount || 0),
-        0
-      );
+      const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
       // Low stock based on reorder_level.
       const lowStock = await prisma.$queryRaw<{ count: number }[]>`

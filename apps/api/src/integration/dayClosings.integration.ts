@@ -36,9 +36,7 @@ describe("Day closings", () => {
 
   beforeAll(async () => {
     tenant = await createTenant("dayclose");
-    const context = await request(testApp)
-      .get("/api/v1/pos/context")
-      .set(auth(tenant.token));
+    const context = await request(testApp).get("/api/v1/pos/context").set(auth(tenant.token));
     const branch = context.body.data.branches.find((b: { isMain: boolean }) => b.isMain);
     warehouseId = context.body.data.warehouses.find(
       (w: { branchId: string }) => w.branchId === branch.id
@@ -109,9 +107,7 @@ describe("Day closings", () => {
         customerId: null,
         items: [{ productId, quantity: 2, discountAmount: 0 }],
         discountAmount: 0,
-        payments: [
-          { provider: "CASH", methodType: "cash", amount: 70000, tenderedAmount: 70000 },
-        ],
+        payments: [{ provider: "CASH", methodType: "cash", amount: 70000, tenderedAmount: 70000 }],
         idempotencyKey: `dc-sale-${Date.now()}`,
       })
       .expect(201);
