@@ -46,6 +46,7 @@ model Organization {
   taxCategories  TaxCategory[]
   accounts       Account[]
   invoices       Invoice[]
+  etimsSubmissions EtimsSubmission[]
   payments       Payment[]
   journals       JournalEntry[]
   apiKeys        ApiKey[]
@@ -396,6 +397,10 @@ model Invoice {
   cardPayments   CardPayment[]
   recordedById   String?
   recordedBy     User?         @relation("InvoiceRecordedBy", fields: [recordedById], references: [id])
+  /// The KRA side of this invoice. One row per invoice, created when the sale is rung up
+  /// so a VAT-registered business can prove it submitted â€” or deliberately keyed in by
+  /// hand while the eTIMS API keys are still being issued.
+  etims          EtimsSubmission?
 }
 
 model InvoiceItem {
@@ -1384,4 +1389,43 @@ model StockCountLine {
   @@index([countId])
   @@index([productId])
   @@unique([countId, productId])
+}
+
+/// The KRA side of one invoice.
+///
+/// This is an outbox, not a mirror. A sale is rung up whether or not KRA is reachable,
+/// so the row is written at sale time and the submission is retried until it is
+/// accepted. Status answers the question an auditor asks — "was this invoice filed?" —
+/// and `kraInvoiceNumber` is what the customer's copy must show, because the number KRA
+/// assigns is the one that counts, not the one this system chose.
+model EtimsSubmission {
+  id             String   @id @default(uuid())
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+  invoice        Invoice  @relation(fields: [invoiceId], references: [id])
+  invoiceId      String   @unique
+
+  /// PENDING    written, not yet sent
+  /// SUBMITTED  sent, waiting on KRA's answer
+  /// ACCEPTED   KRA has the invoice
+  /// REJECTED   KRA refused it; lastError says why
+  /// MANUAL     nobody sent anything: the cashier keyed in the KRA number by hand
+  status    String   @default("PENDING")
+
+  /// The exact payload last sent, kept so a rejection can be replayed after a fix
+  /// without re-deriving it from an invoice that may since have changed.
+  payload  Json?
+  /// Assigned by KRA. Null until accepted.
+  kraInvoiceNumber String?
+  /// The verification payload the receipt prints as a QR code.
+  qrCode   String?
+  lastError String?
+  attempts Int      @default(0)
+
+  submittedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([organizationId, status])
+  @@index([status, attempts])
 }

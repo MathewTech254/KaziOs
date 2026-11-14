@@ -41,6 +41,12 @@ export interface EnvironmentConfig {
     clientSecret?: string;
     certificate?: string;
     tin?: string;
+    /** KRA's token endpoint. Deployment-specific, so it is never hardcoded. */
+    tokenUrl?: string;
+    /** Path the control unit expects the invoice posted to. */
+    submitPath?: string;
+    /** Off until credentials exist; the till falls back to manual entry meanwhile. */
+    enabled: boolean;
   };
   email: {
     provider: string;
@@ -158,6 +164,14 @@ export function loadConfig(): EnvironmentConfig {
       clientSecret: getEnvOptional("ETIMS_CLIENT_SECRET"),
       certificate: getEnvOptional("ETIMS_CERTIFICATE"),
       tin: getEnvOptional("ETIMS_TIN"),
+      // KRA's token endpoint and the submit path are deployment details, not constants:
+      // the sandbox and production hosts differ, and hardcoding either would silently
+      // point a live business at the wrong control unit.
+      tokenUrl: getEnvOptional("ETIMS_TOKEN_URL"),
+      submitPath: getEnvOptional("ETIMS_SUBMIT_PATH"),
+      // Set once KRA has issued credentials. Until then every submission is queued and
+      // the till falls back to keying the KRA number by hand.
+      enabled: getEnvOptional("ETIMS_ENABLED") === "true",
     },
     email: {
       provider: getEnv("EMAIL_PROVIDER", "console"),

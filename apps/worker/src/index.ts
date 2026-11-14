@@ -1,6 +1,6 @@
 import { Worker, Queue } from "bullmq";
 import Redis from "ioredis";
-import { prisma, reconcileSubscriptions } from "@kazios/api";
+import { prisma, reconcileSubscriptions, submitPendingEtims } from "@kazios/api";
 import { QUEUE_NAMES } from "@kazios/types";
 
 const connection = new Redis(process.env.REDIS_URL || "redis://localhost:6379", {
@@ -14,6 +14,7 @@ export const queues = {
   invoiceOverdue: new Queue(QUEUE_NAMES.INVOICE_OVERDUE, { connection }),
   stockCheck: new Queue(QUEUE_NAMES.STOCK_CHECK, { connection }),
   subscriptions: new Queue(QUEUE_NAMES.SUBSCRIPTIONS, { connection }),
+  etims: new Queue(QUEUE_NAMES.ETIMS, { connection }),
 };
 
 /**
@@ -38,6 +39,16 @@ const STOCK_EVERY_MS = Number(process.env.STOCK_SWEEP_MS || 15 * 60 * 1000);
  * this worker cannot leave a stale "ACTIVE" sitting in a support conversation.
  */
 const SUBSCRIPTION_EVERY_MS = Number(process.env.SUBSCRIPTION_SWEEP_MS || 60 * 60 * 1000);
+
+/**
+ * How often invoices still owed to KRA are retried.
+ *
+ * More often than the other sweeps because this one is waiting on a third party. A KRA
+ * outage or a rate limit clears in minutes, and an invoice that sat unsent for an hour is
+ * an invoice the business cannot prove it filed. The backoff inside the sweep keeps a
+ * refused invoice from being hammered on every run.
+ */
+const ETIMS_EVERY_MS = Number(process.env.ETIMS_SWEEP_MS || 10 * 60 * 1000);
 
 async function sendNotification(job: any) {
   const { organizationId, userId, channel, type, title, body } = job.data;
@@ -219,6 +230,21 @@ async function reconcileSubscriptionJobs() {
   return summary;
 }
 
+/**
+ * Files every invoice still owed to KRA, oldest first.
+ *
+ * A thin wrapper rather than passing `submitPendingEtims` straight in, because BullMQ hands
+ * the worker a job and the sweep takes a limit. Without the wrapper the limit would be a
+ * job object, and "25" would silently become "[object Object]".
+ */
+async function submitEtimsSweep() {
+  const summary = await submitPendingEtims();
+  if (summary.filed > 0 || summary.stillWaiting > 0) {
+    console.log(`eTIMS sweep: ${summary.filed} filed, ${summary.stillWaiting} still waiting`);
+  }
+  return summary;
+}
+
 async function main() {
   new Worker(QUEUE_NAMES.NOTIFICATIONS, sendNotification, { connection });
   new Worker(QUEUE_NAMES.AUTOMATIONS, executeAutomation, { connection });
@@ -229,6 +255,7 @@ async function main() {
   new Worker(QUEUE_NAMES.INVOICE_OVERDUE, checkOverdueInvoices, { connection });
   new Worker(QUEUE_NAMES.STOCK_CHECK, checkStock, { connection });
   new Worker(QUEUE_NAMES.SUBSCRIPTIONS, reconcileSubscriptionJobs, { connection });
+  new Worker(QUEUE_NAMES.ETIMS, submitEtimsSweep, { connection });
 
   // Registering the repeat is what makes these queues run at all. Without it the
   // workers above sit waiting on a queue nothing ever writes to.
@@ -243,9 +270,10 @@ async function main() {
     {},
     { repeat: { every: SUBSCRIPTION_EVERY_MS }, jobId: "sweep" }
   );
+  await queues.etims.add("sweep", {}, { repeat: { every: ETIMS_EVERY_MS }, jobId: "sweep" });
 
   console.log(
-    `KaziOS worker started (overdue every ${OVERDUE_EVERY_MS}ms, stock every ${STOCK_EVERY_MS}ms, subscriptions every ${SUBSCRIPTION_EVERY_MS}ms)`
+    `KaziOS worker started (overdue every ${OVERDUE_EVERY_MS}ms, stock every ${STOCK_EVERY_MS}ms, subscriptions every ${SUBSCRIPTION_EVERY_MS}ms, eTIMS every ${ETIMS_EVERY_MS}ms)`
   );
 }
 

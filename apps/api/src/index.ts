@@ -60,6 +60,15 @@ export {
   isUpgrade,
   addInterval,
 } from "./services/subscriptions";
+// The KRA outbox is swept by the worker, so the sweep has to be reachable from there.
+export {
+  enqueueEtimsSubmission,
+  submitEtimsInvoice,
+  submitPendingEtims,
+  recordManualEtims,
+} from "./services/etims/outbox";
+export { getEtimsClient } from "./services/etims/client";
+export { buildEtimsEnvelope, type EtimsEnvelope, type EtimsEnvelopeInput } from "./services/etims/envelope";
 export {
   openCheckout,
   confirmCheckout,

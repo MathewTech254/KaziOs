@@ -11,6 +11,11 @@ export const QUEUE_NAMES = {
    * job per business, for the same reason the stock sweep is.
    */
   SUBSCRIPTIONS: "kazios_subscriptions",
+  /**
+   * Files invoices with KRA eTIMS. Its own queue rather than a cron in the API, because a
+   * submission can be slow or refused and the till must never wait on KRA.
+   */
+  ETIMS: "kazios_etims",
 } as const;
 
 /** Storage object categories used by the file/integration layer. */

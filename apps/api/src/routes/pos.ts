@@ -11,7 +11,8 @@ import { generateId, generateInvoiceNumber, paginate } from "../lib/utils";
 import { getOrganizationId, getScopedValues, getUserId, isAllowed } from "../lib/scope";
 import { notifyPermissionHolders } from "../services/notifications";
 import { alertOnLowStock } from "../services/stockAlerts";
-import { applyStockChange } from "../services/inventory";
+import { reverseSale } from "../services/saleReturns";
+import { enqueueEtimsSubmission } from "../services/etims/outbox";
 import { LIMIT_KEYS } from "@kazios/types";
 import { assertWithinLimit, getEntitlements } from "../services/entitlements";
 import { recordTransaction } from "../services/usage";
@@ -946,6 +947,14 @@ posRouter.post(
       // whatever a counter write lost, which is the correct direction to be wrong in.
       await recordTransaction(organizationId).catch(() => 0);
 
+      // Filed with KRA whether or not KRA is reachable: the outbox row is written now and
+      // the submission retried by the worker. Best effort on purpose — the customer has
+      // already paid and is already holding their goods, so a filing problem must never
+      // be able to fail a completed sale.
+      await enqueueEtimsSubmission(result.id, organizationId).catch(err => {
+        console.warn(`Could not queue ${result.invoiceNumber} for KRA eTIMS:`, err);
+      });
+
       res.status(201).json({
         data: {
           invoice: result,
@@ -978,10 +987,8 @@ posRouter.post(
  * Return a POS sale: restores stock for every tracked line item back to the
  * warehouse it was taken from, then marks the invoice void.
  *
- * Stock is restored through applyStockChange so the Inventory record and the
- * StockMovement ledger are updated in the same Serializable transaction and can
- * never drift apart. A return can only happen once — a second return on the same
- * invoice is rejected with 409.
+ * Manager-level. A cashier correcting their own mistake uses /sales/:id/cancel
+ * below, which is the same reversal with a tighter authorisation rule.
  */
 posRouter.post(
   "/sales/:id/return",
@@ -996,97 +1003,20 @@ posRouter.post(
         typeof req.body.warehouseId === "string" ? req.body.warehouseId : undefined;
       if (!warehouseId) throw new AppError(400, "Warehouse is required");
 
-      const warehouse = await prisma.warehouse.findFirst({
-        where: { id: warehouseId, organizationId },
-      });
-      if (!warehouse)
-        throw new AppError(400, "The selected warehouse is not available in this organization");
-
       const invoice = await prisma.invoice.findFirst({
         where: { id: req.params.id, organizationId },
-        include: { items: { include: { product: true } } },
+        select: { id: true, invoiceNumber: true, status: true },
       });
       if (!invoice) throw new AppError(404, "Sale not found");
-
-      if (invoice.status === "VOID")
-        throw new AppError(409, "This sale has already been cancelled or returned");
-
       if (invoice.status !== "PAID" && invoice.status !== "SENT")
         throw new AppError(400, "Only paid or sent sales can be returned");
 
-      const updated = await prisma.$transaction(
-        async tx => {
-          for (const item of invoice.items) {
-            if (
-              !item.product?.trackStock ||
-              item.product.productType === "SERVICE" ||
-              item.product.productType === "DIGITAL"
-            )
-              continue;
-
-            await applyStockChange(tx, {
-              organizationId,
-              productId: item.productId!,
-              warehouseId,
-              branchId: invoice.branchId ?? null,
-              delta: Number(item.quantity),
-              type: "RETURN",
-              reason: `POS return ${invoice.invoiceNumber}`,
-              reference: invoice.invoiceNumber,
-              productName: item.product.name,
-            });
-          }
-
-          // Reverse the accounting the sale posted. Without this the revenue and
-          // cash stay on the books while the goods come back, and the trial
-          // balance can no longer be derived from the sale records. The reversal
-          // mirrors the original entry line-for-line with debit/credit swapped,
-          // following the same pattern as the expense-void reversal.
-          const original = await tx.journalEntry.findFirst({
-            where: {
-              organizationId,
-              description: `POS sale ${invoice.invoiceNumber}`,
-            },
-            include: { lines: true },
-            orderBy: { journalDate: "desc" },
-          });
-          if (original) {
-            await tx.journalEntry.create({
-              data: {
-                reference: `JE-RETURN-${generateId()}`,
-                description: `POS return ${invoice.invoiceNumber}`,
-                journalDate: new Date(),
-                status: "POSTED",
-                organizationId,
-                lines: {
-                  create: original.lines.map(line => ({
-                    accountId: line.accountId,
-                    description: `Reversal: ${line.description ?? invoice.invoiceNumber}`,
-                    // Swapped, not copied: repeating the original direction
-                    // would double the sale instead of undoing it.
-                    debit: line.credit,
-                    credit: line.debit,
-                  })),
-                },
-              },
-            });
-          }
-
-          // Cash handed back over the counter (or voided card intent) is no
-          // longer money in hand: mark linked payments refunded and zero the
-          // collected amount so the invoice cannot read as both void and paid.
-          await tx.payment.updateMany({
-            where: { invoiceId: invoice.id, organizationId },
-            data: { status: "REFUNDED" },
-          });
-
-          return tx.invoice.update({
-            where: { id: invoice.id },
-            data: { status: "VOID", paidAmount: 0 },
-          });
-        },
-        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
-      );
+      const result = await reverseSale({
+        invoiceId: invoice.id,
+        organizationId,
+        warehouseId,
+        reason: "POS return",
+      });
 
       await notifyPermissionHolders({
         organizationId,
@@ -1099,7 +1029,105 @@ posRouter.post(
         excludeUserIds: [getUserId(req)!],
       }).catch(() => 0);
 
-      res.json({ data: updated });
+      res.json({ data: result });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * Cancel an unpaid sale from the till that rang it.
+ *
+ * A card or M-PESA sale is written before its money is, so a declined card or an
+ * abandoned STK prompt leaves a real invoice holding real stock. Before this the only
+ * way back was a manager with invoices.void, which is not who is standing at the till
+ * when the customer walks off.
+ *
+ * The rule is deliberately narrow: the cashier who recorded the sale may cancel it,
+ * but only while no money has been taken. Anything settled has to go through a refund,
+ * because silently reversing a sale that took cash would make the drawer unreadable.
+ * Anyone holding invoices.void may cancel any sale, paid or not.
+ */
+posRouter.post(
+  "/sales/:id/cancel",
+  requireAuth,
+  requirePermission("pos.sale"),
+  async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+      const organizationId = getOrganizationId(req);
+      if (!organizationId) throw new AppError(401, "Authentication required");
+
+      const invoice = await prisma.invoice.findFirst({
+        where: { id: req.params.id, organizationId },
+        select: {
+          id: true,
+          invoiceNumber: true,
+          status: true,
+          total: true,
+          paidAmount: true,
+          recordedById: true,
+          branchId: true,
+        },
+      });
+      if (!invoice) throw new AppError(404, "Sale not found");
+      if (invoice.status === "VOID")
+        throw new AppError(409, "This sale has already been cancelled or returned");
+      if (invoice.status === "DRAFT")
+        throw new AppError(400, "This sale was never rung up, so there is nothing to cancel");
+
+      // The till usually knows the shelf. When it does not, the goods came from the branch
+      // this sale was rung at, which is where they go back to.
+      let warehouseId = typeof req.body?.warehouseId === "string" ? req.body.warehouseId : "";
+      if (!warehouseId) {
+        const fallback = await prisma.warehouse.findFirst({
+          where: {
+            organizationId,
+            ...(invoice.branchId ? { branchId: invoice.branchId } : {}),
+          },
+          orderBy: { createdAt: "asc" },
+        });
+        warehouseId = fallback?.id ?? "";
+      }
+      if (!warehouseId)
+        throw new AppError(400, "No warehouse is available to put this stock back in");
+
+      const isManager =
+        req.roles?.some(
+          (r: any) =>
+            r.role.permissions.includes("*") || r.role.permissions.includes("invoices.void")
+        ) ?? false;
+      const isOwnSale = !!invoice.recordedById && invoice.recordedById === getUserId(req);
+      if (!isManager && !isOwnSale)
+        throw new AppError(
+          403,
+          "Only the cashier who rang this sale, or a manager, can cancel it"
+        );
+
+      if (invoice.paidAmount > 0)
+        throw new AppError(
+          409,
+          `${invoice.paidAmount.toFixed(2)} has already been taken on this sale. Refund it from Payments before cancelling, or void it from Invoices as a manager.`
+        );
+
+      const result = await reverseSale({
+        invoiceId: invoice.id,
+        organizationId,
+        warehouseId,
+        reason: `Cancelled at the till ${invoice.invoiceNumber}`,
+      });
+
+      await notifyPermissionHolders({
+        organizationId,
+        permission: "reports.view",
+        title: "Sale cancelled at the till",
+        body: `${invoice.invoiceNumber} cancelled before payment; stock restored`,
+        type: "warning",
+        link: "/dashboard/invoices",
+        excludeUserIds: [getUserId(req)!],
+      }).catch(() => 0);
+
+      res.json({ data: result });
     } catch (err) {
       next(err);
     }
