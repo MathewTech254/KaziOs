@@ -182,6 +182,21 @@ export function PosPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
+  /**
+   * A sale whose money never arrived. Card and M-PESA are written before they are paid,
+   * so a declined card leaves a real invoice holding real stock. This remembers the
+   * basket and the invoice together, which is what lets the cashier either try the
+   * payment again against the same sale or cancel it and get the stock back — without
+   * ringing the whole thing a second time and taking the goods off the shelf twice.
+   */
+  const [pendingSale, setPendingSale] = useState<{
+    invoiceId: string;
+    basket: CartLine[];
+    provider: "PAYSTACK" | "MPESA";
+    email: string;
+    phone: string;
+  } | null>(null);
+  const [cancellingSale, setCancellingSale] = useState(false);
   // Paystack sends the customer a receipt, so card payments need an email up front.
   const [customerEmail, setCustomerEmail] = useState("");
   // M-PESA prompts are pushed to a phone number, so the till asks for that up front.
@@ -594,59 +609,75 @@ export function PosPage() {
       });
 
       const sale = res.data.data;
+      // Taken before anything can clear it: a failed payment has to be able to put this
+      // same basket back, not a re-typed one.
+      const basket = cart;
 
       if (isCard && sale.invoiceId) {
         // The sale is recorded but not yet paid. Take the card payment now; the invoice is
         // only marked paid once the server confirms the money with Paystack.
         const paid = await cardPayment.startCardPayment(sale.invoiceId, customerEmail.trim());
 
-        // Refresh the receipt so a successful card sale shows as paid.
-        if (paid) {
-          try {
-            const receiptRes = await api.get<{ data: ReceiptData }>(
-              `/pos/receipt/${sale.invoiceId}`
-            );
-            setReceipt(receiptRes.data.data);
-          } catch {
-            setReceipt(sale);
-          }
-        } else {
-          // The sale exists and stock has moved, so the cashier is told exactly that rather
-          // than being left to guess whether the customer still owes money.
+        if (!paid) {
+          // Keep the basket. The goods are already off the shelf, so the cashier either
+          // retries the payment against this same sale or cancels it and gets the stock
+          // back. Either way the sale must not be rung up a second time, which would take
+          // the goods off the shelf twice for one customer.
           setReceipt(sale);
+          setPendingSale({
+            invoiceId: sale.invoiceId,
+            basket,
+            provider: "PAYSTACK",
+            email: customerEmail.trim(),
+            phone: "",
+          });
           setError(
             cardPayment.error ||
-              "The card payment was not completed. The sale is saved and unpaid; take payment another way."
+              "The card payment did not go through, so no money has been taken. Try the payment again, or cancel the sale to put the stock back."
           );
+          return;
+        }
+
+        // Refresh the receipt so a successful card sale shows as paid.
+        try {
+          const receiptRes = await api.get<{ data: ReceiptData }>(`/pos/receipt/${sale.invoiceId}`);
+          setReceipt(receiptRes.data.data);
+        } catch {
+          setReceipt(sale);
         }
       } else if (isMpesa && sale.invoiceId) {
         // The sale is recorded but not yet paid. Push the prompt to the customer's
         // phone now; the invoice turns paid only once the server hears from Safaricom.
         const paid = await mpesaPayment.startMpesaPayment(sale.invoiceId, mpesaPhone.trim());
 
-        // Refresh the receipt so a successful sale shows as paid.
-        if (paid) {
-          try {
-            const receiptRes = await api.get<{ data: ReceiptData }>(
-              `/pos/receipt/${sale.invoiceId}`
-            );
-            setReceipt(receiptRes.data.data);
-          } catch {
-            setReceipt(sale);
-          }
-        } else {
-          // The sale exists and stock has moved, so the cashier is told exactly that
-          // rather than being left to guess whether the customer still owes money.
+        if (!paid) {
           setReceipt(sale);
+          setPendingSale({
+            invoiceId: sale.invoiceId,
+            basket,
+            provider: "MPESA",
+            email: "",
+            phone: mpesaPhone.trim(),
+          });
           setError(
             mpesaPayment.error ||
-              "The M-PESA payment was not completed. The sale is saved and unpaid; take payment another way."
+              "The M-PESA payment did not go through, so no money has been taken. Try the prompt again, or cancel the sale to put the stock back."
           );
+          return;
+        }
+
+        // Refresh the receipt so a successful sale shows as paid.
+        try {
+          const receiptRes = await api.get<{ data: ReceiptData }>(`/pos/receipt/${sale.invoiceId}`);
+          setReceipt(receiptRes.data.data);
+        } catch {
+          setReceipt(sale);
         }
       } else {
         setReceipt(sale);
       }
 
+      setPendingSale(null);
       setCart([]);
       setTenderedAmount("");
       // The next sale starts as a fresh walk-in. Carrying the previous customer over
@@ -669,9 +700,83 @@ export function PosPage() {
     }
   };
 
+  /**
+   * Try the money again without ringing the sale again. The invoice already exists and the
+   * stock has already moved, so a second POST /pos/sale would take the goods off the shelf
+   * twice for one customer.
+   */
+  const retryPendingPayment = async () => {
+    const pending = pendingSale;
+    if (!pending) return;
+    setError("");
+
+    const paid =
+      pending.provider === "PAYSTACK"
+        ? await cardPayment.startCardPayment(
+            pending.invoiceId,
+            pending.email || customerEmail.trim()
+          )
+        : await mpesaPayment.startMpesaPayment(
+            pending.invoiceId,
+            pending.phone || mpesaPhone.trim()
+          );
+
+    if (!paid) {
+      setError(
+        cardPayment.error ||
+          mpesaPayment.error ||
+          "The payment still did not go through. Try again, or cancel the sale to put the stock back."
+      );
+      return;
+    }
+
+    try {
+      const receiptRes = await api.get<{ data: ReceiptData }>(`/pos/receipt/${pending.invoiceId}`);
+      setReceipt(receiptRes.data.data);
+    } catch {
+      // The sale is paid either way; the receipt on screen is already close enough.
+    }
+    setPendingSale(null);
+    setCart([]);
+    await loadProducts(1);
+  };
+
+  /**
+   * Cancel the unpaid sale and put the goods back. This is the way out of a failed card or
+   * M-PESA payment: the invoice is voided, the stock movements are reversed and the basket
+   * is restored so the cashier can serve the next customer without re-ringing this one.
+   */
+  const cancelPendingSale = async () => {
+    const pending = pendingSale;
+    if (!pending) return;
+    setCancellingSale(true);
+    setError("");
+    try {
+      await api.post(`/pos/sales/${pending.invoiceId}/cancel`, {
+        // The till already knows which shelf the goods came from, and the sale needs that
+        // to put them back on the right one.
+        ...(warehouseId ? { warehouseId } : {}),
+      });
+      setReceipt(null);
+      setPendingSale(null);
+      setCart(pending.basket);
+      setTenderedAmount("");
+      setTenderedTouched(false);
+      setMpesaTransactionCode("");
+      cardPayment.reset();
+      mpesaPayment.reset();
+      await loadProducts(1);
+    } catch (err) {
+      setError(getApiError(err));
+    } finally {
+      setCancellingSale(false);
+    }
+  };
+
   const startNewSale = () => {
     setReceipt(null);
     setCart([]);
+    setPendingSale(null);
     setTenderedAmount("");
     setTenderedTouched(false);
     selectCustomer(null);
@@ -1396,7 +1501,11 @@ export function PosPage() {
                 </div>
                 <div>
                   <h2 className="kazi-page-title">
-                    {isReceiptPaid ? "Sale completed" : "Sale saved, payment due"}
+                    {isReceiptPaid
+                      ? "Sale completed"
+                      : pendingSale
+                        ? "Payment did not go through"
+                        : "Sale saved, payment due"}
                   </h2>
                   <p className="kazi-page-subtitle">
                     Receipt {receipt.receiptNumber}
@@ -1432,8 +1541,8 @@ export function PosPage() {
               )}
               {!isReceiptPaid && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  The stock for this sale has been recorded. The card payment did not complete, so
-                  the customer still owes this amount. If the sale is cancelled, use Return sale to restore stock.
+                  No money has been taken. The stock for this sale is already off the shelf, so try
+                  the payment again or cancel the sale to put it back.
                 </p>
               )}
             </div>
@@ -1454,13 +1563,41 @@ export function PosPage() {
               <span>
                 {receipt.invoice.payments.length
                   ? receipt.invoice.payments.map(payment => payment.provider).join(", ")
-                  : "Card payment not completed"}
+                  : "No payment recorded"}
               </span>
             </div>
+            {!isReceiptPaid && pendingSale && (
+              <div className="mt-6 space-y-2">
+                {/* The two ways out of a failed payment. Both act on the sale that already
+                    exists, so neither one takes the goods off the shelf a second time. */}
+                <button
+                  type="button"
+                  onClick={() => void retryPendingPayment()}
+                  disabled={cancellingSale}
+                  className="kazi-button-primary w-full px-4 disabled:opacity-60"
+                >
+                  <RotateCcw className="h-4 w-4" /> Try the payment again
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void cancelPendingSale()}
+                  disabled={cancellingSale}
+                  className="kazi-button-secondary w-full px-4 disabled:opacity-60"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {cancellingSale ? "Cancelling..." : "Cancel sale and put the stock back"}
+                </button>
+              </div>
+            )}
+
             <button
               type="button"
               onClick={startNewSale}
-              className="kazi-button-primary mt-6 w-full px-4"
+              className={
+                isReceiptPaid
+                  ? "kazi-button-primary mt-6 w-full px-4"
+                  : "mt-3 w-full px-4 py-2 text-xs text-muted-foreground hover:text-foreground"
+              }
             >
               <Receipt className="h-4 w-4" /> Start new sale
             </button>
