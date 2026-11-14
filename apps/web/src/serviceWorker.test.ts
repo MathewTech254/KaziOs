@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import vm from "vm";
 
 /**
  * The service worker is plain script, not a module, so it is loaded into a sandbox
@@ -76,13 +77,23 @@ function loadWorker(options: { cached?: string[]; networkFails?: boolean } = {})
     addEventListener: (type: string, fn: Listener) => {
       listeners[type] = fn;
     },
-    skipWaiting: () => {},
-    clients: { claim: () => {}, matchAll: async () => [] },
+    skipWaiting: () => Promise.resolve(),
+    clients: { claim: () => Promise.resolve(), matchAll: async () => [] },
   };
 
   const source = fs.readFileSync(path.join(__dirname, "..", "public", "sw.js"), "utf8");
-  // The worker is a classic script that reads these as globals.
-  new Function("self", "caches", "fetch", "Response", source)(self, caches, fetch, FakeResponse);
+  // The worker is a classic script that reads these as globals. runInNewContext gives it a
+  // real global object, which is what a classic script expects; `new Function` would only
+  // see the names passed as parameters and no global scope at all.
+  vm.runInNewContext(source, {
+    self,
+    caches,
+    fetch,
+    Response: FakeResponse,
+    URL,
+    Promise,
+    JSON,
+  });
 
   return {
     listeners,

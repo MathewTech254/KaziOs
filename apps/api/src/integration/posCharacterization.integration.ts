@@ -346,7 +346,10 @@ describe("/pos/sale characterization", () => {
     const afterReturn = await testPrisma.inventory.findFirst({
       where: { productId, warehouseId },
     });
-    expect(afterReturn?.quantity).toBe(beforeReturn?.quantity! + 2);
+    // Asserting the row exists first keeps this honest: without it the arithmetic below
+    // would silently compare against NaN if the pre-return lookup had missed.
+    expect(beforeReturn).not.toBeNull();
+    expect(afterReturn?.quantity).toBe(beforeReturn!.quantity + 2);
 
     // RETURN movement exists
     const movements = await testPrisma.stockMovement.findMany({
@@ -1386,7 +1389,7 @@ describe("/pos/sale characterization", () => {
     attendantUserId = attendantUser.id;
 
     await testPrisma.userRole.create({
-      data: { userId: attendantUser.id, roleId: attendantRole!.id },
+      data: { userId: attendantUser.id, roleId: attendantRole.id },
     });
 
     // Login may fail because passwordHash is a placeholder; instead, create a session directly

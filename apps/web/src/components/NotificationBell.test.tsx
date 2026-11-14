@@ -20,7 +20,11 @@ jest.mock("../lib/api", () => ({
   getApiError: (err: any) => err?.message || "error",
 }));
 
-const mockedApi = api as jest.Mocked<typeof api>;
+// jest.mocked rather than an `as` assertion: the assertion form is what the mock needs for
+// `.mockResolvedValue` to typecheck, but `no-unnecessary-type-assertion` reads it as
+// redundant because the mocked and unmocked shapes overlap. The helper carries the same
+// type without tripping the rule.
+const mockedApi = jest.mocked(api);
 
 /** Stands in for the browser's EventSource, which jsdom does not implement. */
 class FakeEventSource {

@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Search } from "lucide-react";
 import { api, getApiError } from "../lib/api";
 import { formatMoney } from "../lib/currency";
+import { useAuth } from "../contexts/AuthContext";
+import { AccessDenied } from "../components/Feedback";
 
 interface ProductOption {
   id: string;
@@ -32,6 +34,11 @@ interface ReceiveForm {
 }
 
 export function ReceiveStockPage() {
+  const { hasPermission } = useAuth();
+  // Receiving writes stock in and costs the business money. POST /inventory/receive is
+  // guarded by inventory.manage, not inventory.view, so that is what gates the page.
+  const canReceive = hasPermission("inventory.manage");
+
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<ProductOption | null>(null);
   const [form, setForm] = useState<ReceiveForm>({
@@ -48,19 +55,28 @@ export function ReceiveStockPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const loadProducts = async () => {
-    try {
-      const res = await api.get("/products/", {
-        params: { search: form.productId, limit: 50 },
-      });
-      setProducts(res.data.data || []);
-    } catch {
-      // Non-fatal
-    }
-  };
+  const loadProducts = useCallback(
+    async (search: string) => {
+      if (!canReceive) return;
+      try {
+        const res = await api.get("/products/", {
+          params: { search, limit: 50 },
+        });
+        setProducts(res.data.data || []);
+      } catch {
+        // Non-fatal: the picker simply stays empty.
+      }
+    },
+    [canReceive]
+  );
+
+  useEffect(() => {
+    void loadProducts("");
+  }, [loadProducts]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canReceive) return;
     setError("");
     setSuccess("");
     setLoading(true);
@@ -89,6 +105,16 @@ export function ReceiveStockPage() {
       setLoading(false);
     }
   };
+
+  if (!canReceive) {
+    return (
+      <AccessDenied
+        title="Receive stock access required"
+        permission="inventory.manage"
+        hint="Receiving stock raises a purchase and a cost against the business. That is limited to roles with receiving rights."
+      />
+    );
+  }
 
   return (
     <div>
@@ -165,7 +191,7 @@ export function ReceiveStockPage() {
                 onChange={() => {
                   setForm({ ...form, productId: "" });
                   setSelectedProduct(null);
-                  void loadProducts();
+                  void loadProducts("");
                 }}
                 placeholder="Search by name, SKU or barcode"
                 className="kazi-input pl-10"

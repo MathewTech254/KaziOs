@@ -1,6 +1,8 @@
-import { useState, useEffect } from "react";
-import { api } from "../lib/api";
+import { useState, useEffect, useCallback } from "react";
+import { api, getApiError } from "../lib/api";
 import { Plus } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
+import { AccessDenied, Notice } from "../components/Feedback";
 
 interface Product {
   id: string;
@@ -14,8 +16,13 @@ interface Product {
 }
 
 export function ProductsPage() {
+  const { hasPermission } = useAuth();
+  const canView = hasPermission("products.view");
+  const canCreate = hasPermission("products.create");
+
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -26,33 +33,58 @@ export function ProductsPage() {
     productType: "PHYSICAL",
   });
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    // The catalogue is a products.view endpoint. Asking for it without the permission
+    // produced a 403 and an unhandled rejection on a page the sidebar does not even
+    // offer, so the request is not made and the page explains itself instead.
+    if (!canView) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     try {
       const res = await api.get("/products");
       setProducts(res.data.data);
+      setError(null);
+    } catch (err) {
+      setError(getApiError(err));
     } finally {
       setLoading(false);
     }
-  };
+  }, [canView]);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await api.post("/products", form);
-    setShowForm(false);
-    setForm({
-      name: "",
-      sku: "",
-      costPrice: 0,
-      sellingPrice: 0,
-      minStock: 0,
-      productType: "PHYSICAL",
-    });
-    load();
+    try {
+      await api.post("/products", form);
+      setShowForm(false);
+      setForm({
+        name: "",
+        sku: "",
+        costPrice: 0,
+        sellingPrice: 0,
+        minStock: 0,
+        productType: "PHYSICAL",
+      });
+      await load();
+    } catch (err) {
+      setError(getApiError(err));
+    }
   };
+
+  if (!canView) {
+    return (
+      <AccessDenied
+        title="Products access required"
+        permission="products.view"
+        hint="The catalogue is limited to roles that may see what the business stocks and what it paid for it."
+      />
+    );
+  }
 
   if (loading) return <div className="p-6 text-muted-foreground">Loading...</div>;
 
@@ -63,11 +95,18 @@ export function ProductsPage() {
           <h1 className="kazi-page-title">Products</h1>
           <p className="kazi-page-subtitle">Manage your product catalog</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="kazi-button-primary px-4 text-sm">
-          <Plus className="h-4 w-4" />
-          {showForm ? "Cancel" : "Add Product"}
-        </button>
+        {canCreate && (
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="kazi-button-primary px-4 text-sm"
+          >
+            <Plus className="h-4 w-4" />
+            {showForm ? "Cancel" : "Add Product"}
+          </button>
+        )}
       </div>
+
+      {error && <Notice tone="error" title="Could not load products" message={error} />}
 
       {showForm && (
         <form onSubmit={handleSubmit} className="kazi-card mb-6 p-6">

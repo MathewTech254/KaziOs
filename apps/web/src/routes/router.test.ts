@@ -15,11 +15,11 @@ jest.mock("../lib/api", () => ({
  * /login — the auth guard, the 401 handler, and five pages — landed on the catch all and
  * rendered "Something went wrong". These assertions keep the route wired up.
  */
-type RouteLike = {
+interface RouteLike {
   path?: string;
   element?: { type?: unknown };
   errorElement?: unknown;
-};
+}
 
 const routes = router.routes as unknown as RouteLike[];
 

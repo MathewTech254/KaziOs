@@ -1,8 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { api } from "../lib/api";
 import { getApiError } from "../lib/api";
 import { Plus } from "lucide-react";
 import { isValidPhoneNumber } from "libphonenumber-js";
+import { useAuth } from "../contexts/AuthContext";
+import { AccessDenied, Notice } from "../components/Feedback";
 
 interface Customer {
   id: string;
@@ -58,6 +60,9 @@ function formatMoney(value: number | null | undefined, currency: string): string
 }
 
 export function CustomersPage() {
+  const { hasPermission } = useAuth();
+  const canView = hasPermission("customers.view");
+  const canCreate = hasPermission("customers.create");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sortBy, setSortBy] = useState<"balance" | "name">("balance");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -80,14 +85,19 @@ export function CustomersPage() {
   });
   const [error, setError] = useState<string | null>(null);
 
-  const load = async () => {
-    const res = await api.get("/customers");
-    setCustomers(res.data.data);
-  };
+  const load = useCallback(async () => {
+    if (!canView) return;
+    try {
+      const res = await api.get("/customers");
+      setCustomers(res.data.data);
+    } catch (err) {
+      setError(getApiError(err));
+    }
+  }, [canView]);
 
   useEffect(() => {
-    load();
-  }, []);
+    void load();
+  }, [load]);
 
   const sortedCustomers = useMemo(() => {
     return [...customers].sort((a, b) => {
@@ -163,6 +173,16 @@ export function CustomersPage() {
     }
   };
 
+  if (!canView) {
+    return (
+      <AccessDenied
+        title="Customers access required"
+        permission="customers.view"
+        hint="The customer book is limited to roles that may see who owes the business money."
+      />
+    );
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -170,11 +190,18 @@ export function CustomersPage() {
           <h1 className="kazi-page-title">Customers</h1>
           <p className="kazi-page-subtitle">Manage your customer relationships</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="kazi-button-primary px-4 text-sm">
-          <Plus className="h-4 w-4" />
-          {showForm ? "Cancel" : "Add Customer"}
-        </button>
+        {canCreate && (
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="kazi-button-primary px-4 text-sm"
+          >
+            <Plus className="h-4 w-4" />
+            {showForm ? "Cancel" : "Add Customer"}
+          </button>
+        )}
       </div>
+
+      {error && <Notice tone="error" title="Could not load customers" message={error} />}
 
       {showForm && (
         <form onSubmit={handleSubmit} className="kazi-card mb-6 p-6">
@@ -249,7 +276,6 @@ export function CustomersPage() {
               </p>
             </div>
           </div>
-          {error && <p className="mt-3 text-sm text-danger">{error}</p>}
           <button type="submit" className="kazi-button-primary mt-4 px-4 text-sm">
             Save customer
           </button>
@@ -331,7 +357,7 @@ export function CustomersPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="kazi-card max-w-md w-full p-6">
             <h2 className="mb-4 text-lg font-semibold text-foreground">Record Payment</h2>
-            <form onSubmit={e => recordPayment(showPayment!, e)} className="space-y-4">
+            <form onSubmit={e => recordPayment(showPayment, e)} className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm text-muted-foreground">Amount (KES)</label>
                 <input

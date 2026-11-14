@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Search } from "lucide-react";
 import { api, getApiError } from "../lib/api";
 import { formatMoney } from "../lib/currency";
+import { useAuth } from "../contexts/AuthContext";
+import { AccessDenied } from "../components/Feedback";
 
 interface CountLine {
   id: string;
@@ -25,6 +27,9 @@ interface StockCount {
 }
 
 export function StocktakePage() {
+  const { hasPermission } = useAuth();
+  const canView = hasPermission("inventory.view");
+  const canManage = hasPermission("stocktake.manage");
   const [counts, setCounts] = useState<StockCount[]>([]);
   const [selectedCount, setSelectedCount] = useState<StockCount | null>(null);
   const [newLine, setNewLine] = useState<{ productId: string; countedQty: string; notes: string }>({
@@ -36,18 +41,24 @@ export function StocktakePage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  const loadCounts = async () => {
+  const loadCounts = useCallback(async () => {
+    if (!canView) return;
     try {
       const res = await api.get("/inventory/stock-counts", {
         params: { limit: 50 },
       });
       setCounts(res.data.data || []);
-    } catch {
-      // Non-fatal
+    } catch (err) {
+      setError(getApiError(err));
     }
-  };
+  }, [canView]);
+
+  useEffect(() => {
+    void loadCounts();
+  }, [loadCounts]);
 
   const openCount = async () => {
+    if (!canManage) return;
     setError("");
     setLoading(true);
     try {
@@ -126,6 +137,16 @@ export function StocktakePage() {
     }
   };
 
+  if (!canView) {
+    return (
+      <AccessDenied
+        title="Stocktake access required"
+        permission="inventory.view"
+        hint="A stock count is a list of every item the business holds and what it costs. That is limited to inventory roles."
+      />
+    );
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
@@ -135,14 +156,16 @@ export function StocktakePage() {
             Count stock, compare against expected, and post adjustments to the ledger.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openCount}
-          disabled={loading}
-          className="kazi-button-primary px-4 text-sm"
-        >
-          {loading ? "Opening..." : "Start new count"}
-        </button>
+        {canManage && (
+          <button
+            type="button"
+            onClick={openCount}
+            disabled={loading}
+            className="kazi-button-primary px-4 text-sm"
+          >
+            {loading ? "Opening..." : "Start new count"}
+          </button>
+        )}
       </div>
 
       {error && (
@@ -212,7 +235,7 @@ export function StocktakePage() {
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  {selectedCount.status === "OPEN" && (
+                  {canManage && selectedCount.status === "OPEN" && (
                     <>
                       <button
                         type="button"
@@ -240,7 +263,7 @@ export function StocktakePage() {
                 </div>
               </div>
 
-              {selectedCount.status === "OPEN" && (
+              {canManage && selectedCount.status === "OPEN" && (
                 <div className="mb-6">
                   <h3 className="mb-2 text-sm font-semibold text-muted-foreground uppercase">
                     Add counted line

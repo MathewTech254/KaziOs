@@ -26,11 +26,10 @@ import {
   getAiClient,
   resolveModel,
   resolveProvider,
-  type AIProvider,
   __resetAiClientForTesting,
 } from "./index";
 
-const MockedOpenAI = OpenAI as jest.Mock;
+const MockedOpenAI = OpenAI as unknown as jest.Mock;
 
 function resetEnv() {
   delete process.env.AI_PROVIDER;

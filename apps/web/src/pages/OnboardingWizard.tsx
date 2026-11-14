@@ -39,7 +39,7 @@ export function OnboardingWizard() {
 
   // Products step state
   const [products, setProducts] = useState<
-    Array<{
+    {
       id: string;
       name: string;
       sku: string | null;
@@ -48,7 +48,7 @@ export function OnboardingWizard() {
       minStock: number;
       reorderPoint: number;
       category: string | null;
-    }>
+    }[]
   >([]);
   const [productForm, setProductForm] = useState<ProductForm>({
     name: "",
@@ -65,7 +65,7 @@ export function OnboardingWizard() {
   const [csvImportResult, setCsvImportResult] = useState<{
     imported: number;
     total: number;
-    errors: Array<{ row: number; error: string }>;
+    errors: { row: number; error: string }[];
   } | null>(null);
 
   // Stock step state
@@ -73,9 +73,7 @@ export function OnboardingWizard() {
   const [stockSaving, setStockSaving] = useState(false);
 
   // Attendants step state
-  const [attendants, setAttendants] = useState<Array<{ id: string; name: string; email: string }>>(
-    []
-  );
+  const [attendants, setAttendants] = useState<{ id: string; name: string; email: string }[]>([]);
   const [attendantForm, setAttendantForm] = useState<AttendantForm>({
     name: "",
     email: "",

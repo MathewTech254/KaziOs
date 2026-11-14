@@ -30,6 +30,40 @@ export function Notice({
   );
 }
 
+/**
+ * Shown instead of a page whose data the signed in role may not read.
+ *
+ * Every page that loads from a permission guarded endpoint needs this. Without it the
+ * request is made anyway, the API answers 403, and the browser reports an unhandled
+ * rejection while the page renders an empty table — which reads as a broken product
+ * rather than as a role that was never given the permission.
+ */
+export function AccessDenied({
+  title,
+  permission,
+  hint,
+}: {
+  title: string;
+  permission: string;
+  hint?: string;
+}) {
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="kazi-card max-w-md p-8 text-center">
+        <AlertCircle className="mx-auto mb-4 h-10 w-10 text-danger" aria-hidden="true" />
+        <h1 className="kazi-page-title mb-2">{title}</h1>
+        <p className="text-sm text-muted-foreground">
+          {hint || "Your role does not include the permission this page needs."}
+        </p>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Ask an owner or administrator to grant{" "}
+          <code className="rounded bg-surface-muted px-1 py-0.5">{permission}</code>.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function LoadingBlock({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 p-6 text-sm text-muted-foreground">

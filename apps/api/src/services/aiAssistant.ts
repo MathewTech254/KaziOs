@@ -96,7 +96,7 @@ export function normalizeQuestion(question: string): string {
 function keywordRoute(question: string): RouteDecision | null {
   const q = question.toLowerCase();
 
-  const patterns: Array<[RegExp, RouteDecision]> = [
+  const patterns: [RegExp, RouteDecision][] = [
     [/\b(low|running.?out|reorder|need.?stock|stock.?level)\b/, { tool: "low_stock", params: {} }],
     [
       /\b(who.?owes|unpaid|outstanding|debt|money.?owed|owes.?me)\b/,

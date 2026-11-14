@@ -1,6 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { api } from "../lib/api";
 import { formatMoney } from "../lib/currency";
+import { useAuth } from "../contexts/AuthContext";
+import { AccessDenied } from "../components/Feedback";
 
 interface ClosingReportData {
   date: string;
@@ -40,13 +42,19 @@ interface ClosingReportData {
 }
 
 export function ClosingPage() {
+  const { hasPermission } = useAuth();
+  // The closing report and the day's figures are reports.view; opening, closing and
+  // reopening the day are closing.manage. A till role has neither.
+  const canView = hasPermission("reports.view");
+  const canManage = hasPermission("closing.manage");
+
   const [date, setDate] = useState("");
   const [report, setReport] = useState<ClosingReportData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const load = async () => {
-    if (!date) return;
+  const load = useCallback(async () => {
+    if (!date || !canView) return;
     setLoading(true);
     setError("");
     try {
@@ -57,17 +65,20 @@ export function ClosingPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [date, canView]);
 
   useEffect(() => {
     // Default to today's date.
     const today = new Date().toISOString().split("T")[0];
     setDate(today);
-    void load();
   }, []);
 
+  useEffect(() => {
+    void load();
+  }, [load]);
+
   const handleOpenClose = async (action: "open" | "close") => {
-    if (!date) return;
+    if (!date || !canManage) return;
     setLoading(true);
     setError("");
     try {
@@ -87,7 +98,7 @@ export function ClosingPage() {
   };
 
   const handleClose = async (countedCash: number, countedMpesa: number, notes: string) => {
-    if (!date) return;
+    if (!date || !canManage) return;
     setLoading(true);
     setError("");
     try {
@@ -106,7 +117,7 @@ export function ClosingPage() {
   };
 
   const handleReopen = async () => {
-    if (!date) return;
+    if (!date || !canManage) return;
     setLoading(true);
     setError("");
     try {
@@ -118,6 +129,16 @@ export function ClosingPage() {
       setLoading(false);
     }
   };
+
+  if (!canView) {
+    return (
+      <AccessDenied
+        title="Daily closing access required"
+        permission="reports.view"
+        hint="The closing report is a set of figures, and figures are limited to roles with report access."
+      />
+    );
+  }
 
   if (loading) {
     return (
@@ -192,7 +213,12 @@ export function ClosingPage() {
                 </p>
               </div>
               <div className="flex gap-2">
-                {isNotOpened && (
+                {!canManage && (
+                  <p className="self-center text-xs text-muted-foreground">
+                    An owner or manager opens and closes the day.
+                  </p>
+                )}
+                {canManage && isNotOpened && (
                   <button
                     type="button"
                     onClick={() => handleOpenClose("open")}
@@ -201,7 +227,7 @@ export function ClosingPage() {
                     Open Day
                   </button>
                 )}
-                {isOpen && (
+                {canManage && isOpen && (
                   <>
                     <button
                       type="button"
@@ -212,7 +238,7 @@ export function ClosingPage() {
                     </button>
                   </>
                 )}
-                {isClosed && (
+                {canManage && isClosed && (
                   <button
                     type="button"
                     onClick={handleReopen}
@@ -225,7 +251,7 @@ export function ClosingPage() {
             </div>
 
             {/* Close day form */}
-            {isOpen && (
+            {canManage && isOpen && (
               <div id="close-form" className="mt-6 pt-6 border-t border-border">
                 <h3 className="mb-3 text-sm font-semibold text-foreground uppercase tracking-wider">
                   Close Day

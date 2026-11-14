@@ -304,7 +304,6 @@ describe("conversation memory", () => {
     (chatCompletion as jest.Mock).mockResolvedValue("Nothing sold today.");
 
     const result = await askBusiness(ORG, "KES", "how much did we sell today?");
-
     expect(result.tool).toBe("sales_summary");
     expect(getRedis).not.toHaveBeenCalled();
     expect(redisStore.size).toBe(0);

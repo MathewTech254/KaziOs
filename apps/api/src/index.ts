@@ -94,6 +94,7 @@ import cookieParser from "cookie-parser";
 import session from "express-session";
 import rateLimit from "express-rate-limit";
 import { MemoryStore } from "express-session";
+import { RedisStore } from "connect-redis";
 import { prisma } from "./lib/prisma";
 import {
   assertProductionEnv,
@@ -202,7 +203,6 @@ export function createApp() {
     session({
       store: (() => {
         if (getRedis()) {
-          const { RedisStore } = require("connect-redis");
           return new RedisStore({ client: getRedis(), ttl: 86400 });
         }
         return new MemoryStore();

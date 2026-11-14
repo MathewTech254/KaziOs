@@ -60,7 +60,7 @@ productRouter.get(
       ]);
       // Attendants must not see cost prices — strip costPrice unless the caller is an owner.
       const isOwner = req.roles?.some((r: any) => r.role.permissions.includes("*")) ?? false;
-      const safeData = isOwner ? data : data.map(({ costPrice, ...rest }) => rest);
+      const safeData = isOwner ? data : data.map(({ costPrice: _costPrice, ...rest }) => rest);
       res.json({ data: safeData, total, page: p, limit: l, totalPages: Math.ceil(total / l) });
     } catch (err) {
       next(err);
