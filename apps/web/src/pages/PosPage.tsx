@@ -837,7 +837,11 @@ export function PosPage() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] flex-col gap-5 lg:flex-row">
+    // lg:items-start so the two columns are each as tall as their own content. Without it
+    // the flex row stretches both children to the tallest one, and a short cart stretches
+    // with them, leaving a tall empty box beside the products. Only at lg, where the two sit
+    // side by side: stacked, both need to stay full width.
+    <div className="flex min-h-[calc(100vh-4rem)] flex-col gap-5 lg:flex-row lg:items-start">
       <div className="min-w-0 flex-1">
         <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -1016,7 +1020,9 @@ export function PosPage() {
         )}
       </div>
 
-      <aside className="kazi-card flex w-full flex-col gap-4 p-4 lg:w-[26rem] lg:shrink-0">
+      {/* self-start keeps the cart at its own height, and sticky keeps the running total in
+          view while the cashier works down a long product list. */}
+      <aside className="kazi-card flex w-full flex-col gap-4 p-4 lg:sticky lg:top-5 lg:w-[26rem] lg:shrink-0 lg:self-start">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base font-semibold text-foreground">Current Sale</h2>
@@ -1130,7 +1136,9 @@ export function PosPage() {
           )}
         </div>
 
-        <div className="flex min-h-[14rem] max-h-[32rem] flex-col gap-2 overflow-y-auto pr-1">
+        {/* Grows with the lines and scrolls once it reaches the cap. No min-height: an empty
+            or single-line cart should be a small box, not a tall mostly-blank one. */}
+        <div className="flex max-h-[min(24rem,44vh)] flex-col gap-2 overflow-y-auto pr-1">
           {cart.length ? (
             cart.map(line => (
               <div
@@ -1194,7 +1202,7 @@ export function PosPage() {
               </div>
             ))
           ) : (
-            <div className="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-border p-8 text-center">
+            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border px-6 py-8 text-center">
               <ShoppingBag className="mb-3 h-8 w-8 text-muted-foreground" />
               <p className="text-sm font-medium text-foreground">Your cart is empty</p>
               <p className="mt-1 text-xs text-muted-foreground">
