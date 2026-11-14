@@ -27,6 +27,8 @@ export interface ReverseSaleInput {
 export interface ReverseSaleResult {
   invoiceNumber: string;
   invoice: { id: string; status: string; paidAmount: number };
+  /** Where the goods went back to. The till shows this so the cashier can see the shelf moved. */
+  warehouse: { id: string; name: string };
   /** Lines that actually put stock back, for the confirmation message. */
   restored: { description: string; quantity: number }[];
 }
@@ -141,6 +143,7 @@ export async function reverseSale(input: ReverseSaleInput): Promise<ReverseSaleR
   return {
     invoiceNumber: invoice.invoiceNumber,
     invoice: { id: updated.id, status: updated.status, paidAmount: updated.paidAmount },
+    warehouse: { id: warehouse.id, name: warehouse.name },
     restored,
   };
 }

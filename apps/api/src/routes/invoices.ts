@@ -44,7 +44,20 @@ invoiceRouter.get(
         where.recordedById = req.userId;
       }
       if (status) where.status = String(status);
-      if (search) where.customer = { name: { contains: String(search), mode: "insensitive" } };
+      // A return has to find the sale by the number printed on the receipt, not only by
+      // the customer: the person at the counter is holding paper, not a name.
+      if (search) {
+        const term = String(search);
+        where.OR = [
+          { customer: { name: { contains: term, mode: "insensitive" } } },
+          { invoiceNumber: { contains: term, mode: "insensitive" } },
+        ];
+      }
+      // The returns screen asks for this: a sale that is already void, or was never rung
+      // up, has nothing to give back, and listing it only invites a 409.
+      if (req.query.returnable === "true") {
+        where.status = { notIn: [InvoiceStatus.VOID, InvoiceStatus.DRAFT] };
+      }
       const [data, total] = await Promise.all([
         prisma.invoice.findMany({
           where,

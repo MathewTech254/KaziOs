@@ -989,6 +989,9 @@ posRouter.post(
  *
  * Manager-level. A cashier correcting their own mistake uses /sales/:id/cancel
  * below, which is the same reversal with a tighter authorisation rule.
+ *
+ * The warehouse may be omitted, in which case the goods go back to the branch the sale
+ * was rung at — the shelf they came from. A shop with one store never has to choose.
  */
 posRouter.post(
   "/sales/:id/return",
@@ -999,30 +1002,46 @@ posRouter.post(
       const organizationId = getOrganizationId(req);
       if (!organizationId) throw new AppError(401, "Authentication required");
 
-      const warehouseId =
-        typeof req.body.warehouseId === "string" ? req.body.warehouseId : undefined;
-      if (!warehouseId) throw new AppError(400, "Warehouse is required");
-
       const invoice = await prisma.invoice.findFirst({
         where: { id: req.params.id, organizationId },
-        select: { id: true, invoiceNumber: true, status: true },
+        select: { id: true, invoiceNumber: true, status: true, branchId: true },
       });
       if (!invoice) throw new AppError(404, "Sale not found");
-      if (invoice.status !== "PAID" && invoice.status !== "SENT")
-        throw new AppError(400, "Only paid or sent sales can be returned");
+
+      // reverseSale owns the status rules so the till, this route and the invoice
+      // screen cannot disagree about what is returnable.
+      let warehouseId = typeof req.body?.warehouseId === "string" ? req.body.warehouseId : "";
+      if (!warehouseId) {
+        const fallback = await prisma.warehouse.findFirst({
+          where: {
+            organizationId,
+            ...(invoice.branchId ? { branchId: invoice.branchId } : {}),
+          },
+          orderBy: { createdAt: "asc" },
+        });
+        warehouseId = fallback?.id ?? "";
+      }
+
+      const reason =
+        typeof req.body?.reason === "string" && req.body.reason.trim()
+          ? req.body.reason.trim()
+          : "POS return";
 
       const result = await reverseSale({
         invoiceId: invoice.id,
         organizationId,
         warehouseId,
-        reason: "POS return",
+        reason,
       });
+
+      const restoredCount = result.restored.reduce((sum, line) => sum + line.quantity, 0);
 
       await notifyPermissionHolders({
         organizationId,
         permission: "reports.view",
         title: "Sale returned",
-        body: `${invoice.invoiceNumber} stock restored`,
+        body: `${invoice.invoiceNumber} returned to ${result.warehouse.name}` +
+          (restoredCount ? ` — ${restoredCount} unit(s) back on the shelf` : ""),
         type: "warning",
         link: "/dashboard/invoices",
         actorName: String(req.body?.soldBy || "").trim() || undefined,

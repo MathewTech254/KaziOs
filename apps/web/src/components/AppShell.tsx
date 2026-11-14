@@ -11,6 +11,7 @@ import {
   Package,
   Plus,
   Receipt,
+  RotateCcw,
   Settings,
   ShoppingBag,
   Sparkles,
@@ -62,6 +63,7 @@ const NAV_GROUPS: NavGroup[] = (() => {
     label: "Sell",
     items: [
       { to: "/pos", label: "POS", icon: ShoppingBag, permission: "pos.sale" },
+      { to: "/returns", label: "Returns", icon: RotateCcw, permission: "invoices.void" },
       { to: "/dashboard/invoices", label: "Invoices", icon: FileText, permission: "invoices.view" },
       { to: "/dashboard/payments", label: "Payments", icon: Receipt, permission: "payments.view" },
       { to: "/dashboard/customers", label: "Customers", icon: Users, permission: "customers.view" },

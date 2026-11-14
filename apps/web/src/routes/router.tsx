@@ -11,6 +11,7 @@ import { CustomersPage } from "../pages/CustomersPage";
 import { InvoicesPage } from "../pages/InvoicesPage";
 import { ReportsPage } from "../pages/ReportsPage";
 import { PosPage } from "../pages/PosPage";
+import { ReturnsPage } from "../pages/ReturnsPage";
 import { PaymentsPage } from "../pages/PaymentsPage";
 import { SettingsPage } from "../pages/SettingsPage";
 import { InventoryPage } from "../pages/InventoryPage";
@@ -139,6 +140,17 @@ export const router = createBrowserRouter([
       </AuthGuard>
     ),
     children: [{ index: true, element: <PosPage /> }],
+  },
+  {
+    // Its own route rather than a tab on the invoices list: a return is found by receipt
+    // number from a piece of paper, which is a different job from reading the invoice book.
+    path: "/returns",
+    element: (
+      <AuthGuard>
+        <Layout />
+      </AuthGuard>
+    ),
+    children: [{ index: true, element: <ReturnsPage /> }],
   },
   {
     path: "/settings",
