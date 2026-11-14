@@ -52,12 +52,21 @@ interface DashboardData {
 }
 
 export function DashboardPage() {
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
   const [stats, setStats] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const canViewReports = hasPermission("reports.view");
+  const canViewProducts = hasPermission("products.view");
 
   const load = useCallback(async () => {
+    // The dashboard is a report. Asking for it without reports.view produced a 403 and an
+    // "insufficient permissions" banner on the first screen a cashier sees, so the request
+    // is not made at all and the page explains where their figures live instead.
+    if (!canViewReports) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -70,7 +79,7 @@ export function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [canViewReports]);
 
   useEffect(() => {
     void load();
@@ -128,6 +137,38 @@ export function DashboardPage() {
         },
       ]
     : [];
+
+  // A dashboard is a report, and an attendant is not given reports.view. Rather than ask
+  // for figures they are not allowed to see and show them a 403 on their first screen, the
+  // page says where their work actually is.
+  if (!canViewReports) {
+    return (
+      <div>
+        <div className="mb-6">
+          <h1 className="kazi-page-title">Dashboard</h1>
+          <p className="kazi-page-subtitle">Welcome back, {user?.name}.</p>
+        </div>
+
+        <div className="kazi-card p-6">
+          <h2 className="text-lg font-semibold text-foreground">Your dashboard is on the till</h2>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">
+            Sales and financial figures are limited to roles with report access, so this page has
+            nothing to show you. Everything you need to serve customers is one step away.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Link to="/pos" className="kazi-button-primary px-4 py-2 text-sm">
+              Open the till
+            </Link>
+            {canViewProducts ? (
+              <Link to="/dashboard/products" className="kazi-button-secondary px-4 py-2 text-sm">
+                Browse products
+              </Link>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

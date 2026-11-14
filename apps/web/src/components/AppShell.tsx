@@ -29,9 +29,22 @@ import { BrandLogo } from "./BrandLogo";
 import { CommandPalette } from "./CommandPalette";
 import { NotificationBell } from "./NotificationBell";
 
+interface NavItem {
+  to: string;
+  label: string;
+  icon: React.ElementType;
+  /**
+   * The permission that makes this destination usable. An attendant is not given
+   * reports.view, so an unfiltered sidebar offered them Reports, Users, Purchasing and
+   * the rest: links that could only ever answer "insufficient permissions". A group with
+   * nothing left to show is dropped rather than left as an empty heading.
+   */
+  permission?: string;
+}
+
 interface NavGroup {
   label: string;
-  items: { to: string; label: string; icon: React.ElementType }[];
+  items: NavItem[];
 }
 
 const NAV_GROUPS: NavGroup[] = (() => {
@@ -48,34 +61,39 @@ const NAV_GROUPS: NavGroup[] = (() => {
   groups.push({
     label: "Sell",
     items: [
-      { to: "/pos", label: "POS", icon: ShoppingBag },
-      { to: "/dashboard/invoices", label: "Invoices", icon: FileText },
-      { to: "/dashboard/payments", label: "Payments", icon: Receipt },
-      { to: "/dashboard/customers", label: "Customers", icon: Users },
+      { to: "/pos", label: "POS", icon: ShoppingBag, permission: "pos.sale" },
+      { to: "/dashboard/invoices", label: "Invoices", icon: FileText, permission: "invoices.view" },
+      { to: "/dashboard/payments", label: "Payments", icon: Receipt, permission: "payments.view" },
+      { to: "/dashboard/customers", label: "Customers", icon: Users, permission: "customers.view" },
     ],
   });
 
-  const operateItems: { to: string; label: string; icon: React.ElementType }[] = [
-    { to: "/dashboard/products", label: "Products", icon: Package },
-    { to: "/inventory", label: "Inventory", icon: Warehouse },
-    { to: "/stocktake", label: "Stocktake", icon: Clipboard },
-    { to: "/stock/receive", label: "Receive Stock", icon: Truck },
-    { to: "/purchases", label: "Purchasing", icon: Building2 },
+  const operateItems: NavItem[] = [
+    { to: "/dashboard/products", label: "Products", icon: Package, permission: "products.view" },
+    { to: "/inventory", label: "Inventory", icon: Warehouse, permission: "inventory.view" },
+    { to: "/stocktake", label: "Stocktake", icon: Clipboard, permission: "stocktake.manage" },
+    { to: "/stock/receive", label: "Receive Stock", icon: Truck, permission: "inventory.manage" },
+    { to: "/purchases", label: "Purchasing", icon: Building2, permission: "purchasing.view" },
   ];
   groups.push({ label: "Operate", items: operateItems });
 
-  const financeItems: { to: string; label: string; icon: React.ElementType }[] = [
-    { to: "/dashboard/reports", label: "Reports", icon: BarChart3 },
-    { to: "/closing", label: "Daily Closing", icon: Clock },
-    { to: "/expenses", label: "Expenses", icon: Wallet },
+  const financeItems: NavItem[] = [
+    { to: "/dashboard/reports", label: "Reports", icon: BarChart3, permission: "reports.view" },
+    { to: "/closing", label: "Daily Closing", icon: Clock, permission: "closing.manage" },
+    { to: "/expenses", label: "Expenses", icon: Wallet, permission: "expenses.view" },
   ];
   groups.push({ label: "Finance", items: financeItems });
 
   groups.push({
     label: "Organization",
     items: [
-      { to: "/settings", label: "Settings", icon: Settings },
-      { to: "/settings?tab=roles", label: "Users", icon: Users },
+      { to: "/settings", label: "Settings", icon: Settings, permission: "settings.manage" },
+      {
+        to: "/settings?tab=roles",
+        label: "Users",
+        icon: Users,
+        permission: "users.view",
+      },
     ],
   });
 
@@ -89,6 +107,14 @@ interface AppShellProps {
 
 export function AppSidebar({ collapsed, onToggle }: AppShellProps) {
   const location = useLocation();
+  const { hasPermission } = useAuth();
+
+  // Decided per render rather than at module load, because the signed in user changes
+  // without the page reloading: signing out and back in as somebody else has to re-filter.
+  const groups = NAV_GROUPS.map(group => ({
+    ...group,
+    items: group.items.filter(item => !item.permission || hasPermission(item.permission)),
+  })).filter(group => group.items.length > 0);
 
   return (
     <aside
@@ -110,7 +136,7 @@ export function AppSidebar({ collapsed, onToggle }: AppShellProps) {
       </div>
 
       <nav className="flex-1 overflow-y-auto py-4" aria-label="Workspace navigation">
-        {NAV_GROUPS.map(group => (
+        {groups.map(group => (
           <div key={group.label} className="mb-5 px-2 sm:px-3">
             {!collapsed && <p className="kazi-section-title mb-2 px-2">{group.label}</p>}
             {group.items.map(item => {

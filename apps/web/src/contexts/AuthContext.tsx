@@ -1,24 +1,30 @@
 import type { ReactNode } from "react";
 import { useState, useEffect, createContext, useContext, useCallback } from "react";
 import { api } from "../lib/api";
+import { landingPath, roleAllows, type Principal } from "../lib/permissions";
 
-interface User {
+// Re-exported so callers can keep importing permission helpers from the context that
+// exposes the signed in user.
+export { landingPath, permissionsOf, roleAllows } from "../lib/permissions";
+export type { UserRole } from "../lib/permissions";
+
+interface User extends Principal {
   id: string;
   email: string;
   name: string;
   phone?: string;
   status: string;
   organizationId: string;
-  roles: { type: string; permissions: string[]; branchId?: string; warehouseId?: string }[];
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   hasPermission: (perm: string) => boolean;
+  homePath: string;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -61,9 +67,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const res = await api.post("/auth/login", { email, password });
+    const signedIn = res.data.data.user as User;
     localStorage.setItem("kazios_token", res.data.data.token);
-    localStorage.setItem("kazios_user", JSON.stringify(res.data.data.user));
-    setUser(res.data.data.user);
+    localStorage.setItem("kazios_user", JSON.stringify(signedIn));
+    setUser(signedIn);
+    return signedIn;
   };
 
   const register = async (data: RegisterData) => {
@@ -85,16 +93,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  const hasPermission = useCallback(
-    (perm: string) => {
-      if (!user) return false;
-      return user.roles.some(r => r.permissions.includes("*") || r.permissions.includes(perm));
-    },
-    [user]
-  );
+  const hasPermission = useCallback((perm: string) => roleAllows(user, perm), [user]);
+
+  const homePath = landingPath(user);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, hasPermission }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, register, logout, hasPermission, homePath }}
+    >
       {children}
     </AuthContext.Provider>
   );

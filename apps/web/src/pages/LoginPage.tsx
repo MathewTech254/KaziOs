@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
 import { AuthBrandPanel } from "../components/AuthBrandPanel";
 import { BrandLogo } from "../components/BrandLogo";
-import { useAuth } from "../contexts/AuthContext";
+import { landingPath, useAuth } from "../contexts/AuthContext";
 
 export function LoginPage() {
   const [email, setEmail] = useState("");
@@ -18,8 +18,10 @@ export function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      await login(email, password);
-      navigate("/dashboard");
+      // Where somebody lands depends on what they are allowed to do, so the decision is
+      // made from the account that just signed in rather than assumed to be the dashboard.
+      const user = await login(email, password);
+      navigate(landingPath(user));
     } catch (err: any) {
       setError(err.response?.data?.error || "Login failed");
     } finally {

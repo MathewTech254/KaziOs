@@ -3,7 +3,7 @@ import { prisma } from "../lib/prisma";
 import { AppError, hashPassword } from "../lib";
 import type { AuthRequest } from "../middleware/auth";
 import { requireAuth, requirePermission } from "../middleware/auth";
-import { zUserCreateSchema, zUserRoleAssignSchema } from "@kazios/validation";
+import { zAdminPasswordResetSchema, zUserCreateSchema, zUserRoleAssignSchema } from "@kazios/validation";
 import { LIMIT_KEYS } from "@kazios/types";
 import { assertWithinLimit, getEntitlements } from "../services/entitlements";
 
@@ -166,6 +166,39 @@ userRouter.delete(
       }
 
       await prisma.userRole.delete({ where: { id: assignment.id } });
+      res.json({ data: { success: true } });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * Sets a member's password.
+ *
+ * The owner is the only one who can do this. A member resetting their own password
+ * depends on a reset link reaching their inbox, and a shared till account often has no
+ * inbox the owner controls, so the person who created the account is the person who can
+ * take it back.
+ *
+ * Every session is dropped afterwards: a reset that left an existing session alive would
+ * not have locked anybody out, which is the whole point of resetting.
+ */
+userRouter.post(
+  "/:id/reset-password",
+  requireAuth,
+  requirePermission("users.manage"),
+  async (req: AuthRequest, res, next) => {
+    try {
+      const { password } = zAdminPasswordResetSchema.parse(req.body);
+      const member = await findMember(req.organizationId, req.params.id);
+
+      await prisma.user.update({
+        where: { id: member.id },
+        data: { passwordHash: await hashPassword(password) },
+      });
+      await prisma.session.deleteMany({ where: { userId: member.id } });
+
       res.json({ data: { success: true } });
     } catch (err) {
       next(err);

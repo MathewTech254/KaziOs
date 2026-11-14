@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { UserPlus, X } from "lucide-react";
+import { KeyRound, UserPlus, X } from "lucide-react";
 import { api, getApiError } from "../lib/api";
 
 interface RoleRef {
@@ -35,6 +35,8 @@ export function SettingsUsersPanel({ canManage }: { canManage: boolean }) {
   const [roles, setRoles] = useState<RoleOption[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [selection, setSelection] = useState<Record<string, string>>({});
+  const [resetFor, setResetFor] = useState<string | null>(null);
+  const [resetValue, setResetValue] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -104,6 +106,29 @@ export function SettingsUsersPanel({ canManage }: { canManage: boolean }) {
       await api.delete(`/users/${member.id}/roles/${assignmentId}`);
       await load();
       setMessage(`Role removed from ${member.name}`);
+    } catch (err) {
+      setError(getApiError(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /**
+   * Sets a member's password from here.
+   *
+   * Staff cannot do this for themselves: a reset link depends on an inbox, and a shared
+   * till account often has none the owner controls. The owner sets it and tells them, and
+   * the API drops every session the member had so the new password is the only way back.
+   */
+  const resetPassword = async (member: Member, password: string) => {
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      await api.post(`/users/${member.id}/reset-password`, { password });
+      setResetFor(null);
+      setResetValue("");
+      setMessage(`Password reset for ${member.name}. They will need to sign in again.`);
     } catch (err) {
       setError(getApiError(err));
     } finally {
@@ -197,6 +222,9 @@ export function SettingsUsersPanel({ canManage }: { canManage: boolean }) {
               <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
                 Roles
               </th>
+              <th className="px-6 py-3 text-left text-xs font-medium uppercase text-muted-foreground">
+                Password
+              </th>
               <th className="px-6 py-3 text-right text-xs font-medium uppercase text-muted-foreground">
                 Assign role
               </th>
@@ -233,6 +261,60 @@ export function SettingsUsersPanel({ canManage }: { canManage: boolean }) {
                       </span>
                     ))}
                   </div>
+                </td>
+                <td className="px-6 py-4">
+                  {resetFor === member.id ? (
+                    <form
+                      onSubmit={e => {
+                        e.preventDefault();
+                        void resetPassword(member, resetValue);
+                      }}
+                      className="flex items-center gap-2"
+                    >
+                      <input
+                        type="password"
+                        minLength={8}
+                        required
+                        autoFocus
+                        value={resetValue}
+                        onChange={e => setResetValue(e.target.value)}
+                        placeholder="New password"
+                        aria-label={`New password for ${member.name}`}
+                        className="kazi-input max-w-[11rem]"
+                      />
+                      <button
+                        type="submit"
+                        disabled={saving || resetValue.length < 8}
+                        className="kazi-button-primary px-3 text-xs disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setResetFor(null);
+                          setResetValue("");
+                        }}
+                        className="kazi-button-secondary px-3 text-xs"
+                      >
+                        Cancel
+                      </button>
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setResetFor(member.id);
+                        setResetValue("");
+                      }}
+                      disabled={!canManage || saving}
+                      className="kazi-button-secondary inline-flex items-center gap-1 px-3 text-xs disabled:opacity-50"
+                      aria-label={`Reset password for ${member.name}`}
+                    >
+                      <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
+                      Reset
+                    </button>
+                  )}
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex justify-end gap-2">

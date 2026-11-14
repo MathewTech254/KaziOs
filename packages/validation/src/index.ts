@@ -837,6 +837,17 @@ export const zUserRoleAssignSchema = z.object({
   warehouseId: zUuid.optional().nullable(),
 });
 
+/**
+ * A password an administrator sets for somebody else.
+ *
+ * Staff cannot reset their own: a reset link is only as private as the inbox it lands
+ * in, and a shared till account frequently has no inbox at all. The owner resets it and
+ * tells them, which also means a member who has left keeps no way back in.
+ */
+export const zAdminPasswordResetSchema = z.object({
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+
 /* ------------------------------------------------------------------ *
  * Organization settings (per-organization key/value store)
  * ------------------------------------------------------------------ */
